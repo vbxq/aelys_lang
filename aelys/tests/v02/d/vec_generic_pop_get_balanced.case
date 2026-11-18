@@ -1,0 +1,29 @@
+fn mk(i: i64) -> string { return "s{i}" }
+fn take<T>(v: &mut Vec<T>) -> Option<T> { return Vec::pop(*v) }
+fn peek<T>(v: &Vec<T>, i: i64) -> Option<T> { return Vec::get(*v, i) }
+fn mkv(n: i64) -> Vec<string> {
+    let mut v: Vec<string> = Vec::new()
+    for k in 0..n { Vec::push(v, mk(k)) }
+    return v
+}
+fn main() -> i64 {
+    let mut total: i64 = 0
+    let mut i: i64 = 0
+    while i < 300 {
+        let mut v: Vec<string> = mkv(3)
+        match take(&mut v) { Some(s) => { total = total + s.len } None => { total = total - 1000 } }
+        match peek(&v, 1) { Some(s) => { total = total + s.len * 10 } None => { total = total - 1000 } }
+        match peek(&v, 7) { Some(s) => { total = total - 1000 } None => { total = total + 100 } }
+        match Vec::get(mkv(2), 1) { Some(s) => { total = total + s.len * 1000 } None => { total = total - 1000 } }
+        let o = Vec::pop(v)
+        let p = o
+        match p { Some(s) => { total = total + s.len * 10000 } None => { total = total - 1 } }
+        Vec::get(v, 0)
+        Vec::pop(v)
+        Vec::pop(v)
+        total = total + v.len
+        i = i + 1
+    }
+    println(total)
+    return 0
+}

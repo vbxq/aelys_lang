@@ -1,0 +1,13 @@
+struct N { val: i64 }
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 100 {
+        let x: Rc<N> = Rc::new(N { val: i })
+        let v: Vec<Rc<N>> = vec[Rc::new(N { val: 7 }), x, x]
+        t = t + Rc::get(v[1]).val + Rc::get(x).val + v.len
+        i = i + 1
+    }
+    println(t)
+    return 0
+}
