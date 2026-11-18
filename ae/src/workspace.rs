@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use aelys_common::Diagnostic;
+
 use crate::error::{Result, closest, error, io_error, with_help};
 use crate::manifest::{Manifest, check_name};
 
@@ -53,6 +55,17 @@ pub fn load(manifest_path: &Path) -> Result<Package> {
         .expect("a manifest path names a file")
         .to_path_buf();
     let bins = discover_bins(&root, &manifest)?;
+    if let Some(default) = &manifest.default_run {
+        let name = default.get_ref();
+        if !bins.iter().any(|bin| bin.name == *name) {
+            let mut diagnostic = manifest.origin.error_at(
+                default.span(),
+                format!("`default-run` names `{name}`, which is not a bin target"),
+            );
+            suggest(&mut diagnostic, name, &bins);
+            return Err(diagnostic.into());
+        }
+    }
     Ok(Package {
         root,
         manifest,
@@ -154,18 +167,7 @@ impl Package {
             return self.bin(name);
         }
         if let Some(default) = &self.manifest.default_run {
-            return self.bin(default.get_ref()).map_err(|_| {
-                self.manifest
-                    .origin
-                    .error_at(
-                        default.span(),
-                        format!(
-                            "`default-run` names `{}`, which is not a bin target",
-                            default.get_ref()
-                        ),
-                    )
-                    .into()
-            });
+            return self.bin(default.get_ref());
         }
         match self.select(None)?.as_slice() {
             [only] => Ok(only),
@@ -186,9 +188,13 @@ impl Package {
             return Ok(bin);
         }
         let mut diagnostic = error(format!("no bin target named `{name}`"));
-        if let Some(similar) = closest(name, self.bins.iter().map(|bin| bin.name.as_str())) {
-            diagnostic.add_help(format!("a target with a similar name exists: `{similar}`"));
-        }
+        suggest(&mut diagnostic, name, &self.bins);
         Err(diagnostic.into())
+    }
+}
+
+fn suggest(diagnostic: &mut Diagnostic, name: &str, bins: &[Bin]) {
+    if let Some(similar) = closest(name, bins.iter().map(|bin| bin.name.as_str())) {
+        diagnostic.add_help(format!("a target with a similar name exists: `{similar}`"));
     }
 }

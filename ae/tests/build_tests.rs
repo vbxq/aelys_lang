@@ -172,3 +172,22 @@ fn a_bin_at_the_package_root_reads_only_its_modules() {
     assert_ok(&output);
     assert_eq!(output.stdout, "1\n");
 }
+
+#[test]
+fn a_default_run_naming_no_bin_is_refused_by_build_and_check() {
+    let dir = project("b_default", "default-run = \"tol\"\n", PRINTS_ONE);
+    write(&dir.join("src/bin/tool.aelys"), PRINTS_TWO);
+    for command in ["build", "check"] {
+        let output = ae(&dir, &[command]);
+        assert_eq!(output.code, Some(101), "stderr:\n{}", output.stderr);
+        assert_contains(
+            &output.stderr,
+            "`default-run` names `tol`, which is not a bin target",
+        );
+        assert_contains(&output.stderr, " --> Ae.toml:4:15\n");
+        assert_contains(
+            &output.stderr,
+            "a target with a similar name exists: `tool`",
+        );
+    }
+}
