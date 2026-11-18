@@ -263,7 +263,7 @@ pub(crate) fn mentions_param(ty: &AirType) -> bool {
         | AirType::Array(inner, _)
         | AirType::Slice(inner)
         | AirType::Vec(inner) => mentions_param(inner),
-        AirType::Enum(r) => r.args.iter().any(mentions_param),
+        AirType::Enum(r) | AirType::Struct(r) => r.args.iter().any(mentions_param),
         AirType::FnPtr { params, ret, .. } => {
             params.iter().any(mentions_param) || mentions_param(ret)
         }
@@ -280,7 +280,6 @@ pub(crate) fn mentions_param(ty: &AirType) -> bool {
         | AirType::Bool
         | AirType::Char
         | AirType::Str
-        | AirType::Struct(_)
         | AirType::Opaque
         | AirType::Void => false,
     }

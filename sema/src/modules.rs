@@ -124,9 +124,12 @@ pub fn source_type_name(name: &str) -> &str {
 pub fn source_shown(ty: &InferType) -> String {
     let args = |args: &[InferType]| args.iter().map(source_shown).collect::<Vec<_>>().join(", ");
     match ty {
-        InferType::Enum(name, targs) if targs.is_empty() => source_type_name(name).to_string(),
-        InferType::Enum(name, targs) => format!("{}<{}>", source_type_name(name), args(targs)),
-        InferType::Struct(name) => source_type_name(name).to_string(),
+        InferType::Enum(name, targs) | InferType::Struct(name, targs) if targs.is_empty() => {
+            source_type_name(name).to_string()
+        }
+        InferType::Enum(name, targs) | InferType::Struct(name, targs) => {
+            format!("{}<{}>", source_type_name(name), args(targs))
+        }
         other => other.to_string(),
     }
 }
@@ -137,8 +140,13 @@ pub fn qualify_infer_type(ty: &InferType, path: &str, owned: &HashSet<String>) -
     }
     let go = |t: &InferType| qualify_infer_type(t, path, owned);
     match ty {
-        InferType::Struct(name) if owned.contains(name) => {
-            InferType::Struct(qualify_type_name(path, name))
+        InferType::Struct(name, args) => {
+            let name = if owned.contains(name) {
+                qualify_type_name(path, name)
+            } else {
+                name.clone()
+            };
+            InferType::Struct(name, args.iter().map(go).collect())
         }
         InferType::Enum(name, args) => {
             let name = if owned.contains(name) {
@@ -175,7 +183,7 @@ fn reach(
     out: &mut HashMap<String, ModuleTypeDef>,
 ) {
     let named = match ty {
-        InferType::Struct(name) | InferType::Enum(name, _) => Some(name.clone()),
+        InferType::Struct(name, _) | InferType::Enum(name, _) => Some(name.clone()),
         _ => None,
     };
     if let Some(name) = named {
@@ -196,7 +204,7 @@ fn reach(
         }
     }
     match ty {
-        InferType::Enum(_, args) | InferType::Tuple(args) => {
+        InferType::Enum(_, args) | InferType::Struct(_, args) | InferType::Tuple(args) => {
             for arg in args {
                 reach(arg, table, out);
             }

@@ -51,7 +51,8 @@ pub(crate) struct BoundGenericSig {
 
 fn type_mentions(ty: &InferType, type_param: &str) -> bool {
     match ty {
-        InferType::Struct(name) => name == type_param,
+        InferType::Struct(name, args) if args.is_empty() => name == type_param,
+        InferType::Struct(_, args) => args.iter().any(|a| type_mentions(a, type_param)),
         InferType::Array(inner, _) | InferType::Vec(inner) | InferType::Rc(inner) => {
             type_mentions(inner, type_param)
         }
@@ -300,7 +301,7 @@ impl TypeInference {
         let mut culprit = None;
         for &slot in slots {
             let Some(arg) = args.get(slot) else { continue };
-            let InferType::Struct(struct_name) = &arg.ty else {
+            let InferType::Struct(struct_name, _) = &arg.ty else {
                 continue;
             };
             let is_generic = self
@@ -327,7 +328,8 @@ impl TypeInference {
         type_params: &[String],
         out: &mut HashMap<String, (InferType, Span)>,
     ) {
-        if let InferType::Struct(name) = sig
+        if let InferType::Struct(name, sig_args) = sig
+            && sig_args.is_empty()
             && type_params.iter().any(|p| p == name)
             && !self.type_table.has_struct(name)
         {
@@ -353,6 +355,7 @@ impl TypeInference {
                 }
             }
             (InferType::Enum(sn, sa), InferType::Enum(an, aa))
+            | (InferType::Struct(sn, sa), InferType::Struct(an, aa))
                 if sn == an && sa.len() == aa.len() =>
             {
                 for (s, a) in sa.iter().zip(aa.iter()) {

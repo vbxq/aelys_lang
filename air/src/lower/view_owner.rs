@@ -182,7 +182,7 @@ pub(super) fn frame_held(expr: &TypedExpr, is_local: &dyn Fn(&str) -> bool) -> b
         TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
             matches!(
                 object.ty,
-                InferType::Struct(_) | InferType::Enum(..) | InferType::Array(..)
+                InferType::Struct(..) | InferType::Enum(..) | InferType::Array(..)
             ) && frame_held(object, is_local)
         }
         _ => false,

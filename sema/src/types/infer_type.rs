@@ -43,7 +43,7 @@ pub enum InferType {
     Tuple(Vec<InferType>),
     Range,
 
-    Struct(std::string::String),
+    Struct(std::string::String, Vec<InferType>),
     Enum(std::string::String, Vec<InferType>),
 
     Var(TypeVarId),
@@ -86,7 +86,9 @@ impl InferType {
             InferType::Ref { referent, .. } => referent.has_vars(),
             InferType::Slice { elem, .. } => elem.has_vars(),
             InferType::Tuple(elems) => elems.iter().any(|e| e.has_vars()),
-            InferType::Enum(_, args) => args.iter().any(|a| a.has_vars()),
+            InferType::Enum(_, args) | InferType::Struct(_, args) => {
+                args.iter().any(|a| a.has_vars())
+            }
             _ => false,
         }
     }
@@ -110,9 +112,10 @@ impl InferType {
             | InferType::Bool
             | InferType::Char
             | InferType::String
-            | InferType::Null
-            | InferType::Struct(_) => true,
-            InferType::Enum(_, args) => args.iter().all(|a| a.is_concrete()),
+            | InferType::Null => true,
+            InferType::Enum(_, args) | InferType::Struct(_, args) => {
+                args.iter().all(|a| a.is_concrete())
+            }
             InferType::Ref { referent, .. } => referent.is_concrete(),
             InferType::Slice { elem, .. } => elem.is_concrete(),
             _ => false,
@@ -130,11 +133,44 @@ impl InferType {
             InferType::Ref { referent, .. } => referent.contains_rc(),
             InferType::Slice { elem, .. } => elem.contains_rc(),
             InferType::Tuple(elems) => elems.iter().any(|e| e.contains_rc()),
-            InferType::Enum(_, args) => args.iter().any(|a| a.contains_rc()),
+            InferType::Enum(_, args) | InferType::Struct(_, args) => {
+                args.iter().any(|a| a.contains_rc())
+            }
             InferType::Function { params, ret, .. } => {
                 params.iter().any(|p| p.contains_rc()) || ret.contains_rc()
             }
             _ => false,
+        }
+    }
+
+    pub fn subst_params(&self, params: &[String], args: &[InferType]) -> InferType {
+        let go = |t: &InferType| t.subst_params(params, args);
+        match self {
+            InferType::Struct(name, a) if a.is_empty() => params
+                .iter()
+                .position(|p| p == name)
+                .and_then(|i| args.get(i).cloned())
+                .unwrap_or_else(|| self.clone()),
+            InferType::Struct(name, a) => InferType::Struct(name.clone(), a.iter().map(go).collect()),
+            InferType::Enum(name, a) => InferType::Enum(name.clone(), a.iter().map(go).collect()),
+            InferType::Function { params: ps, ret, nogc } => InferType::Function {
+                params: ps.iter().map(go).collect(),
+                ret: Box::new(go(ret)),
+                nogc: *nogc,
+            },
+            InferType::Array(inner, n) => InferType::Array(Box::new(go(inner)), *n),
+            InferType::Vec(inner) => InferType::Vec(Box::new(go(inner))),
+            InferType::Rc(inner) => InferType::Rc(Box::new(go(inner))),
+            InferType::Ref { referent, mutable } => InferType::Ref {
+                referent: Box::new(go(referent)),
+                mutable: *mutable,
+            },
+            InferType::Slice { elem, mutable } => InferType::Slice {
+                elem: Box::new(go(elem)),
+                mutable: *mutable,
+            },
+            InferType::Tuple(elems) => InferType::Tuple(elems.iter().map(go).collect()),
+            other => other.clone(),
         }
     }
 
@@ -185,7 +221,7 @@ impl InferType {
             return InferType::Rc(Box::new(inner));
         }
         if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
-            return InferType::Struct(ann.name.clone());
+            return InferType::Struct(ann.name.clone(), Vec::new());
         }
         let name_lower = ann.name.to_lowercase();
         match name_lower.as_str() {
@@ -241,7 +277,7 @@ impl InferType {
             "null" | "void" => InferType::Null,
             _ => {
                 if name.chars().next().is_some_and(|c| c.is_uppercase()) {
-                    InferType::Struct(name.to_string())
+                    InferType::Struct(name.to_string(), Vec::new())
                 } else {
                     InferType::Dynamic
                 }
@@ -429,10 +465,7 @@ impl fmt::Display for InferType {
                 write!(f, ")")
             }
             InferType::Range => write!(f, "range"),
-            InferType::Struct(name) => {
-                write!(f, "{}", crate::modules::strip_type_head(name))
-            }
-            InferType::Enum(name, type_args) => {
+            InferType::Struct(name, type_args) | InferType::Enum(name, type_args) => {
                 write!(f, "{}", crate::modules::strip_type_head(name))?;
                 if !type_args.is_empty() {
                     write!(f, "<")?;

@@ -221,20 +221,15 @@ impl TypeInference {
     }
 
     fn struct_field_type(&self, object: &InferType, field: &str) -> Option<InferType> {
-        let name = match object {
-            InferType::Struct(name) => name,
+        let (name, args) = match object {
+            InferType::Struct(name, args) => (name, args),
             InferType::Rc(inner) => match inner.as_ref() {
-                InferType::Struct(name) => name,
+                InferType::Struct(name, args) => (name, args),
                 _ => return None,
             },
             _ => return None,
         };
-        self.type_table
-            .get_struct(name)?
-            .fields
-            .iter()
-            .find(|f| f.name == field)
-            .map(|f| f.ty.clone())
+        self.type_table.field_type(name, args, field)
     }
 
     pub(crate) fn project(&self, object: &InferType, kind: &ProjKind) -> Option<InferType> {
@@ -413,9 +408,9 @@ impl TypeInference {
             return;
         }
         let owner = match &object.ty {
-            InferType::Struct(name) => Some(name.clone()),
+            InferType::Struct(name, _) => Some(name.clone()),
             InferType::Rc(inner) => match inner.as_ref() {
-                InferType::Struct(name) => Some(name.clone()),
+                InferType::Struct(name, _) => Some(name.clone()),
                 _ => None,
             },
             _ => None,

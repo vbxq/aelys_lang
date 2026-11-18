@@ -32,5 +32,5 @@ pub fn category(ty: &InferType, tt: &TypeTable) -> Category {
 }
 
 pub fn is_affine(ty: &InferType) -> bool {
-    matches!(ty, InferType::Struct(name) if source_type_name(name) == AFFINE_TEST_TYPE)
+    matches!(ty, InferType::Struct(name, _) if source_type_name(name) == AFFINE_TEST_TYPE)
 }

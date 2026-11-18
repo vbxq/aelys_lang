@@ -254,7 +254,7 @@ fn one_representative_per_variant() -> Vec<(&'static str, InferType)> {
         }),
         ("tuple", InferType::Tuple(vec![InferType::I64])),
         ("range", InferType::Range),
-        ("struct", InferType::Struct("S".to_string())),
+        ("struct", InferType::Struct("S".to_string(), Vec::new())),
         ("enum", InferType::Enum("E".to_string(), Vec::new())),
         ("var", InferType::Var(TypeVarId(0))),
         ("dynamic", InferType::Dynamic),

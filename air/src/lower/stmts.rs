@@ -132,7 +132,7 @@ impl<'a> LoweringContext<'a> {
                 paths: vec![crate::rc_paths::RcLeafPath { steps: Vec::new() }],
             });
         }
-        if !matches!(ty, InferType::Struct(_) | InferType::Enum(_, _)) {
+        if !matches!(ty, InferType::Struct(..) | InferType::Enum(_, _)) {
             return None;
         }
         let air = self.lower_type_from_infer(ty);
@@ -811,7 +811,7 @@ impl<'a> LoweringContext<'a> {
         &mut self,
         sema_ty: &InferType,
     ) -> Option<(AirType, Vec<crate::rc_paths::RcLeafPath>)> {
-        if !matches!(sema_ty, InferType::Struct(_) | InferType::Enum(_, _)) {
+        if !matches!(sema_ty, InferType::Struct(..) | InferType::Enum(_, _)) {
             return None;
         }
         let air_ty = self.lower_type_from_infer(sema_ty);

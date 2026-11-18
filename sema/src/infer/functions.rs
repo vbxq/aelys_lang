@@ -19,9 +19,12 @@ impl TypeInference {
     }
 
     pub(crate) fn bounds_on_type_param(&self, ty: &InferType) -> Option<(String, TypeBounds)> {
-        let InferType::Struct(name) = ty else {
+        let InferType::Struct(name, args) = ty else {
             return None;
         };
+        if !args.is_empty() {
+            return None;
+        }
         if !self.type_params_in_scope.iter().any(|p| p == name) {
             return None;
         }

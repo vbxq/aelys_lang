@@ -120,7 +120,7 @@ fn may_be_null(ty: &InferType) -> bool {
     !matches!(
         ty,
         InferType::Ref { .. }
-            | InferType::Struct(_)
+            | InferType::Struct(..)
             | InferType::Enum(_, _)
             | InferType::Tuple(_)
             | InferType::Array(_, _)

@@ -268,7 +268,7 @@ pub fn foreign_type_rejection(
         InferType::Array(..) => Some("an array has no c layout the compiler promises"),
         InferType::Vec(_) => Some("a `vec` is a managed aelys value, not a c array"),
         InferType::Slice { .. } => Some("a slice is a pointer and a length, not a c pointer"),
-        InferType::Struct(_) => Some("a struct has no declared c layout"),
+        InferType::Struct(..) => Some("a struct has no declared c layout"),
         InferType::Enum(..) => Some("an enum has no declared c layout"),
         InferType::Var(_) | InferType::Dynamic => {
             Some("the type is not written, so there is no c type to declare")

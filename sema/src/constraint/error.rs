@@ -1344,7 +1344,7 @@ impl TypeError {
 
     pub fn not_printable(found: &InferType, in_format: bool, span: Span) -> Self {
         let what = match found {
-            InferType::Struct(_) => "a struct",
+            InferType::Struct(..) => "a struct",
             InferType::Enum(..) => "an enum",
             InferType::Array(..) => "an array",
             InferType::Vec(_) => "a `Vec`",
@@ -1356,7 +1356,7 @@ impl TypeError {
             _ => "this value",
         };
         let detail = match found {
-            InferType::Struct(_) => {
+            InferType::Struct(..) => {
                 format!("printing {what} is not supported yet; print its fields")
             }
             InferType::Enum(..) if in_format => format!(

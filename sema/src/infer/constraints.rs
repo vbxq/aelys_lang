@@ -7,7 +7,7 @@ impl TypeInference {
     fn recover_param_name(&self, ty: &InferType) -> InferType {
         match ty {
             InferType::Var(id) => match self.instantiated_param_names.get(id) {
-                Some(name) => InferType::Struct(name.clone()),
+                Some(name) => InferType::Struct(name.clone(), Vec::new()),
                 None => ty.clone(),
             },
             InferType::Array(inner, len) => {
@@ -27,6 +27,10 @@ impl TypeInference {
                 InferType::Tuple(elems.iter().map(|e| self.recover_param_name(e)).collect())
             }
             InferType::Enum(name, args) => InferType::Enum(
+                name.clone(),
+                args.iter().map(|a| self.recover_param_name(a)).collect(),
+            ),
+            InferType::Struct(name, args) if !args.is_empty() => InferType::Struct(
                 name.clone(),
                 args.iter().map(|a| self.recover_param_name(a)).collect(),
             ),

@@ -536,13 +536,14 @@ impl<'a> LoweringContext<'a> {
             let air = self.lower_type_from_infer(ty);
             return self.carriers().carries_string(&air);
         }
-        let InferType::Struct(name) = ty else {
+        let InferType::Struct(name, args) = ty else {
             return false;
         };
-        self.type_params_map.iter().any(|(n, _)| n == name)
-            || self
-                .carriers()
-                .carries_string(&AirType::Struct(crate::StructRef::plain(name.clone())))
+        if args.is_empty() && self.type_params_map.iter().any(|(n, _)| n == name) {
+            return true;
+        }
+        let air = self.lower_type_from_infer(ty);
+        self.carriers().carries_string(&air)
     }
 
     pub(super) fn lower_type_params(&mut self, type_params: &[String]) -> Vec<TypeParamId> {
@@ -612,11 +613,18 @@ impl<'a> LoweringContext<'a> {
                 );
                 AirType::Opaque
             }
-            InferType::Struct(name) => {
-                if let Some((_, id)) = self.type_params_map.iter().find(|(n, _)| n == name) {
+            InferType::Struct(name, args) => {
+                if let Some((_, id)) = self
+                    .type_params_map
+                    .iter()
+                    .find(|(n, _)| args.is_empty() && n == name)
+                {
                     AirType::Param(*id)
                 } else {
-                    AirType::Struct(crate::StructRef::plain(name.clone()))
+                    AirType::Struct(crate::StructRef::new(
+                        name.clone(),
+                        args.iter().map(|a| self.lower_type_from_infer(a)).collect(),
+                    ))
                 }
             }
             InferType::Enum(name, type_args) => AirType::Enum(EnumRef {

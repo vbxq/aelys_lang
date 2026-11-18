@@ -18,7 +18,7 @@ impl TypeInference {
         mapping: &mut HashMap<String, InferType>,
     ) -> InferType {
         match ty {
-            InferType::Struct(name) if !self.type_table.has_struct(name) => {
+            InferType::Struct(name, args) if args.is_empty() && !self.type_table.has_struct(name) => {
                 if let Some(bound) = mapping.get(name) {
                     return bound.clone();
                 }
@@ -63,6 +63,13 @@ impl TypeInference {
                     .collect(),
             ),
             InferType::Enum(name, type_args) if !type_args.is_empty() => InferType::Enum(
+                name.clone(),
+                type_args
+                    .iter()
+                    .map(|a| self.instantiate_inner(a, mapping))
+                    .collect(),
+            ),
+            InferType::Struct(name, type_args) if !type_args.is_empty() => InferType::Struct(
                 name.clone(),
                 type_args
                     .iter()

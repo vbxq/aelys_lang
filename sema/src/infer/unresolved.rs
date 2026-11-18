@@ -71,7 +71,7 @@ pub(crate) fn spelled(ty: &InferType) -> String {
                 ret => format!("fn({}) -> {}", params.join(", "), spelled(ret)),
             }
         }
-        InferType::Enum(name, args) if !args.is_empty() => {
+        InferType::Enum(name, args) | InferType::Struct(name, args) if !args.is_empty() => {
             let args: Vec<String> = args.iter().map(spelled).collect();
             format!(
                 "{}<{}>",
@@ -79,7 +79,7 @@ pub(crate) fn spelled(ty: &InferType) -> String {
                 args.join(", ")
             )
         }
-        InferType::Struct(name) => crate::modules::source_type_name(name).to_string(),
+        InferType::Struct(name, _) => crate::modules::source_type_name(name).to_string(),
         InferType::Enum(name, _) => crate::modules::source_type_name(name).to_string(),
         other => other.to_string(),
     }

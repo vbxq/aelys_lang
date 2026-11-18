@@ -61,7 +61,7 @@ impl TypeInference {
         mapping: &mut HashMap<String, InferType>,
     ) -> InferType {
         match ty {
-            InferType::Struct(name) if type_param_names.contains(name) => mapping
+            InferType::Struct(name, args) if args.is_empty() && type_param_names.contains(name) => mapping
                 .entry(name.clone())
                 .or_insert_with(|| self.type_gen.fresh())
                 .clone(),
@@ -111,6 +111,13 @@ impl TypeInference {
                     .map(|a| self.instantiate_enum_type_param(a, type_param_names, mapping))
                     .collect();
                 InferType::Enum(name.clone(), new_args)
+            }
+            InferType::Struct(name, args) if !args.is_empty() => {
+                let new_args = args
+                    .iter()
+                    .map(|a| self.instantiate_enum_type_param(a, type_param_names, mapping))
+                    .collect();
+                InferType::Struct(name.clone(), new_args)
             }
             other => other.clone(),
         }

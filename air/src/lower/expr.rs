@@ -2449,11 +2449,13 @@ impl LoweringContext<'_> {
             | InferType::Slice { .. }
             | InferType::Var(_)
             | InferType::Dynamic => true,
-            InferType::Struct(name) => self.type_params_map.iter().any(|(n, _)| n == name),
+            InferType::Struct(name, args) if args.is_empty() => {
+                self.type_params_map.iter().any(|(n, _)| n == name)
+            }
             InferType::Array(inner, _) | InferType::Vec(inner) | InferType::Rc(inner) => {
                 self.may_hold_a_view(inner)
             }
-            InferType::Tuple(items) | InferType::Enum(_, items) => {
+            InferType::Tuple(items) | InferType::Enum(_, items) | InferType::Struct(_, items) => {
                 items.iter().any(|item| self.may_hold_a_view(item))
             }
             _ => false,

@@ -64,10 +64,10 @@ pub fn computed_len_receiver(e: &TypedExpr) -> Option<&InferType> {
 pub fn owns_field_place(e: &TypedExpr) -> bool {
     match &e.kind {
         TypedExprKind::Grouping(inner) => owns_field_place(inner),
-        TypedExprKind::Identifier(_) => matches!(e.ty, InferType::Struct(_)),
+        TypedExprKind::Identifier(_) => matches!(e.ty, InferType::Struct(..)),
         TypedExprKind::Deref(inner) => matches!(inner.ty, InferType::Ref { mutable: true, .. }),
         TypedExprKind::Member { object, .. } => {
-            matches!(e.ty, InferType::Struct(_))
+            matches!(e.ty, InferType::Struct(..))
                 && (matches!(object.ty, InferType::Rc(_)) || owns_field_place(object))
         }
         _ => is_rc_get(e),

@@ -40,26 +40,21 @@ impl TypeTable {
             InferType::Tuple(elems) => elems
                 .iter()
                 .all(|e| self.scan_nogc_value(e, checked_params, visited)),
-            InferType::Struct(name) => {
+            InferType::Struct(name, args) => {
                 if !self.has_struct(name) {
-                    return checked_params.iter().any(|p| p == name);
+                    return args.is_empty() && checked_params.iter().any(|p| p == name);
                 }
-                let def = match self.get_struct(name) {
-                    Some(def) => def,
-                    None => return false,
-                };
-                // a struct carries no type args, so a generic one has nothing to recurse on
-                if !def.type_params.is_empty() {
+                let Some(fields) = self.struct_fields(name, args) else {
                     return false;
-                }
-                if !visited.insert(name.clone()) {
+                };
+                let key = format!("{name}{args:?}");
+                if !visited.insert(key.clone()) {
                     return true;
                 }
-                let ok = def
-                    .fields
+                let ok = fields
                     .iter()
                     .all(|f| self.scan_nogc_value(&f.ty, &[], visited));
-                visited.remove(name);
+                visited.remove(&key);
                 ok
             }
             InferType::Enum(name, args) => {

@@ -166,7 +166,7 @@ impl TypeInference {
                             }
                         }
                     }
-                    if let InferType::Struct(name) = operand_ty {
+                    if let InferType::Struct(name, _) = operand_ty {
                         self.errors.push(TypeError::member_access(
                             format!(
                                 "comparison (`{}`) is not supported for struct `{}`",

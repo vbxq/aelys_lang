@@ -168,7 +168,7 @@ impl TypeInference {
                             self.errors.push(TypeError {
                                 kind: TypeErrorKind::Mismatch {
                                     expected: InferType::Dynamic,
-                                    found: InferType::Struct(ann.name.clone()),
+                                    found: InferType::Struct(ann.name.clone(), Vec::new()),
                                 },
                                 span: ann.span,
                                 reason: ConstraintReason::UnknownType {
@@ -218,11 +218,11 @@ impl TypeInference {
             if self.type_table.has_struct(&qualified) {
                 self.check_struct_type_arg_count(&qualified, ann);
             }
-            return InferType::Struct(qualified);
+            return InferType::Struct(qualified, Vec::new());
         }
 
         let ty = InferType::from_annotation(ann);
-        if let InferType::Struct(ref name) = ty {
+        if let InferType::Struct(ref name, _) = ty {
             if self.type_table.has_enum(name) {
                 let type_args = self.collect_enum_type_args(ann);
                 self.check_enum_type_arg_count(name, type_args.len(), ann);
@@ -326,7 +326,7 @@ impl TypeInference {
             self.errors.push(TypeError {
                 kind: TypeErrorKind::Mismatch {
                     expected: InferType::Dynamic,
-                    found: InferType::Struct(ann.name.clone()),
+                    found: InferType::Struct(ann.name.clone(), Vec::new()),
                 },
                 span: ann.span,
                 reason: ConstraintReason::UnknownType {
@@ -371,7 +371,7 @@ impl TypeInference {
             self.errors.push(TypeError {
                 kind: TypeErrorKind::Mismatch {
                     expected: InferType::Dynamic,
-                    found: InferType::Struct(ann.name.clone()),
+                    found: InferType::Struct(ann.name.clone(), Vec::new()),
                 },
                 span: ann.span,
                 reason: ConstraintReason::UnknownType {
@@ -479,7 +479,7 @@ impl TypeInference {
         inf.drop_generic_value_cascades();
 
         let is_type_param = |inf: &TypeInference, ty: &InferType| -> bool {
-            matches!(ty, InferType::Struct(name) if declared_type_params.contains(name.as_str()) && !inf.type_table.has_struct(name))
+            matches!(ty, InferType::Struct(name, args) if args.is_empty() && declared_type_params.contains(name.as_str()) && !inf.type_table.has_struct(name))
         };
         let defers = |kind: &TypeErrorKind| {
             matches!(

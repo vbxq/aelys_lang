@@ -107,13 +107,13 @@ fn collect(
     found: &mut Vec<(String, String, Span)>,
 ) {
     match ty {
-        InferType::Struct(name) | InferType::Enum(name, _) if private.contains(name) => {
+        InferType::Struct(name, _) | InferType::Enum(name, _) if private.contains(name) => {
             found.push((item.to_string(), name.clone(), span));
         }
         _ => {}
     }
     match ty {
-        InferType::Enum(_, args) | InferType::Tuple(args) => {
+        InferType::Enum(_, args) | InferType::Struct(_, args) | InferType::Tuple(args) => {
             for arg in args {
                 collect(arg, private, item, span, found);
             }

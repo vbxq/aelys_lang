@@ -52,6 +52,34 @@ impl TypeTable {
         self.structs.contains_key(name)
     }
 
+    pub fn struct_fields(&self, name: &str, args: &[InferType]) -> Option<Vec<StructField>> {
+        let def = self.structs.get(name)?;
+        if def.type_params.is_empty() {
+            return Some(def.fields.clone());
+        }
+        if def.type_params.len() != args.len() {
+            return None;
+        }
+        Some(
+            def.fields
+                .iter()
+                .map(|f| StructField {
+                    name: f.name.clone(),
+                    ty: f.ty.subst_params(&def.type_params, args),
+                    is_pub: f.is_pub,
+                })
+                .collect(),
+        )
+    }
+
+    pub fn field_type(&self, name: &str, args: &[InferType], field: &str) -> Option<InferType> {
+        let fields = match self.struct_fields(name, args) {
+            Some(fields) => fields,
+            None => self.structs.get(name)?.fields.clone(),
+        };
+        fields.into_iter().find(|f| f.name == field).map(|f| f.ty)
+    }
+
     pub fn register_enum(&mut self, def: EnumDef) {
         self.enums.insert(def.name.clone(), def);
     }
@@ -96,21 +124,16 @@ impl TypeTable {
             // a reference is a non-owning boundary, never owns its referent
             InferType::Ref { .. } | InferType::Slice { .. } => false,
             InferType::Function { .. } => false,
-            InferType::Struct(name) => {
-                let Some(def) = self.structs.get(name) else {
+            InferType::Struct(name, args) => {
+                let Some(fields) = self.struct_fields(name, args) else {
                     return false;
                 };
-                if !def.type_params.is_empty() {
+                let key = format!("{name}{args:?}");
+                if !visited.insert(key.clone()) {
                     return false;
                 }
-                if !visited.insert(name.clone()) {
-                    return false;
-                }
-                let found = def
-                    .fields
-                    .iter()
-                    .any(|f| self.scan_vec_by_value(&f.ty, visited));
-                visited.remove(name);
+                let found = fields.iter().any(|f| self.scan_vec_by_value(&f.ty, visited));
+                visited.remove(&key);
                 found
             }
             InferType::Enum(name, args) => {
@@ -148,22 +171,17 @@ impl TypeTable {
             InferType::Ref { .. } | InferType::Slice { .. } => false,
             InferType::Tuple(elems) => elems.iter().any(|e| self.scan_rc_nominal(e, visited)),
             InferType::Function { .. } => false,
-            InferType::Struct(name) => {
-                let Some(def) = self.structs.get(name) else {
-                    // unresolvable here, the construction site guards this instead
+            InferType::Struct(name, args) => {
+                // unresolvable here, the construction site guards this instead
+                let Some(fields) = self.struct_fields(name, args) else {
                     return false;
                 };
-                if !def.type_params.is_empty() {
+                let key = format!("{name}{args:?}");
+                if !visited.insert(key.clone()) {
                     return false;
                 }
-                if !visited.insert(name.clone()) {
-                    return false;
-                }
-                let found = def
-                    .fields
-                    .iter()
-                    .any(|f| self.scan_rc_nominal(&f.ty, visited));
-                visited.remove(name);
+                let found = fields.iter().any(|f| self.scan_rc_nominal(&f.ty, visited));
+                visited.remove(&key);
                 found
             }
             InferType::Enum(name, args) => {

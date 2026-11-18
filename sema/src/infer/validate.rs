@@ -87,7 +87,7 @@ impl TypeInference {
         for operand in [left, right] {
             let ty = &operand.ty;
             let answers = match ty {
-                InferType::Struct(name) => {
+                InferType::Struct(name, _) => {
                     generic_scope.contains(name) || self.errors.iter().any(|e| e.span == span)
                 }
                 InferType::Enum(name, _) => {
@@ -141,7 +141,7 @@ impl TypeInference {
             return;
         }
         let printable = match &value.ty {
-            InferType::Struct(name) => {
+            InferType::Struct(name, _) => {
                 !self.type_table.has_struct(name)
                     || self.is_active_generic_placeholder_type(
                         &value.ty,
@@ -581,7 +581,7 @@ impl TypeInference {
                             ));
                         }
                     }
-                    InferType::Struct(name) => {
+                    InferType::Struct(name, _) => {
                         if let Some(def) = self.type_table.get_struct(name) {
                             if !def.fields.iter().any(|f| f.name == *member) {
                                 self.errors.push(TypeError::member_access(
@@ -612,7 +612,7 @@ impl TypeInference {
                         }
                     }
                     InferType::Rc(inner) => {
-                        if let InferType::Struct(name) = inner.as_ref() {
+                        if let InferType::Struct(name, _) = inner.as_ref() {
                             if let Some(def) = self.type_table.get_struct(name) {
                                 if !def.fields.iter().any(|f| f.name == *member) {
                                     self.errors.push(TypeError::member_access(
@@ -732,7 +732,7 @@ impl TypeInference {
                     InferType::Rc(inner) => inner.as_ref(),
                     other => other,
                 };
-                if let InferType::Struct(name) = owner
+                if let InferType::Struct(name, _) = owner
                     && self.is_active_generic_placeholder_type(
                         owner,
                         generic_scope,
@@ -1034,7 +1034,10 @@ impl TypeInference {
         declared_type_params: &HashSet<String>,
     ) -> Option<String> {
         match ty {
-            InferType::Struct(name) => {
+            InferType::Struct(_, args) if !args.is_empty() => args
+                .iter()
+                .find_map(|a| self.find_leaked_type_param(a, generic_scope, declared_type_params)),
+            InferType::Struct(name, _) => {
                 let is_placeholder =
                     declared_type_params.contains(name) && !self.type_table.has_struct(name);
                 if is_placeholder && !generic_scope.contains(name) {
@@ -1067,8 +1070,9 @@ impl TypeInference {
         declared_type_params: &HashSet<String>,
     ) -> bool {
         match ty {
-            InferType::Struct(name) => {
-                declared_type_params.contains(name)
+            InferType::Struct(name, args) => {
+                args.is_empty()
+                    && declared_type_params.contains(name)
                     && !self.type_table.has_struct(name)
                     && generic_scope.contains(name)
             }
@@ -1223,7 +1227,7 @@ impl TypeInference {
         declared_type_params: &HashSet<String>,
     ) -> bool {
         match ty {
-            InferType::Struct(name) => {
+            InferType::Struct(name, args) if args.is_empty() => {
                 declared_type_params.contains(name)
                     && !self.type_table.has_struct(name)
                     && generic_scope.contains(name)
@@ -1254,7 +1258,7 @@ impl TypeInference {
                     declared_type_params,
                 )
             }),
-            InferType::Enum(_, type_args) => type_args.iter().any(|a| {
+            InferType::Enum(_, type_args) | InferType::Struct(_, type_args) => type_args.iter().any(|a| {
                 self.contains_active_generic_placeholder_type(
                     a,
                     generic_scope,

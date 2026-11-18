@@ -103,7 +103,7 @@ fn classify_loan_root(body: &BirBody, place: &BirPlace) -> RootClass {
     match ty {
         InferType::Vec(_) | InferType::Rc(_) => RootClass::Managed,
         InferType::Slice { .. } => RootClass::Unknown,
-        InferType::Struct(_)
+        InferType::Struct(..)
         | InferType::Enum(_, _)
         | InferType::Tuple(_)
         | InferType::Array(_, _) => {

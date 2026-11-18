@@ -66,7 +66,7 @@ fn test_from_annotation_generic_types() {
     // "Array" with a capital A is treated as Struct("Array"), not the builtin array.
     assert_eq!(
         InferType::from_annotation(&make_generic_ann("Array", "Int")),
-        InferType::Struct("Array".to_string())
+        InferType::Struct("Array".to_string(), Vec::new())
     );
 }
 

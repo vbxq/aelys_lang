@@ -77,7 +77,14 @@ pub fn unify_dir(
         | (InferType::String, InferType::String)
         | (InferType::Null, InferType::Null) => Ok(()),
 
-        (InferType::Struct(a), InferType::Struct(b)) if a == b => Ok(()),
+        (InferType::Struct(a, args_a), InferType::Struct(b, args_b)) if a == b => {
+            if args_a.len() == args_b.len() {
+                for (a_arg, b_arg) in args_a.iter().zip(args_b.iter()) {
+                    unify_type_arg(a_arg, b_arg, subst)?;
+                }
+            }
+            Ok(())
+        }
         (InferType::Enum(a, args_a), InferType::Enum(b, args_b)) if a == b => {
             // differing type args (variant vs annotation) still match: they inform monomorphization, not semantic equality
             if !args_a.is_empty() && !args_b.is_empty() && args_a.len() == args_b.len() {

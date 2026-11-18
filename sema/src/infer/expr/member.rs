@@ -88,28 +88,15 @@ impl TypeInference {
                     InferType::Dynamic
                 }
             }
-            InferType::Struct(name) => {
-                if let Some(def) = self.type_table.get_struct(name) {
-                    def.fields
-                        .iter()
-                        .find(|f| f.name == member)
-                        .map(|f| f.ty.clone())
-                        .unwrap_or(InferType::Dynamic)
-                } else {
-                    InferType::Dynamic
-                }
-            }
+            InferType::Struct(name, args) => self
+                .type_table
+                .field_type(name, args, member)
+                .unwrap_or(InferType::Dynamic),
             InferType::Rc(inner) => {
-                if let InferType::Struct(name) = inner.as_ref() {
-                    if let Some(def) = self.type_table.get_struct(name) {
-                        def.fields
-                            .iter()
-                            .find(|f| f.name == member)
-                            .map(|f| f.ty.clone())
-                            .unwrap_or(InferType::Dynamic)
-                    } else {
-                        InferType::Dynamic
-                    }
+                if let InferType::Struct(name, args) = inner.as_ref() {
+                    self.type_table
+                        .field_type(name, args, member)
+                        .unwrap_or(InferType::Dynamic)
                 } else {
                     InferType::Dynamic
                 }
@@ -188,21 +175,20 @@ impl TypeInference {
             }
         }
 
-        let object_struct: Option<String> = match &typed_object.ty {
-            InferType::Struct(name) => Some(name.clone()),
+        let object_struct: Option<(String, Vec<InferType>)> = match &typed_object.ty {
+            InferType::Struct(name, args) => Some((name.clone(), args.clone())),
             InferType::Rc(inner) => match inner.as_ref() {
-                InferType::Struct(name) => Some(name.clone()),
+                InferType::Struct(name, args) => Some((name.clone(), args.clone())),
                 _ => None,
             },
             _ => None,
         };
-        if let Some(struct_name) = object_struct.clone() {
+        if let Some((struct_name, _)) = object_struct.clone() {
             self.reject_private_field(&struct_name, field, span);
         }
-        if let Some(ref struct_name) = object_struct {
-            if let Some(def) = self.type_table.get_struct(struct_name) {
-                if let Some(field_def) = def.fields.iter().find(|f| f.name == field) {
-                    let field_ty = field_def.ty.clone();
+        if let Some((ref struct_name, ref struct_args)) = object_struct {
+            if self.type_table.has_struct(struct_name) {
+                if let Some(field_ty) = self.type_table.field_type(struct_name, struct_args, field) {
                     self.reject_rc_field_write(field, &field_ty, &typed_object, &typed_value, span);
                     self.try_narrow_literal(&mut typed_value, &field_ty);
                     if typed_value.ty != field_ty && typed_value.ty.can_implicit_widen_to(&field_ty)
@@ -392,7 +378,7 @@ impl TypeInference {
                 fields: typed_fields,
             },
             if struct_exists {
-                InferType::Struct(name.to_string())
+                InferType::Struct(name.to_string(), Vec::new())
             } else {
                 InferType::Dynamic
             },
