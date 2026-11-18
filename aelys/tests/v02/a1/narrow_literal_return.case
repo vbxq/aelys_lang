@@ -1,0 +1,9 @@
+struct P<A, B> { a: A, b: B }
+struct W<T> { v: T }
+fn g(k: i64) -> P<i64, u8> {
+    return P { a: k, b: 250 }
+}
+fn main() {
+    let p = g(10)
+    println((p.b as i64) + p.a)
+}

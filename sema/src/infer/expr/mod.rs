@@ -899,6 +899,56 @@ impl TypeInference {
             }
         }
 
+        if let TypedExprKind::StructLiteral { name, fields } = &mut expr.kind
+            && let InferType::Struct(target_name, target_args) = target_ty
+            && target_name == name
+            && !target_args.is_empty()
+            && target_ty.is_concrete()
+            && matches!(&expr.ty, InferType::Struct(n, a) if n == name && a.len() == target_args.len())
+            && let Some(def) = self.type_table.get_struct(name).cloned()
+            && def.type_params.len() == target_args.len()
+        {
+            let mut ok = true;
+            for (field_name, value) in fields.iter_mut() {
+                let Some(declared) = def.fields.iter().find(|f| f.name == *field_name) else {
+                    continue;
+                };
+                let expected = declared.ty.subst_params(&def.type_params, target_args);
+                if !self.try_narrow_literal(value, &expected) {
+                    ok = false;
+                }
+                if value.ty != expected && value.ty.can_implicit_widen_to(&expected) {
+                    let vspan = value.span;
+                    let original = std::mem::replace(
+                        &mut **value,
+                        TypedExpr {
+                            kind: TypedExprKind::Null,
+                            ty: InferType::Null,
+                            span: vspan,
+                        },
+                    );
+                    **value = TypedExpr {
+                        kind: TypedExprKind::Cast {
+                            expr: Box::new(original),
+                            target: expected.clone(),
+                        },
+                        ty: expected.clone(),
+                        span: vspan,
+                    };
+                }
+                self.constraints.push(Constraint::flows(
+                    value.ty.clone(),
+                    expected,
+                    value.span,
+                    ConstraintReason::TypeAnnotation {
+                        var_name: format!("{}.{}", name, field_name),
+                    },
+                ));
+            }
+            expr.ty = target_ty.clone();
+            return ok;
+        }
+
         if let TypedExprKind::EnumVariant {
             args,
             enum_name,
