@@ -1237,6 +1237,16 @@ satisfy neither.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
+        code: "E0759",
+        title: "ambiguous method",
+        explanation: "\
+A method call names a method that more than one table provides for the
+receiver's type, and nothing chooses between them. The compiler never
+picks one by order: the call is refused and the candidates are listed.
+Call the one you mean by its full path.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
         code: "E0601",
         title: "module not found",
         explanation: "\

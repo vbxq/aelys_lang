@@ -122,3 +122,18 @@ sema/src/infer/unresolved.rs	spelled	2	InferType	ret	format!(	correct-as-is	aggr
 air/src/passes/generic_print.rs	shown	1	AirType	other	format!( ).to_lowercase()	correct-as-is	aggregate-only
 sema/src/infer/finalize.rs	finalize_stmt	1	InferType	other	Self::finalize_type(other)	correct-as-is	delegates-to-a-decided-arm
 sema/src/infer/validate.rs	validate_expr	3	InferType	other	other	correct-as-is	aggregate-only
+sema/src/infer/expr/member.rs	deref_struct_ref	1	InferType	_	typed_object	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	contains_ref	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/infer/expr/method.rs	desugar_method_call	1	InferType	other	other.clone()	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	infer_method_call	1	InferType	other	other.clone()	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	infer_method_call	2	InferType	other	(other.clone()	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	infer_method_call	3	InferType	_	Err(typed_object)	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	is_concrete	1	InferType	_	true	correct-as-is	carrier-walk
+sema/src/infer/expr/method.rs	is_param	1	InferType	_	None	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	matches_head	1	InferType	_	!is_concrete(pat) || !is_concrete(ty) || pat == 	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	no_builtin_method	1	InferType	_	vec![ ]	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	no_method	1	InferType	_	String::new()	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	std_function_for	1	InferType	_	&[]	correct-as-is	aggregate-only
+sema/src/infer/validate.rs	projected_receiver_ok	1	InferType	_	false	correct-as-is	aggregate-only
+sema/src/infer/validate.rs	type_holds_ref	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/modules.rs	collect_exports	1	InferType	_	aelys_syntax::Receiver::Value	correct-as-is	aggregate-only
