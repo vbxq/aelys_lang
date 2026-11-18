@@ -1,0 +1,34 @@
+struct W { calls: i64 }
+struct Row { tics: i32, action: fn(&mut W, i64), next: i32 }
+
+fn a_none(_w: &mut W, _m: i64) {}
+fn a_add(w: &mut W, m: i64) {
+    w.calls += m;
+}
+
+static ROWS: [Row; 5] = [
+    Row { tics: 3, action: a_none, next: 1 },
+    Row { tics: 5, action: a_add, next: 2 },
+    Row { tics: 7, action: a_add, next: 4 },
+    Row { tics: 11, action: a_none, next: 0 },
+    Row { tics: 13, action: a_add, next: 3 },
+];
+
+static mut COUNTS: [i64; 4] = [1, 2, 3, 4];
+
+fn main() {
+    let mut w = W { calls: 0 };
+    let mut s: i64 = 0;
+    for i in 0..5 {
+        let f = ROWS[i].action;
+        f(&mut w, i);
+        s += ROWS[i].tics as i64 * 10 + ROWS[i].next as i64;
+    }
+    let mut t: i64 = 0;
+    for r in ROWS {
+        t += r.tics as i64;
+    }
+    let copy = ROWS;
+    COUNTS[2] = 30;
+    println!("{} {} {} {} {} {}", s, w.calls, t, copy[4].next, COUNTS[2], COUNTS[3]);
+}

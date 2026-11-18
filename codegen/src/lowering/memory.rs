@@ -2,8 +2,13 @@ use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
 use crate::types::alignment_of;
 use aelys_air::AirType;
-use inkwell::types::BasicTypeEnum;
-use inkwell::values::{BasicValue, BasicValueEnum, InstructionValue, MetadataValue, PointerValue};
+use inkwell::types::{BasicType, BasicTypeEnum};
+use inkwell::values::{
+    BasicValue, BasicValueEnum, FunctionValue, InstructionOpcode, InstructionValue, MetadataValue,
+    PointerValue,
+};
+
+const AGGREGATE_COPY_LEAVES: u64 = 32;
 
 impl<'a> FunctionCodegen<'a> {
     fn vec_header_scope(&self) -> MetadataValue<'static> {
@@ -44,7 +49,17 @@ impl<'a> FunctionCodegen<'a> {
         &self,
         ptr: PointerValue<'static>,
         value: BasicValueEnum<'static>,
-    ) -> Result<InstructionValue<'static>, CodegenError> {
+    ) -> Result<Option<InstructionValue<'static>>, CodegenError> {
+        if let Some((src, align)) = self.forwardable_aggregate_load(value) {
+            let size = value
+                .get_type()
+                .size_of()
+                .ok_or_else(|| CodegenError::LlvmError("unsized aggregate copy".to_string()))?;
+            self.builder
+                .build_memmove(ptr, align, src, align, size)
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            return Ok(None);
+        }
         let store = self
             .builder
             .build_store(ptr, value)
@@ -52,7 +67,40 @@ impl<'a> FunctionCodegen<'a> {
         store
             .set_alignment(alignment_of(value.get_type()))
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-        Ok(store)
+        Ok(Some(store))
+    }
+
+    // llvm splits an aggregate load and store into one node per scalar, which takes minutes on a large array
+    fn forwardable_aggregate_load(
+        &self,
+        value: BasicValueEnum<'static>,
+    ) -> Option<(PointerValue<'static>, u32)> {
+        if leaves(value.get_type()) < AGGREGATE_COPY_LEAVES {
+            return None;
+        }
+        let load = value.as_instruction_value()?;
+        if load.get_opcode() != InstructionOpcode::Load
+            || load.get_parent()? != self.builder.get_insert_block()?
+        {
+            return None;
+        }
+        let mut next = load.get_next_instruction();
+        while let Some(inst) = next {
+            if matches!(
+                inst.get_opcode(),
+                InstructionOpcode::Store
+                    | InstructionOpcode::Call
+                    | InstructionOpcode::Invoke
+                    | InstructionOpcode::AtomicRMW
+                    | InstructionOpcode::AtomicCmpXchg
+                    | InstructionOpcode::Fence
+            ) {
+                return None;
+            }
+            next = inst.get_next_instruction();
+        }
+        let src = load.get_operand(0)?.value()?.into_pointer_value();
+        Some((src, load.get_alignment().ok()?))
     }
 
     pub(crate) fn load_value(
@@ -191,4 +239,33 @@ fn align_to(offset: u32, align: u32) -> u32 {
         return offset;
     }
     (offset + align - 1) & !(align - 1)
+}
+
+fn leaves(ty: BasicTypeEnum<'static>) -> u64 {
+    match ty {
+        BasicTypeEnum::ArrayType(array) => {
+            u64::from(array.len()).saturating_mul(leaves(array.get_element_type()))
+        }
+        BasicTypeEnum::StructType(fields) => fields.get_field_types().into_iter().map(leaves).sum(),
+        _ => 1,
+    }
+}
+
+// the load a forwarded aggregate copy leaves behind would still cost llvm its per-scalar split
+pub(crate) fn drop_dead_aggregate_loads(function: FunctionValue<'static>) {
+    for block in function.get_basic_block_iter() {
+        let mut next = block.get_first_instruction();
+        while let Some(inst) = next {
+            next = inst.get_next_instruction();
+            if inst.get_opcode() == InstructionOpcode::Load
+                && inst.get_first_use().is_none()
+                && matches!(
+                    BasicTypeEnum::try_from(inst.get_type()),
+                    Ok(BasicTypeEnum::ArrayType(_) | BasicTypeEnum::StructType(_))
+                )
+            {
+                inst.erase_from_basic_block();
+            }
+        }
+    }
 }

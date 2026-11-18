@@ -39,7 +39,8 @@ impl<'a> FunctionCodegen<'a> {
                     _ => {
                         let ptr = self.place_ptr(place)?;
                         let store = self.store_value(ptr, value)?;
-                        if let Place::Index(root, _) = place
+                        if let Some(store) = store
+                            && let Place::Index(root, _) = place
                             && (value.is_int_value() || value.is_float_value())
                             && self.indexes_a_vec_buffer(*root)?
                         {

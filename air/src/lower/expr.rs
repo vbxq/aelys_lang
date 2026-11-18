@@ -439,6 +439,14 @@ impl<'a> LoweringContext<'a> {
                         Some(addr) => Operand::Copy(addr.ptr),
                         None => self.lower_expr(object),
                     }
+                } else if let TypedExprKind::Identifier(name) = &object.kind
+                    && self.views.captures.is_empty()
+                    && self.lookup_local(name).is_none()
+                    && self.global_names.contains(name)
+                    && let pointee @ AirType::Array(..) = self.lower_type_from_infer(&object.ty)
+                {
+                    // an element read must not load the whole global array, llvm chokes on a large aggregate
+                    Operand::Copy(self.emit_addr_of(Place::Global(name.clone()), &pointee, sp))
                 } else {
                     self.lower_expr(object)
                 };

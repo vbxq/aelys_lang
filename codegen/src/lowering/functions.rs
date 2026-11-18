@@ -151,6 +151,7 @@ impl CodegenContext {
                 &index,
             );
             fcx.generate()?;
+            crate::lowering::memory::drop_dead_aggregate_loads(fn_value);
         }
 
         Ok(())
