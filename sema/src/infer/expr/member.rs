@@ -67,10 +67,7 @@ impl TypeInference {
             InferType::String | InferType::Slice { .. } | InferType::Vec(_) | InferType::Array(..)
         );
         if builtin && (member == "len" || (member == "bytes" && matches!(base, InferType::String))) {
-            let receiver = match &object.kind {
-                ExprKind::Identifier(n) => n.as_str(),
-                _ => "v",
-            };
+            let receiver = receiver_text(object).unwrap_or_else(|| "v".to_string());
             let (message, fix) = if member == "len" {
                 (format!("`{receiver}.len` is a method; write `{receiver}.len()`"), ".len()")
             } else {
@@ -724,5 +721,13 @@ impl TypeInference {
             } => ps.iter().any(go) || go(ret),
             _ => false,
         }
+    }
+}
+
+fn receiver_text(e: &Expr) -> Option<String> {
+    match &e.kind {
+        ExprKind::Identifier(name) => Some(name.clone()),
+        ExprKind::Member { object, member } => Some(format!("{}.{member}", receiver_text(object)?)),
+        _ => None,
     }
 }

@@ -1,0 +1,6 @@
+struct S { items: Vec<i64> }
+
+fn main() {
+    let s = S { items: vec![1] };
+    println!("{}", s.items.len);
+}

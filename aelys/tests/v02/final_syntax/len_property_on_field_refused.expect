@@ -1,0 +1,2 @@
+refuse E0121
+`s.items.len` is a method; write `s.items.len()`
