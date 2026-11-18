@@ -374,20 +374,32 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
                     bounds,
                     literal: None,
                 };
-                if let Some((tname, mname)) = func.name.split_once("::")
-                    && owned.contains(tname)
-                {
+                let method_key = match func.name.split_once("::") {
+                    Some((tname, mname)) if owned.contains(tname) => {
+                        Some((qualify_type_name(path, tname), mname))
+                    }
+                    Some((tname, mname)) if path.starts_with("std.") => {
+                        crate::infer::builtin_key_of_prefix(tname).map(|k| (k.to_string(), mname))
+                    }
+                    _ => None,
+                };
+                if let Some((key, mname)) = method_key {
                     let receiver = match func.params.first() {
                         Some(p) if p.name == "self" => match &p.ty {
-                            InferType::Ref { mutable: true, .. } => aelys_syntax::Receiver::RefMut,
-                            InferType::Ref { .. } => aelys_syntax::Receiver::Ref,
+                            InferType::Ref { mutable: true, .. }
+                            | InferType::Slice { mutable: true, .. } => {
+                                aelys_syntax::Receiver::RefMut
+                            }
+                            InferType::Ref { .. } | InferType::Slice { .. } => {
+                                aelys_syntax::Receiver::Ref
+                            }
                             _ => aelys_syntax::Receiver::Value,
                         },
                         _ => aelys_syntax::Receiver::None,
                     };
                     exports
                         .methods
-                        .entry(qualify_type_name(path, tname))
+                        .entry(key)
                         .or_default()
                         .push(MethodEntry {
                             name: mname.to_string(),

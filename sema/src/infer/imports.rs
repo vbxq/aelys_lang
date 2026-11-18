@@ -37,7 +37,14 @@ impl TypeInference {
                     self.define_imported_value(value);
                 }
             }
-            self.methods.insert(ty.clone(), entries.clone());
+            if super::impls::is_builtin_key(ty) {
+                self.builtin_methods
+                    .entry(ty.clone())
+                    .or_default()
+                    .extend(entries.iter().cloned());
+            } else {
+                self.methods.insert(ty.clone(), entries.clone());
+            }
         }
         for def in super::traits::builtin_traits() {
             self.trait_names.insert(def.name.clone(), def.qualified.clone());

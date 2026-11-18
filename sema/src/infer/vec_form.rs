@@ -216,6 +216,13 @@ impl TypeInference {
             TypedExprKind::Identifier(_) => true,
             TypedExprKind::Member { .. } => true,
             TypedExprKind::Call { .. } => true,
+            TypedExprKind::Block { stmts, tail } => {
+                matches!(tail.kind, TypedExprKind::Call { .. })
+                    && !stmts.is_empty()
+                    && stmts.iter().all(|s| {
+                        matches!(&s.kind, TypedStmtKind::Let { name, .. } if name.starts_with("__recv$"))
+                    })
+            }
             _ => false,
         };
         if accepted {

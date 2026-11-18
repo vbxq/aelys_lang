@@ -1329,7 +1329,7 @@ impl TypeInference {
     }
 }
 
-pub(super) fn intrinsic_methods(head: &str) -> Option<&'static [&'static str]> {
+pub(crate) fn intrinsic_methods(head: &str) -> Option<&'static [&'static str]> {
     match head {
         "Vec" => Some(&[
             "new",

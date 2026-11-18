@@ -1,6 +1,7 @@
 use super::TypeInference;
 use crate::constraint::TypeError;
 use crate::modules::MethodEntry;
+use crate::types::InferType;
 use aelys_syntax::{
     CatchHandler, Expr, ExprKind, FmtStringPart, Function, ImplDecl, MatchArm, Parameter, Pattern,
     Receiver, RefKind, Span, Stmt, StmtKind, TypeAnnotation, TypeBounds,
@@ -8,6 +9,79 @@ use aelys_syntax::{
 use std::collections::HashSet;
 
 const BUILTIN_HEADS: &[&str] = &["Vec", "Rc", "Option", "Result", "Never", "Self"];
+pub(crate) const SLICE_KEY: &str = "[]";
+const TRAIT_METHOD_NAMES: &[&str] = &["eq", "cmp", "to_string"];
+
+pub(crate) fn builtin_head_key(head: &TypeAnnotation) -> Option<&'static str> {
+    if head.reference.is_some() || head.is_function_type() || head.array_size.is_some() {
+        return None;
+    }
+    if head.is_slice {
+        return Some(SLICE_KEY);
+    }
+    match head.name.as_str() {
+        "string" => Some("string"),
+        "char" => Some("char"),
+        "i64" => Some("i64"),
+        "f64" => Some("f64"),
+        "Vec" => Some("Vec"),
+        _ => None,
+    }
+}
+
+pub(crate) fn builtin_type_key(ty: &InferType) -> Option<&'static str> {
+    match ty {
+        InferType::String => Some("string"),
+        InferType::Char => Some("char"),
+        InferType::I64 => Some("i64"),
+        InferType::F64 => Some("f64"),
+        InferType::Vec(_) => Some("Vec"),
+        InferType::Slice { .. } | InferType::Array(..) => Some(SLICE_KEY),
+        _ => None,
+    }
+}
+
+pub(crate) fn builtin_fn_prefix(key: &str) -> &str {
+    if key == SLICE_KEY { "slice" } else { key }
+}
+
+pub fn builtin_key_of_prefix(prefix: &str) -> Option<&'static str> {
+    match prefix {
+        "string" => Some("string"),
+        "char" => Some("char"),
+        "i64" => Some("i64"),
+        "f64" => Some("f64"),
+        "Vec" => Some("Vec"),
+        "slice" => Some(SLICE_KEY),
+        _ => None,
+    }
+}
+
+pub fn is_builtin_key(key: &str) -> bool {
+    matches!(key, "string" | "char" | "i64" | "f64" | "Vec") || key == SLICE_KEY
+}
+
+pub(crate) fn builtin_key_shown(key: &str) -> &str {
+    if key == SLICE_KEY { "[T]" } else { key }
+}
+
+fn builtin_name_clash(key: &str, name: &str) -> Option<String> {
+    let shown = builtin_key_shown(key);
+    if TRAIT_METHOD_NAMES.contains(&name) {
+        return Some(format!(
+            "`{name}` is a method of a builtin trait; a method of `{shown}` cannot share its name"
+        ));
+    }
+    if key == "Vec"
+        && super::expr::intrinsic_method_names("Vec").is_some_and(|names| names.contains(&name))
+    {
+        return Some(format!("`{name}` is an intrinsic method of `Vec`"));
+    }
+    if name == "len" && matches!(key, "string" | "Vec" | "[]") {
+        return Some(format!("`len` is an intrinsic method of `{shown}`"));
+    }
+    None
+}
 
 pub(crate) enum MethodLookup {
     Found(MethodEntry),
@@ -42,9 +116,16 @@ impl TypeInference {
         out
     }
 
+    fn in_std(&self) -> bool {
+        self.module_path().starts_with("std.")
+    }
+
     fn impl_head_error(&mut self, decl: &ImplDecl) -> bool {
         let head = &decl.self_ty;
         let name = head.name.as_str();
+        if self.in_std() && builtin_head_key(head).is_some() {
+            return self.unconstrained_impl_param(decl);
+        }
         if head.reference.is_some() || head.is_slice || head.is_function_type() {
             self.errors.push(TypeError::coded(
                 "E0341",
@@ -55,7 +136,8 @@ impl TypeInference {
             return true;
         }
         let lower = name.to_lowercase();
-        if BUILTIN_HEADS.contains(&name)
+        let std_declared = self.in_std() && self.declares_local(name);
+        if (BUILTIN_HEADS.contains(&name) && !std_declared)
             || (super::KNOWN_TYPE_NAMES.contains(&lower.as_str()) && !self.declares_local(name))
         {
             let shown = if name == "Option" || name == "Result" {
@@ -121,6 +203,11 @@ impl TypeInference {
             ));
             return true;
         }
+        self.unconstrained_impl_param(decl)
+    }
+
+    fn unconstrained_impl_param(&mut self, decl: &ImplDecl) -> bool {
+        let head = &decl.self_ty;
         let mut used = HashSet::new();
         collect_names(head, &mut used);
         for tp in &decl.type_params {
@@ -159,7 +246,19 @@ impl TypeInference {
             return Vec::new();
         }
         let head = decl.self_ty.clone();
-        let type_name = head.name.clone();
+        let builtin = if self.in_std() {
+            builtin_head_key(&head)
+        } else {
+            None
+        };
+        let table_key = match builtin {
+            Some(key) => key.to_string(),
+            None => head.name.clone(),
+        };
+        let type_name = match builtin {
+            Some(key) => builtin_fn_prefix(key).to_string(),
+            None => head.name.clone(),
+        };
         let fields: Vec<String> = self
             .type_table
             .get_struct(&type_name)
@@ -196,11 +295,40 @@ impl TypeInference {
                 ));
                 continue;
             }
-            let entries = self.methods.entry(type_name.clone()).or_default();
+            if let Some(key) = builtin
+                && let Some(message) = builtin_name_clash(key, &mname)
+            {
+                self.errors.push(TypeError::coded(
+                    "E0342",
+                    message,
+                    "clashes with a builtin method",
+                    func.span,
+                ));
+                continue;
+            }
+            if builtin == Some(SLICE_KEY) && method.receiver == Receiver::Value {
+                self.errors.push(TypeError::coded(
+                    "E0341",
+                    format!("a slice method takes `&self` or `&mut self`; `{mname}` takes `self`"),
+                    "slice method by value",
+                    func.span,
+                ));
+                continue;
+            }
+            let shown_head = match builtin {
+                Some(key) => builtin_key_shown(key).to_string(),
+                None => type_name.clone(),
+            };
+            let table = if builtin.is_some() {
+                &mut self.builtin_methods
+            } else {
+                &mut self.methods
+            };
+            let entries = table.entry(table_key.clone()).or_default();
             if entries.iter().any(|e| e.name == mname) {
                 self.errors.push(TypeError::coded(
                     "E0342",
-                    format!("duplicate method `{mname}` on `{type_name}`"),
+                    format!("duplicate method `{mname}` on `{shown_head}`"),
                     "already defined",
                     func.span,
                 ));

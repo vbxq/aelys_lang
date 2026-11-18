@@ -157,8 +157,26 @@ fn build_imports(
         ..Default::default()
     };
     imports.module_path = unit.dotted.clone();
-    for module in exports {
+    let direct: HashSet<usize> = unit
+        .imports
+        .iter()
+        .map(|import| match import {
+            crate::modules::ResolvedImport::Namespace { target, .. }
+            | crate::modules::ResolvedImport::Symbols { target, .. } => *target,
+        })
+        .collect();
+    for (index, module) in exports.iter().enumerate() {
         for (ty, entries) in &module.methods {
+            if aelys_sema::is_builtin_key(ty) {
+                if direct.contains(&index) {
+                    imports
+                        .methods
+                        .entry(ty.clone())
+                        .or_default()
+                        .extend(entries.iter().cloned());
+                }
+                continue;
+            }
             imports.methods.insert(ty.clone(), entries.clone());
         }
         for def in module.traits.values() {
@@ -750,7 +768,7 @@ fn lower_file_to_air_with_source(
         .is_some_and(|scope| scope.values.is_empty() && scope.namespaces.is_empty())
     {
         for (front, unit) in fronts.iter_mut().zip(&graph.units) {
-            front.functions_unreachable = unit.prelude_only;
+            front.functions_unreachable = unit.prelude_only && front.exports.methods.is_empty();
         }
     }
 

@@ -30,6 +30,7 @@ use aelys_common::Warning;
 use std::collections::{HashMap, HashSet};
 
 pub(crate) use crate::typed_ast::LiteralInit;
+pub use impls::{builtin_key_of_prefix, is_builtin_key};
 
 const MAX_INFERENCE_DEPTH: usize = 200;
 
@@ -88,6 +89,7 @@ pub struct TypeInference {
     module_decls: crate::typed_ast::ModuleDecls,
     pub(crate) methods: HashMap<String, Vec<crate::modules::MethodEntry>>,
     pub(crate) trait_methods: HashMap<String, Vec<crate::modules::MethodEntry>>,
+    pub(crate) builtin_methods: HashMap<String, Vec<crate::modules::MethodEntry>>,
     recv_counter: usize,
     pretyped: HashMap<String, crate::typed_ast::TypedExpr>,
     method_tparams: HashMap<String, Vec<String>>,

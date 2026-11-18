@@ -93,6 +93,25 @@ impl TypeInference {
                 span,
             ));
         }
+        if let Some(key) = crate::infer::impls::builtin_type_key(&base)
+            && let Some(entry) = self.builtin_entry(key, member)
+        {
+            return Ok(self.builtin_method_call(typed_object, &base, via_ref, key, entry, args, span));
+        }
+        if let Some(key) = crate::infer::impls::builtin_type_key(&base)
+            && let Some(module) = std_method_module(key, member)
+        {
+            self.errors.push(TypeError::coded(
+                "E0304",
+                format!(
+                    "no method `{member}` on `{}`; it is in `std.{module}` (needs std.{module})",
+                    method_shown(&base)
+                ),
+                "method of a module not imported",
+                span,
+            ));
+            return Ok(self.skip_args(args));
+        }
         if !matches!(
             base,
             InferType::Struct(..) | InferType::Enum(..) | InferType::Var(_) | InferType::Dynamic
@@ -242,6 +261,37 @@ impl TypeInference {
                 {
                     return Err(typed_object);
                 }
+                if matches!(inner.as_ref(), InferType::Struct(..) | InferType::Enum(..))
+                    && matches!(self.lookup_quiet_for(inner, member), MethodLookup::Found(_))
+                {
+                    let span_obj = typed_object.span;
+                    let handle = match via_ref {
+                        Some(_) => TypedExpr::new(
+                            TypedExprKind::Deref(Box::new(typed_object)),
+                            base.clone(),
+                            span_obj,
+                        ),
+                        None => typed_object,
+                    };
+                    let handle = self.stash_pretyped(handle);
+                    let get = Expr::new(
+                        ExprKind::EnumVariant {
+                            enum_name: "Rc".to_string(),
+                            variant: "get".to_string(),
+                            args: vec![handle],
+                            unqualified: false,
+                        },
+                        span_obj,
+                    );
+                    let callee = Expr::new(
+                        ExprKind::Member {
+                            object: Box::new(get),
+                            member: member.to_string(),
+                        },
+                        span,
+                    );
+                    return Ok(self.infer_call_expr(&callee, args, span));
+                }
                 self.errors.push(TypeError::coded(
                     "E0304",
                     format!(
@@ -274,6 +324,155 @@ impl TypeInference {
             }
             _ => Err(typed_object),
         }
+    }
+
+    fn builtin_entry(&self, key: &str, member: &str) -> Option<MethodEntry> {
+        self.builtin_methods
+            .get(key)?
+            .iter()
+            .find(|e| e.name == member)
+            .cloned()
+    }
+
+    fn skip_args(&mut self, args: &[Expr]) -> (TypedExprKind, InferType) {
+        for a in args {
+            self.infer_expr(a);
+        }
+        (TypedExprKind::Null, InferType::Dynamic)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn builtin_method_call(
+        &mut self,
+        typed_object: TypedExpr,
+        base: &InferType,
+        via_ref: Option<bool>,
+        key: &str,
+        entry: MethodEntry,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        let member = entry.name.clone();
+        let Some((params, tparams)) = self.method_sig(&entry) else {
+            return self.skip_args(args);
+        };
+        if entry.receiver == Receiver::None || params.is_empty() {
+            return self.no_method_on(&typed_object.ty, &member, args, span);
+        }
+        let head = match &params[0] {
+            InferType::Ref { referent, .. } => (**referent).clone(),
+            other => other.clone(),
+        };
+        let recv_elem = match base {
+            InferType::Array(elem, _) => Some(InferType::Slice {
+                elem: elem.clone(),
+                mutable: false,
+            }),
+            _ => None,
+        };
+        let matched = match (&head, recv_elem.as_ref().unwrap_or(base)) {
+            (InferType::Slice { elem: pe, .. }, InferType::Slice { elem: te, .. }) => {
+                head_mismatch(pe, te, &tparams).is_none()
+            }
+            (h, b) => head_mismatch(h, b, &tparams).is_none(),
+        };
+        if !matched {
+            self.errors.push(TypeError::coded(
+                "E0304",
+                format!(
+                    "no method `{member}` on `{}`; `{member}` is defined for `{}`",
+                    method_shown(base),
+                    builtin_head_shown(&head)
+                ),
+                "receiver does not match the impl",
+                span,
+            ));
+            return self.skip_args(args);
+        }
+        let InferType::Slice {
+            mutable: wants_mut, ..
+        } = head
+        else {
+            return self.desugar_method_call(typed_object, base, via_ref, key, entry, args, span);
+        };
+        self.note_stub_use(&entry.fn_name);
+        if params.len() != args.len() + 1 {
+            self.arity_error(&member, params.len().saturating_sub(1), args.len(), span);
+            return self.skip_args(args);
+        }
+        let recv_span = typed_object.span;
+        let callee = Expr::new(ExprKind::Identifier(entry.fn_name.clone()), span);
+        let object = match via_ref {
+            Some(_) => TypedExpr::new(
+                TypedExprKind::Deref(Box::new(typed_object)),
+                base.clone(),
+                recv_span,
+            ),
+            None => typed_object,
+        };
+        let recv = match base {
+            InferType::Slice { mutable, .. } => {
+                if wants_mut && !*mutable {
+                    self.errors.push(TypeError::coded(
+                        "E0422",
+                        format!(
+                            "`{member}` takes `&mut self`, and its receiver is a shared slice `{}`; \
+                             mutation through a shared reference",
+                            method_shown(base)
+                        ),
+                        "shared slice",
+                        recv_span,
+                    ));
+                    return self.skip_args(args);
+                }
+                object
+            }
+            InferType::Array(elem, _) => {
+                let writable = {
+                    let env = &self.env;
+                    crate::place_spine::place_is_writable(&object, &|n: &str| env.is_mutable(n))
+                };
+                if wants_mut && !writable {
+                    let before = self.errors.len();
+                    self.require_mutable_root(&object, &member, recv_span);
+                    if self.errors.len() == before {
+                        self.errors.push(TypeError::coded(
+                            "E0417",
+                            format!(
+                                "`{member}` takes `&mut self`, and its receiver is not a mutable \
+                                 place"
+                            ),
+                            "immutable receiver",
+                            recv_span,
+                        ));
+                    }
+                    return self.skip_args(args);
+                }
+                let range = TypedExpr::new(
+                    TypedExprKind::Range {
+                        start: None,
+                        end: None,
+                        inclusive: false,
+                    },
+                    InferType::Range,
+                    recv_span,
+                );
+                TypedExpr::new(
+                    TypedExprKind::Slice {
+                        object: Box::new(object),
+                        range: Box::new(range),
+                    },
+                    InferType::Slice {
+                        elem: elem.clone(),
+                        mutable: writable,
+                    },
+                    recv_span,
+                )
+            }
+            _ => return self.no_method_on(base, &member, args, span),
+        };
+        let recv = self.stash_pretyped(recv);
+        self.finish_method_call(callee, recv, args, span, None)
     }
 
     fn no_method_on(
@@ -364,6 +563,19 @@ impl TypeInference {
             "unknown method",
             span,
         ));
+    }
+
+    fn lookup_quiet_for(&self, ty: &InferType, member: &str) -> MethodLookup {
+        let key = match ty {
+            InferType::Struct(n, _) | InferType::Enum(n, _) => n.clone(),
+            _ => return MethodLookup::Missing,
+        };
+        match self.lookup_quiet(&key, member) {
+            MethodLookup::Missing if !self.trait_candidates(ty, member).is_empty() => {
+                MethodLookup::Found(self.trait_candidates(ty, member).remove(0))
+            }
+            other => other,
+        }
     }
 
     fn lookup_quiet(&self, key: &str, member: &str) -> MethodLookup {
@@ -569,6 +781,7 @@ impl TypeInference {
                         recv_span,
                     ));
                 }
+                let (hoisted, typed_object) = split_receiver_block(typed_object);
                 let name = format!("{RECV}{}", self.recv_counter);
                 self.recv_counter += 1;
                 let init = self.stash_pretyped(typed_object);
@@ -608,8 +821,9 @@ impl TypeInference {
                 );
                 let typed = self.infer_expr(&block);
                 let mut typed = typed;
-                if let TypedExprKind::Block { tail, .. } = &mut typed.kind {
+                if let TypedExprKind::Block { tail, stmts } = &mut typed.kind {
                     mark_receiver(tail, &member);
+                    stmts.splice(0..0, hoisted);
                 }
                 (typed.kind, typed.ty)
             }
@@ -733,6 +947,19 @@ impl TypeInference {
     }
 }
 
+fn split_receiver_block(recv: TypedExpr) -> (Vec<crate::typed_ast::TypedStmt>, TypedExpr) {
+    let hoistable = matches!(&recv.kind, TypedExprKind::Block { stmts, .. }
+        if !stmts.is_empty() && stmts.iter().all(|s| matches!(&s.kind,
+            crate::typed_ast::TypedStmtKind::Let { name, .. } if name.starts_with(RECV))));
+    if !hoistable {
+        return (Vec::new(), recv);
+    }
+    match recv.kind {
+        TypedExprKind::Block { stmts, tail } => (stmts, *tail),
+        _ => unreachable!("checked above"),
+    }
+}
+
 fn mark_receiver(call: &mut TypedExpr, member: &str) {
     if let TypedExprKind::Call { args, .. } = &mut call.kind
         && let Some(first) = args.first_mut()
@@ -813,6 +1040,10 @@ fn matches_head(
         return true;
     }
     match (pat, ty) {
+        (InferType::Vec(p), InferType::Vec(t))
+        | (InferType::Slice { elem: p, .. }, InferType::Slice { elem: t, .. })
+        | (InferType::Array(p, _), InferType::Array(t, _))
+        | (InferType::Rc(p), InferType::Rc(t)) => matches_head(p, t, tparams, bound),
         (InferType::Struct(a, pa), InferType::Struct(b, ta))
         | (InferType::Enum(a, pa), InferType::Enum(b, ta)) => {
             a == b
@@ -833,6 +1064,62 @@ fn shown_with_params(ty: &InferType) -> String {
 const STD_STR: &str = include_str!("../../../../std/str.aelys");
 const STD_VEC: &str = include_str!("../../../../std/vec.aelys");
 const STD_SLICE: &str = include_str!("../../../../std/slice.aelys");
+const STD_MATH: &str = include_str!("../../../../std/math.aelys");
+
+fn std_impl_key(line: &str) -> Option<&'static str> {
+    let rest = line.strip_prefix("impl")?;
+    let rest = rest.trim_start();
+    let rest = match rest.strip_prefix('<') {
+        Some(r) => r.split_once('>')?.1.trim_start(),
+        None => rest,
+    };
+    if rest.starts_with('[') {
+        return Some(crate::infer::impls::SLICE_KEY);
+    }
+    let head: String = rest
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    crate::infer::builtin_key_of_prefix(&head).filter(|k| *k != crate::infer::impls::SLICE_KEY)
+}
+
+fn std_method_module(key: &str, member: &str) -> Option<&'static str> {
+    for (module, src) in [
+        ("str", STD_STR),
+        ("vec", STD_VEC),
+        ("slice", STD_SLICE),
+        ("math", STD_MATH),
+    ] {
+        let mut current: Option<&str> = None;
+        for line in src.lines() {
+            if line.starts_with("impl") {
+                current = std_impl_key(line);
+                continue;
+            }
+            if line.starts_with('}') {
+                current = None;
+                continue;
+            }
+            if current != Some(key) {
+                continue;
+            }
+            let t = line.trim_start();
+            let t = t.strip_prefix("pub ").unwrap_or(t);
+            let t = t.strip_prefix("nogc ").unwrap_or(t);
+            let Some(t) = t.strip_prefix("fn ") else {
+                continue;
+            };
+            let name: String = t
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            if name == member {
+                return Some(module);
+            }
+        }
+    }
+    None
+}
 
 fn std_function_for(base: &InferType, member: &str) -> Option<&'static str> {
     let candidates: &[(&'static str, &str, &[&str])] = match base {
@@ -850,6 +1137,13 @@ fn std_function_for(base: &InferType, member: &str) -> Option<&'static str> {
             accepts.iter().any(|a| ty.contains(a)).then_some(*module)
         })
     })
+}
+
+fn builtin_head_shown(head: &InferType) -> String {
+    match head {
+        InferType::Slice { elem, .. } => format!("[{elem}]"),
+        other => other.to_string(),
+    }
 }
 
 pub(crate) fn method_shown(ty: &InferType) -> String {

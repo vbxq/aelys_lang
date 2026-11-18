@@ -45,7 +45,7 @@ impl Parser {
         } else {
             None
         };
-        let first = self.parse_type_annotation()?;
+        let first = self.parse_impl_head()?;
         let (trait_ref, self_ty) = if trait_ref.is_some() {
             (trait_ref, first)
         } else if self.match_token(&TokenKind::For) {
@@ -117,6 +117,21 @@ impl Parser {
 }
 
 impl Parser {
+    fn parse_impl_head(&mut self) -> Result<aelys_syntax::TypeAnnotation> {
+        if self.check(&TokenKind::LBracket) {
+            let save = self.current;
+            let start = self.peek().span;
+            self.advance();
+            let element = self.parse_type_annotation()?;
+            if self.match_token(&TokenKind::RBracket) {
+                let span = start.merge(self.previous().span);
+                return Ok(aelys_syntax::TypeAnnotation::slice_referent(element, span));
+            }
+            self.current = save;
+        }
+        self.parse_type_annotation()
+    }
+
     pub(super) fn starts_trait(&self) -> bool {
         matches!(&self.peek().kind, TokenKind::Identifier(n) if n == "trait")
             && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))

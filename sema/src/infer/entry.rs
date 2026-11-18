@@ -66,6 +66,7 @@ impl Default for TypeInference {
             module_decls: Default::default(),
             methods: HashMap::new(),
             trait_methods: HashMap::new(),
+            builtin_methods: HashMap::new(),
             recv_counter: 0,
             pretyped: HashMap::new(),
             method_tparams: HashMap::new(),

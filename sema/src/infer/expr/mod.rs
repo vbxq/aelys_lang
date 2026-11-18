@@ -11,6 +11,7 @@ mod method;
 mod primary;
 mod try_expr;
 
+pub(crate) use primary::intrinsic_methods as intrinsic_method_names;
 
 use super::{LiteralInit, TypeInference};
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
