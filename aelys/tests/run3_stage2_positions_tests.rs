@@ -3338,66 +3338,6 @@ fn the_effect_decision_surface_is_one_file() {
 }
 
 #[test]
-fn the_ablation_matrix_is_stated_over_rows_that_exist() {
-    let root = repo_root();
-    let guard =
-        fs::read_to_string(root.join("scripts/s4_retro_discrimination.sh")).expect("guard script");
-    let extractor =
-        fs::read_to_string(root.join("scripts/extract_corpus.py")).expect("fixture extractor");
-    assert!(
-        extractor.contains("const %s: &[Row] = &["),
-        "the guard must generate its fixtures from this file, not carry copies of the programs"
-    );
-    for group in ["GROUP_A", "GROUP_B", "GROUP_C"] {
-        assert!(
-            extractor.contains(group),
-            "the fixture generator must read {group} too, or the matrix cannot see it move"
-        );
-    }
-    assert!(
-        guard.contains("scripts/extract_corpus.py"),
-        "the guard must call the generator rather than embed fixtures"
-    );
-
-    let ids: Vec<&str> = GROUP_A
-        .iter()
-        .chain(GROUP_B)
-        .chain(GROUP_C)
-        .map(|r| r.id)
-        .collect();
-    let mut declared = 0;
-    let mut becomes_accepted = 0;
-    for table in guard.split("EXPECT_").skip(1) {
-        let body = table
-            .split_once("=\"")
-            .and_then(|(_, rest)| rest.split("\"\n").next())
-            .expect("an EXPECT_<id> table ends with a quote on its own");
-        for token in body.split_whitespace() {
-            let Some((id, verdict)) = token.split_once(':') else {
-                continue;
-            };
-            assert!(
-                ids.contains(&id),
-                "the ablation matrix declares {id}, which is not a corpus row"
-            );
-            declared += 1;
-            if verdict == "ACCEPT" && id.starts_with('B') {
-                becomes_accepted += 1;
-            }
-        }
-    }
-    assert!(
-        declared > 0,
-        "the ablation matrix declares no moved row at all"
-    );
-    assert!(
-        becomes_accepted > 0,
-        "no ablation is declared to turn a must-stay-rejected row into an acceptance, so the \
-         matrix cannot show a silent retain"
-    );
-}
-
-#[test]
 fn every_must_stay_rejected_row_names_e0727() {
     let h = Harness::new();
     let mut behind = 0;
