@@ -729,7 +729,7 @@ fn main() -> i64 {
 ```
 
 ```diagnostic
-error[E0902]: variant `Points` of enum `Shape` has a payload of type `Vec<i64>`: a Vec inside an enum is not supported in 0.1; keep the Vec in its own binding and pass it with `&mut`
+error[E0902]: variant `Points` of enum `Shape` has a payload of type `Vec<i64>`: a Vec inside an enum is not supported yet; keep the Vec in its own binding and pass it with `&mut`
  --> main.aelys:1:21
   |
 1 | enum Shape { Points(Vec<i64>), Empty }

@@ -285,7 +285,6 @@ pub struct TracedLeaf {
     pub guard: Option<usize>,
 }
 
-// the collector's view: every rc leaf, a leaf under a multi-variant enum named with its guarding step
 pub fn rc_traced_leaves(ty: &AirType, defs: Defs<'_>) -> Result<Vec<TracedLeaf>, String> {
     let mut out = Vec::new();
     trace(ty, defs, &mut Vec::new(), None, &mut out, &mut HashSet::new())?;
