@@ -1,6 +1,7 @@
 fn main() -> i64 {
-    let e: Vec<i64> = Vec::new()
+    let mut e: Vec<i64> = vec[4, 5]
     let o: Option<(Vec<i64>, i64)> = Some((e, 1))
-    match o { Some(p) => { println(p.1) } None => { println(0) } }
+    Vec::push(e, 6)
+    match o { Some(p) => { println(p.1 + p.0.len * 10 + e.len * 100) } None => { println(0) } }
     return 0
 }

@@ -1,0 +1,7 @@
+enum Msg { Batch(Vec<i64>), Empty }
+fn main() -> i64 {
+    let mut v: Vec<Msg> = Vec::new()
+    Vec::push(v, Msg::Empty)
+    println(v.len)
+    return 0
+}
