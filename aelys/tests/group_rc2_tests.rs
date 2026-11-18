@@ -2663,14 +2663,14 @@ fn rc2_96_a_generic_struct_with_an_inferred_literal_answers_its_value() {
 fn rc2_97_a_global_initialized_by_a_call_is_unsupported_at_its_let() {
     refusal_row_full(
         "rc2-97",
-        "fn mk() -> i64 { return 7 }\n\nlet G = mk()\nfn main() -> i64 { println(\"{G}\"); return 0 }\n",
+        "fn mk() -> i64 { 7 }\n\nstatic G: i64 = mk();\nfn main() { println!(\"{G}\"); }\n",
         &[],
         "E0902",
         &[
             "[E0902]: file-scope let 'G' requires a compile-time constant initializer",
-            "let G = mk()",
+            "static G: i64 = mk();",
         ],
-        &["E0904", "[air-lowering];"],
+        &["E0904", "[air-lowering]"],
     );
 }
 
@@ -2701,7 +2701,7 @@ fn rc2_99_a_slice_of_a_string_names_substring() {
          \x20   println!(\"{}, {}\", n.last, n.first);\n}\n",
         &[],
         "E0425",
-        &["a `string` has no slices", "str.substring;"],
+        &["a `string` has no slices", "str.substring"],
         &["&[dynamic]"],
     );
 }
@@ -3169,7 +3169,7 @@ fn rc2_127_rc_get_of_a_value_typed_only_later_asks_for_an_annotation() {
             "the argument of `Rc::get` has a type that is only inferred after this use; annotate \
              the binding it comes from as `Rc<T>`",
         ],
-        &["E0901", "τ;"],
+        &["E0901", "τ"],
     );
 }
 
@@ -3182,7 +3182,7 @@ fn rc2_128_a_constant_index_past_an_array_returned_by_a_generic_is_refused() {
         &[],
         "E0433",
         &["index 5 is outside `[_; 3]`"],
-        &["E0412", "E0901;"],
+        &["E0412", "E0901"],
     );
 }
 
@@ -3195,7 +3195,7 @@ fn rc2_129_an_integer_index_into_a_string_returned_by_a_generic_is_refused() {
         &[],
         "E0304",
         &["a `string` cannot be indexed by integer"],
-        &["E0412", "E0901;"],
+        &["E0412", "E0901"],
     );
 }
 
@@ -3356,11 +3356,11 @@ const GENERIC_ENUM_RC: &str = "payload 0 of enum variant `May::Yes` stores a val
 #[test]
 fn rc2_139_an_rc_field_of_a_generic_result_put_in_a_generic_enum_runs() {
     let src = format!(
-        "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
-         \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }})\n\
-         \x20       let m = May::Yes(h.r)\n        let junk = victim(3)\n\
-         \x20       match m {{ May::Yes(x) => {{ t = t + 1 }} May::No => {{ t = t + 0 }} }}\n\
-         \x20       i = i + 1\n    }}\n    println(\"{{t}}\")\n    return 0\n}}\n"
+        "{RC2_LATE_CARRIER}fn main() {{\n    let mut i: i64 = 0;\n    let mut t: i64 = 0;\n\
+         \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }});\n\
+         \x20       let m = May::Yes(h.r);\n        let junk = victim(3);\n\
+         \x20       match m {{ May::Yes(x) => {{ t = t + 1; }} May::No => {{ t = t + 0; }} }}\n\
+         \x20       i = i + 1;\n    }}\n    println!(\"{{t}}\");\n}}\n"
     );
     let h = Harness::new();
     h.differential_row("rc2-139", &src, &[], "1000\n", (5000, 5000));
@@ -3371,11 +3371,11 @@ fn rc2_139_an_rc_field_of_a_generic_result_put_in_a_generic_enum_runs() {
 #[test]
 fn rc2_140_an_rc_returned_by_a_generic_put_in_a_generic_enum_runs() {
     let src = format!(
-        "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
-         \x20   while i < 1000 {{\n        let r = Rc::new(N {{ s: victim(i) }})\n        let q = id(r)\n\
-         \x20       let m = May::Yes(q)\n        let junk = victim(3)\n\
-         \x20       match m {{ May::Yes(x) => {{ t = t + 1 }} May::No => {{ t = t + 0 }} }}\n\
-         \x20       i = i + 1\n    }}\n    println(\"{{t}}\")\n    return 0\n}}\n"
+        "{RC2_LATE_CARRIER}fn main() {{\n    let mut i: i64 = 0;\n    let mut t: i64 = 0;\n\
+         \x20   while i < 1000 {{\n        let r = Rc::new(N {{ s: victim(i) }});\n        let q = id(r);\n\
+         \x20       let m = May::Yes(q);\n        let junk = victim(3);\n\
+         \x20       match m {{ May::Yes(x) => {{ t = t + 1; }} May::No => {{ t = t + 0; }} }}\n\
+         \x20       i = i + 1;\n    }}\n    println!(\"{{t}}\");\n}}\n"
     );
     let h = Harness::new();
     h.differential_row("rc2-140", &src, &[], "1000\n", (5000, 5000));
@@ -3386,12 +3386,12 @@ fn rc2_140_an_rc_returned_by_a_generic_put_in_a_generic_enum_runs() {
 #[test]
 fn rc2_141_an_rc_field_of_a_generic_result_read_back_from_a_generic_enum_runs() {
     let src = format!(
-        "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
-         \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }})\n\
-         \x20       let m = May::Yes(h.r)\n        let junk = victim(3)\n\
-         \x20       match m {{ May::Yes(x) => {{ let y: Rc<N> = x\n t = t + Rc::get(y).s.len }} \
-         May::No => {{ t = t + 0 }} }}\n        i = i + 1\n    }}\n    println(\"{{t}}\")\n\
-         \x20   return 0\n}}\n"
+        "{RC2_LATE_CARRIER}fn main() {{\n    let mut i: i64 = 0;\n    let mut t: i64 = 0;\n\
+         \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }});\n\
+         \x20       let m = May::Yes(h.r);\n        let junk = victim(3);\n\
+         \x20       match m {{ May::Yes(x) => {{ let y: Rc<N> = x;\n t = t + Rc::get(y).s.len(); }} \
+         May::No => {{ t = t + 0; }} }}\n        i = i + 1;\n    }}\n    println!(\"{{t}}\");\n\
+         }}\n"
     );
     let h = Harness::new();
     h.differential_row("rc2-141", &src, &[], "4890\n", (5000, 5000));
@@ -3402,10 +3402,10 @@ fn rc2_141_an_rc_field_of_a_generic_result_read_back_from_a_generic_enum_runs() 
 #[test]
 fn rc2_142_an_array_of_rc_fields_of_a_generic_result_is_refused() {
     let src = format!(
-        "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
-         \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }})\n\
-         \x20       let arr = [h.r, h.r]\n        let junk = victim(3)\n        t = t + arr.len\n\
-         \x20       i = i + 1\n    }}\n    println(\"{{t}}\")\n    return 0\n}}\n"
+        "{RC2_LATE_CARRIER}fn main() {{\n    let mut i: i64 = 0;\n    let mut t: i64 = 0;\n\
+         \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }});\n\
+         \x20       let arr = [h.r, h.r];\n        let junk = victim(3);\n        t = t + arr.len();\n\
+         \x20       i = i + 1;\n    }}\n    println!(\"{{t}}\");\n}}\n"
     );
     refusal_row_full(
         "rc2-142",
@@ -3420,10 +3420,10 @@ fn rc2_142_an_array_of_rc_fields_of_a_generic_result_is_refused() {
 #[test]
 fn rc2_143_an_rc_field_of_a_generic_result_pushed_into_a_vec_runs() {
     let src = format!(
-        "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
-         \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }})\n\
-         \x20       let mut v = Vec::new()\n        Vec::push(v, h.r)\n        let junk = victim(3)\n\
-         \x20       t = t + v.len\n        i = i + 1\n    }}\n    println(\"{{t}}\")\n    return 0\n}}\n"
+        "{RC2_LATE_CARRIER}fn main() {{\n    let mut i: i64 = 0;\n    let mut t: i64 = 0;\n\
+         \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }});\n\
+         \x20       let mut v = Vec::new();\n        Vec::push(v, h.r);\n        let junk = victim(3);\n\
+         \x20       t = t + v.len();\n        i = i + 1;\n    }}\n    println!(\"{{t}}\");\n}}\n"
     );
     let h = Harness::new();
     h.differential_row("rc2-143", &src, &[], "1000\n", (6000, 6000));
@@ -3460,7 +3460,7 @@ fn rc2_145_a_slice_of_a_value_whose_type_is_never_inferred_asks_for_an_annotatio
         &[
             "type annotations needed: the type of this value is never inferred, so it cannot be sliced",
         ],
-        &["E0425", "τ;", "E0901"],
+        &["E0425", "τ", "E0901"],
     );
 }
 
@@ -3793,14 +3793,13 @@ fn rc2_160_a_byte_view_into_the_payload_of_a_mutable_rc_survives_its_reassignmen
 const RC2_161: &str = r#"
 struct Node { v: i64, next: Rc<Node> }
 struct List { head: Rc<Node>, len: i64 }
-fn main() -> i64 {
-    let mut l = List { head: Rc::null(), len: 0 }
-    let mut i = 0
-    while i < 3 { l.head = Rc::new(Node { v: i, next: l.head })
-      l.len = l.len + 1
-      i = i + 1 }
-    println("{l.len} {Rc::get(l.head).v}")
-    return 0
+fn main() {
+    let mut l = List { head: Rc::null(), len: 0 };
+    let mut i = 0;
+    while i < 3 { l.head = Rc::new(Node { v: i, next: l.head });
+      l.len = l.len + 1;
+      i = i + 1; }
+    println!("{} {}", l.len, Rc::get(l.head).v);
 }
 "#;
 
@@ -3815,15 +3814,14 @@ fn rc2_161_an_rc_field_of_a_local_carrier_is_written_in_place() {
 const RC2_162: &str = r#"
 struct Node { v: i64, next: Rc<Node> }
 struct List { head: Rc<Node>, len: i64 }
-fn push(l: &mut List, v: i64) { (*l).head = Rc::new(Node { v: v, next: (*l).head })
- (*l).len = (*l).len + 1 }
-fn main() -> i64 {
-    let mut l = List { head: Rc::null(), len: 0 }
-    push(&mut l, 1)
-    push(&mut l, 2)
-    push(&mut l, 3)
-    println("{l.len} {Rc::get(l.head).v}")
-    return 0
+fn push(l: &mut List, v: i64) { (*l).head = Rc::new(Node { v: v, next: (*l).head });
+ (*l).len = (*l).len + 1; }
+fn main() {
+    let mut l = List { head: Rc::null(), len: 0 };
+    push(&mut l, 1);
+    push(&mut l, 2);
+    push(&mut l, 3);
+    println!("{} {}", l.len, Rc::get(l.head).v);
 }
 "#;
 
@@ -3838,26 +3836,25 @@ fn rc2_162_an_rc_field_is_written_through_a_mutable_reference() {
 const RC2_163: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct List { head: Rc<Node>, len: i64 }
-fn main() -> i64 {
-    let mut l = List { head: Rc::null(), len: 0 }
-    let mut t = 0
-    let mut i = 0
+fn main() {
+    let mut l = List { head: Rc::null(), len: 0 };
+    let mut t = 0;
+    let mut i = 0;
     while i < 1000 {
-        l.head = Rc::new(Node { val: i, next: l.head })
-        l.len = l.len + 1
+        l.head = Rc::new(Node { val: i, next: l.head });
+        l.len = l.len + 1;
         if i % 3 == 2 {
-            t = t + Rc::get(l.head).val
-            l.head = Rc::get(l.head).next
-            l.len = l.len - 1
+            t = t + Rc::get(l.head).val;
+            l.head = Rc::get(l.head).next;
+            l.len = l.len - 1;
         }
-        i = i + 1
+        i = i + 1;
     }
     while !Rc::is_null(l.head) {
-        t = t + Rc::get(l.head).val
-        l.head = Rc::get(l.head).next
+        t = t + Rc::get(l.head).val;
+        l.head = Rc::get(l.head).next;
     }
-    println("{t} {l.len}")
-    return 0
+    println!("{t} {}", l.len);
 }
 "#;
 
@@ -3873,28 +3870,27 @@ const RC2_164: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct List { head: Rc<Node>, len: i64 }
 fn push(l: &mut List, v: i64) {
-    (*l).head = Rc::new(Node { val: v, next: (*l).head })
-    (*l).len = (*l).len + 1
+    (*l).head = Rc::new(Node { val: v, next: (*l).head });
+    (*l).len = (*l).len + 1;
 }
 fn pop(l: &mut List) -> i64 {
-    let v = Rc::get((*l).head).val
-    (*l).head = Rc::get((*l).head).next
-    (*l).len = (*l).len - 1
-    return v
+    let v = Rc::get((*l).head).val;
+    (*l).head = Rc::get((*l).head).next;
+    (*l).len = (*l).len - 1;
+    v
 }
-fn main() -> i64 {
-    let mut l = List { head: Rc::null(), len: 0 }
-    let mut t = 0
-    let mut i = 0
+fn main() {
+    let mut l = List { head: Rc::null(), len: 0 };
+    let mut t = 0;
+    let mut i = 0;
     while i < 1000 {
-        push(&mut l, i)
-        push(&mut l, i + 1)
-        t = t + pop(&mut l)
-        i = i + 1
+        push(&mut l, i);
+        push(&mut l, i + 1);
+        t = t + pop(&mut l);
+        i = i + 1;
     }
-    while l.len > 0 { t = t + pop(&mut l) }
-    println("{t} {l.len}")
-    return 0
+    while l.len > 0 { t = t + pop(&mut l); }
+    println!("{t} {}", l.len);
 }
 "#;
 
@@ -4059,50 +4055,49 @@ struct Node { val: i64, next: Rc<Node> }
 struct List { head: Rc<Node>, len: i64 }
 
 fn push(l: &mut List, v: i64) {
-    (*l).head = Rc::new(Node { val: v, next: (*l).head })
-    (*l).len = (*l).len + 1
+    (*l).head = Rc::new(Node { val: v, next: (*l).head });
+    (*l).len = (*l).len + 1;
 }
 
 fn pop(l: &mut List) -> i64 {
-    if Rc::is_null((*l).head) { return 0 }
-    let v = Rc::get((*l).head).val
-    (*l).head = Rc::get((*l).head).next
-    (*l).len = (*l).len - 1
-    return v
+    if Rc::is_null((*l).head) { return 0; }
+    let v = Rc::get((*l).head).val;
+    (*l).head = Rc::get((*l).head).next;
+    (*l).len = (*l).len - 1;
+    v
 }
 
 fn sum(l: &List) -> i64 {
-    let mut cur = (*l).head
-    let mut t = 0
+    let mut cur = (*l).head;
+    let mut t = 0;
     while !Rc::is_null(cur) {
-        t = t + Rc::get(cur).val
-        cur = Rc::get(cur).next
+        t = t + Rc::get(cur).val;
+        cur = Rc::get(cur).next;
     }
-    return t
+    t
 }
 
 fn build(n: i64) -> Rc<Node> {
-    if n == 0 { return Rc::null() }
-    return Rc::new(Node { val: n, next: build(n - 1) })
+    if n == 0 { return Rc::null(); }
+    Rc::new(Node { val: n, next: build(n - 1) })
 }
 
-fn main() -> i64 {
-    let mut l = List { head: build(10), len: 10 }
-    let mut t = 0
-    let mut i = 0
+fn main() {
+    let mut l = List { head: build(10), len: 10 };
+    let mut t = 0;
+    let mut i = 0;
     while i < 1000 {
-        push(&mut l, i % 1000)
-        push(&mut l, 1)
-        t = t + pop(&mut l) + pop(&mut l)
+        push(&mut l, i % 1000);
+        push(&mut l, 1);
+        t = t + pop(&mut l) + pop(&mut l);
         if i % 1000 == 0 {
-            l.head = build(20)
-            l.len = 20
-            t = t + sum(&l)
+            l.head = build(20);
+            l.len = 20;
+            t = t + sum(&l);
         }
-        i = i + 1
+        i = i + 1;
     }
-    println("{t} {l.len} {sum(&l)}")
-    return 0
+    println!("{t} {} {}", l.len, sum(&l));
 }
 "#;
 
@@ -4960,19 +4955,18 @@ fn rc2_203_complex_callee_expressions_without_a_conflict_stay_accepted() {
 }
 
 const RC2_204: &str = r#"
-fn mk(n: i64) -> string { return "ab" + "{n}" }
-fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i) } }
-fn id(x: i64) -> i64 { return x }
-let F = fn() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    Vec::push(v, 41)
-    let r = Vec::as_slice(v)
-    for i in 0..1000 { Vec::push(v, i) }
-    return r[0]
-}
-fn main() -> i64 {
-    println("{F()}")
-    return 0
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
+fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i); } }
+fn id(x: i64) -> i64 { x }
+static F: fn() -> i64 = || -> i64 {
+    let mut v: Vec<i64> = Vec::new();
+    Vec::push(v, 41);
+    let r = Vec::as_slice(v);
+    for i in 0..1000 { Vec::push(v, i); }
+    r[0]
+};
+fn main() {
+    println!("{}", F());
 }
 "#;
 
@@ -5080,127 +5074,126 @@ fn rc2_207_an_rc_linked_by_a_field_write_beside_a_copied_vec_is_released() {
 }
 
 const RC2_208: &str = r#"
-needs std.str
-needs std.vec
-needs std.slice
-needs std.sort
-needs std.math
-needs std.result
-needs std.io
+use std::str;
+use std::vec;
+use std::slice;
+use std::sort;
+use std::math;
+use std::result;
+use std::io;
 
-struct Entry { key: string, score: Rc<i64> }
+struct Entry { key: String, score: Rc<i64> }
 struct Node { val: i64, next: Rc<Node> }
 struct List { head: Rc<Node>, len: i64 }
-struct Tags { names: [string; 4], n: i64 }
+struct Tags { names: [String; 4], n: i64 }
 
-fn line_for(i: i64) -> string {
-    return "  id" + str.from_int(i % 37) + " , " + str.from_int((i * 7) % 101) + " , x" + str.from_int(i % 5) + "  "
+fn line_for(i: i64) -> String {
+    "  id" + str::from_int(i % 37) + " , " + str::from_int((i * 7) % 101) + " , x" + str::from_int(i % 5) + "  "
 }
 
 fn score_of(e: Entry) -> i64 {
-    return Rc::get(e.score)
+    Rc::get(e.score)
 }
 
-fn mk_entry(key: string, value: i64) -> Entry {
-    return Entry { key: key, score: Rc::new(value) }
+fn mk_entry(key: String, value: i64) -> Entry {
+    Entry { key: key, score: Rc::new(value) }
 }
 
 fn push(l: &mut List, v: i64) {
-    (*l).head = Rc::new(Node { val: v, next: (*l).head })
-    (*l).len = (*l).len + 1
+    (*l).head = Rc::new(Node { val: v, next: (*l).head });
+    (*l).len = (*l).len + 1;
 }
 
 fn pop(l: &mut List) -> i64 {
-    if Rc::is_null((*l).head) { return 0 }
-    let v = Rc::get((*l).head).val
-    (*l).head = Rc::get((*l).head).next
-    (*l).len = (*l).len - 1
-    return v
+    if Rc::is_null((*l).head) { return 0; }
+    let v = Rc::get((*l).head).val;
+    (*l).head = Rc::get((*l).head).next;
+    (*l).len = (*l).len - 1;
+    v
 }
 
 fn walk(l: &List) -> i64 {
-    let mut cur = (*l).head
-    let mut t = 0
+    let mut cur = (*l).head;
+    let mut t = 0;
     while !Rc::is_null(cur) {
-        t = t + Rc::get(cur).val
-        cur = Rc::get(cur).next
+        t = t + Rc::get(cur).val;
+        cur = Rc::get(cur).next;
     }
-    return t
+    t
 }
 
-fn record(seen: &mut Vec<string>, count: &mut i64, s: string) {
-    Vec::push(*seen, s)
-    *count = *count + 1
+fn record(seen: &mut Vec<String>, count: &mut i64, s: String) {
+    Vec::push(*seen, s);
+    *count = *count + 1;
 }
 
-fn tag_add(t: &mut Tags, s: string) {
-    (*t).names[(*t).n % 4] = s
-    (*t).n = (*t).n + 1
+fn tag_add(t: &mut Tags, s: String) {
+    (*t).names[(*t).n % 4] = s;
+    (*t).n = (*t).n + 1;
 }
 
-fn main() -> i64 {
-    let mut total: i64 = 0
-    let mut l = List { head: Rc::null(), len: 0 }
-    push(&mut l, 5)
-    push(&mut l, 6)
-    let mut i: i64 = 0
+fn main() {
+    let mut total: i64 = 0;
+    let mut l = List { head: Rc::null(), len: 0 };
+    push(&mut l, 5);
+    push(&mut l, 6);
+    let mut i: i64 = 0;
     while i < 300 {
-        let raw: string = line_for(i)
-        let clean: string = str.trim(raw)
-        let parts: Vec<string> = str.split(clean, ",")
-        let key: string = str.trim(parts[0])
-        let value: i64 = result.unwrap_or(str.parse_int(str.trim(parts[1])), 0)
-        let tag: string = str.substring(str.trim(parts[2]), 0, 2)
-        let e: Entry = mk_entry(key, value)
-        let mut names: Vec<string> = Vec::new()
-        Vec::push(names, tag)
-        Vec::push(names, e.key)
-        Vec::push(names, "zz")
-        let mut view: &mut [string] = Vec::try_as_unique_mut_slice(names)
-        sort.strings(view)
-        let joined: string = str.join(&names, "|")
-        let mut nums: Vec<i64> = Vec::new()
-        Vec::push(nums, value)
-        Vec::push(nums, math.gcd(value, 12))
-        Vec::push(nums, math.clamp(value - 50, 0, 9))
-        let k: i64 = joined.len
-        let shifted: Vec<i64> = vec.map(&nums, fn (x: i64) -> i64 { return x + k })
-        let kept: Vec<i64> = vec.filter(&shifted, fn (x: i64) -> bool { return x % 2 == 0 })
-        let acc: i64 = vec.fold(&kept, 0, fn (a: i64, b: i64) -> i64 { return a + b })
-        let sorted: Vec<i64> = vec.sorted(&shifted)
-        let first: i64 = result.some_or(slice.first(Vec::as_slice(sorted)), 0)
-        let hit: i64 = if str.contains(joined, "id1") { 1 } else { 0 }
-        let ch: i64 = str.char_count(joined) + str.index_of(joined, "|") + str.compare(tag, "x2")
-        total = total + score_of(e) + acc + first + hit + ch + math.abs(math.sign(value - 50)) + vec.sum(&nums) % 7
-        push(&mut l, value)
-        let top = l.head
-        push(&mut l, k)
-        let moved: i64 = if top == l.head { 0 } else { 1 }
-        let popped: i64 = pop(&mut l)
-        let back: i64 = if top == l.head { 1 } else { 0 }
-        total = total + moved + back + popped + pop(&mut l) + l.len
-        if i % 50 == 0 { total = total + walk(&l) }
-        let mut seen: Vec<string> = Vec::new()
-        let mut count: i64 = 0
-        record(&mut seen, &mut count, tag)
-        record(&mut seen, &mut count, joined)
-        let peek = fn () -> i64 {
-            let s = Vec::as_slice(seen)
-            return s.len + s[1].len
-        }
-        let lead = fn () -> i64 {
-            let b = joined.bytes
-            return b[0] + b.len
-        }
-        let mut tg = Tags { names: ["", "", "", ""], n: 0 }
-        tag_add(&mut tg, key)
-        tag_add(&mut tg, tag)
-        tag_add(&mut tg, str.from_int(value))
-        total = total + peek() + lead() + count + tg.n + tg.names[2].len + tg.names[0].len
-        i = i + 1
+        let raw: String = line_for(i);
+        let clean: String = str::trim(raw);
+        let parts: Vec<String> = str::split(clean, ",");
+        let key: String = str::trim(parts[0]);
+        let value: i64 = result::unwrap_or(str::parse_int(str::trim(parts[1])), 0);
+        let tag: String = str::substring(str::trim(parts[2]), 0, 2);
+        let e: Entry = mk_entry(key, value);
+        let mut names: Vec<String> = Vec::new();
+        Vec::push(names, tag);
+        Vec::push(names, e.key);
+        Vec::push(names, "zz");
+        let mut view: &mut [String] = Vec::try_as_unique_mut_slice(names);
+        sort::strings(view);
+        let joined: String = str::join(&names, "|");
+        let mut nums: Vec<i64> = Vec::new();
+        Vec::push(nums, value);
+        Vec::push(nums, math::gcd(value, 12));
+        Vec::push(nums, math::clamp(value - 50, 0, 9));
+        let k: i64 = joined.len();
+        let shifted: Vec<i64> = vec::map(&nums, move |x: i64| -> i64 { x + k });
+        let kept: Vec<i64> = vec::filter(&shifted, move |x: i64| -> bool { x % 2 == 0 });
+        let acc: i64 = vec::fold(&kept, 0, move |a: i64, b: i64| -> i64 { a + b });
+        let sorted: Vec<i64> = vec::sorted(&shifted);
+        let first: i64 = result::some_or(slice::first(Vec::as_slice(sorted)), 0);
+        let hit: i64 = if str::contains(joined, "id1") { 1 } else { 0 };
+        let ch: i64 = str::char_count(joined) + str::index_of(joined, "|") + str::compare(tag, "x2");
+        total = total + score_of(e) + acc + first + hit + ch + math::abs(math::sign(value - 50)) + vec::sum(&nums) % 7;
+        push(&mut l, value);
+        let top = l.head;
+        push(&mut l, k);
+        let moved: i64 = if top == l.head { 0 } else { 1 };
+        let popped: i64 = pop(&mut l);
+        let back: i64 = if top == l.head { 1 } else { 0 };
+        total = total + moved + back + popped + pop(&mut l) + l.len;
+        if i % 50 == 0 { total = total + walk(&l); }
+        let mut seen: Vec<String> = Vec::new();
+        let mut count: i64 = 0;
+        record(&mut seen, &mut count, tag);
+        record(&mut seen, &mut count, joined);
+        let peek = move || -> i64 {
+            let s = Vec::as_slice(seen);
+            s.len() + s[1].len()
+        };
+        let lead = move || -> i64 {
+            let b = joined.as_bytes();
+            b[0] + b.len()
+        };
+        let mut tg = Tags { names: ["", "", "", ""], n: 0 };
+        tag_add(&mut tg, key);
+        tag_add(&mut tg, tag);
+        tag_add(&mut tg, str::from_int(value));
+        total = total + peek() + lead() + count + tg.n + tg.names[2].len() + tg.names[0].len();
+        i = i + 1;
     }
-    io.print_out(str.from_int(total) + " " + str.from_int(walk(&l)) + "\n")
-    return 0
+    io::print_out(str::from_int(total) + " " + str::from_int(walk(&l)) + "\n");
 }
 "#;
 

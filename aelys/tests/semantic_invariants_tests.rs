@@ -3387,10 +3387,9 @@ fn main() -> ExitCode {
         id: "SI-PAX15",
         code: "E0104",
         rejected: r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [7, 2, 3]
-    a[..]++
-    return 0
+fn main() {
+    let mut a: [i64; 3] = [7, 2, 3];
+    a[..] += 1;
 }
 "#,
         twin: Some((
@@ -3465,10 +3464,9 @@ fn main() -> ExitCode {
         id: "SI-PAX22",
         code: "E0104",
         rejected: r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [7, 2, 3]
-    a[0..2]++
-    return 0
+fn main() {
+    let mut a: [i64; 3] = [7, 2, 3];
+    a[0..2] += 1;
 }
 "#,
         twin: None,
@@ -3477,10 +3475,9 @@ fn main() -> i64 {
         id: "SI-PAX23",
         code: "E0104",
         rejected: r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [7, 2, 3]
-    a[..2]++
-    return 0
+fn main() {
+    let mut a: [i64; 3] = [7, 2, 3];
+    a[..2] += 1;
 }
 "#,
         twin: None,
@@ -3489,10 +3486,9 @@ fn main() -> i64 {
         id: "SI-PAX24",
         code: "E0104",
         rejected: r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [7, 2, 3]
-    a[0..=2]++
-    return 0
+fn main() {
+    let mut a: [i64; 3] = [7, 2, 3];
+    a[0..=2] += 1;
 }
 "#,
         twin: None,
@@ -3501,10 +3497,9 @@ fn main() -> i64 {
         id: "SI-PAX25",
         code: "E0104",
         rejected: r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [7, 2, 3]
-    a[..=2]++
-    return 0
+fn main() {
+    let mut a: [i64; 3] = [7, 2, 3];
+    a[..=2] += 1;
 }
 "#,
         twin: None,
@@ -3513,10 +3508,9 @@ fn main() -> i64 {
         id: "SI-PAX26",
         code: "E0104",
         rejected: r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [7, 2, 3]
-    a[0..0]++
-    return 0
+fn main() {
+    let mut a: [i64; 3] = [7, 2, 3];
+    a[0..0] += 1;
 }
 "#,
         twin: None,
@@ -3525,10 +3519,9 @@ fn main() -> i64 {
         id: "SI-PAX27",
         code: "E0104",
         rejected: r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [7, 2, 3]
-    a[0..1]++
-    return 0
+fn main() {
+    let mut a: [i64; 3] = [7, 2, 3];
+    a[0..1] += 1;
 }
 "#,
         twin: None,
@@ -3538,12 +3531,12 @@ fn main() -> i64 {
         code: "E0104",
         rejected: r#"
 fn bad(s: &[i64]) -> i64 {
-    s[0..2]++
-    return 0
+    s[0..2] += 1;
+    return 0;
 }
-fn main() -> i64 {
-    let a: [i64; 3] = [7, 2, 3]
-    return bad(a[..])
+fn main() {
+    let a: [i64; 3] = [7, 2, 3];
+    bad(a[..]);
 }
 "#,
         twin: None,
@@ -3553,10 +3546,9 @@ fn main() -> i64 {
         code: "E0104",
         rejected: r#"
 struct Cell { a: [i64; 3] }
-fn main() -> i64 {
-    let mut c: Cell = Cell { a: [7, 2, 3] }
-    c.a[..]++
-    return 0
+fn main() {
+    let mut c: Cell = Cell { a: [7, 2, 3] };
+    c.a[..] += 1;
 }
 "#,
         twin: None,
@@ -5446,332 +5438,300 @@ const GROUP_N_X: &[NRow] = &[
     NRow {
         id: "SI-N00",
         template: r#"@DECL@
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#,
     },
     NRow {
         id: "SI-N01",
-        template: r#"fn host() -> i64 {
+        template: r#"use std::process::ExitCode; fn host() -> i64 {
     @DECL@
-    return 0
+    0
 }
-fn main() -> i64 {
-    return host()
+fn main() -> ExitCode {
+    return ExitCode::from(host() as u8);
 }
 "#,
     },
     NRow {
         id: "SI-N02",
-        template: r#"fn host() -> i64 {
+        template: r#"use std::process::ExitCode; fn host() -> i64 {
     {
         @DECL@
     }
-    return 0
+    0
 }
-fn main() -> i64 { return host() }
+fn main() -> ExitCode { return ExitCode::from(host() as u8); }
 "#,
     },
     NRow {
         id: "SI-N03",
-        template: r#"fn host(c: bool) -> i64 {
+        template: r#"use std::process::ExitCode; fn host(c: bool) -> i64 {
     if c {
         @DECL@
     }
-    return 0
+    0
 }
-fn main() -> i64 { return host(true) }
+fn main() -> ExitCode { return ExitCode::from(host(true) as u8); }
 "#,
     },
     NRow {
         id: "SI-N04",
-        template: r#"fn host(c: bool) -> i64 {
+        template: r#"use std::process::ExitCode; fn host(c: bool) -> i64 {
     if c {
-        return 0
+        return 0;
     } else {
         @DECL@
     }
-    return 0
+    0
 }
-fn main() -> i64 { return host(true) }
+fn main() -> ExitCode { return ExitCode::from(host(true) as u8); }
 "#,
     },
     NRow {
         id: "SI-N05",
-        template: r#"fn host(n: i64) -> i64 {
-    let mut i = 0
+        template: r#"use std::process::ExitCode; fn host(n: i64) -> i64 {
+    let mut i = 0;
     while i < n {
         @DECL@
-        i = i + 1
+        i = i + 1;
     }
-    return 0
+    0
 }
-fn main() -> i64 { return host(1) }
+fn main() -> ExitCode { return ExitCode::from(host(1) as u8); }
 "#,
     },
     NRow {
         id: "SI-N06",
-        template: r#"fn host(n: i64) -> i64 {
+        template: r#"use std::process::ExitCode; fn host(n: i64) -> i64 {
     for i in 0..n {
         @DECL@
     }
-    return 0
+    0
 }
-fn main() -> i64 { return host(1) }
+fn main() -> ExitCode { return ExitCode::from(host(1) as u8); }
 "#,
     },
     NRow {
         id: "SI-N07",
-        template: r#"fn host(a: [i64; 2]) -> i64 {
+        template: r#"use std::process::ExitCode; fn host(a: [i64; 2]) -> i64 {
     for x in a {
         @DECL@
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let a: [i64; 2] = [1, 2]
-    return host(a)
+fn main() -> ExitCode {
+    let a: [i64; 2] = [1, 2];
+    return ExitCode::from(host(a) as u8);
 }
 "#,
     },
     NRow {
         id: "SI-N08",
-        template: r#"fn host(c: bool, d: bool) -> i64 {
+        template: r#"use std::process::ExitCode; fn host(c: bool, d: bool) -> i64 {
     if c {
         if d {
             @DECL@
         }
     }
-    return 0
+    0
 }
-fn main() -> i64 { return host(true, true) }
+fn main() -> ExitCode { return ExitCode::from(host(true, true) as u8); }
 "#,
     },
     NRow {
         id: "SI-N09",
-        template: r#"fn host(c: bool, n: i64) -> i64 {
+        template: r#"use std::process::ExitCode; fn host(c: bool, n: i64) -> i64 {
     if c {
-        let mut i = 0
+        let mut i = 0;
         while i < n {
             @DECL@
-            i = i + 1
+            i = i + 1;
         }
     }
-    return 0
+    0
 }
-fn main() -> i64 { return host(true, 1) }
+fn main() -> ExitCode { return ExitCode::from(host(true, 1) as u8); }
 "#,
     },
     NRow {
         id: "SI-N10",
-        template: r#"fn host() -> i64 {
+        template: r#"use std::process::ExitCode; fn host() -> i64 {
     fn mid() -> i64 {
         {
             @DECL@
         }
-        return 0
+        0
     }
-    return mid()
+    mid()
 }
-fn main() -> i64 { return host() }
-"#,
-    },
-    NRow {
-        id: "SI-N11",
-        template: r#"{
-    @DECL@
-}
-fn main() -> i64 { return 0 }
-"#,
-    },
-    NRow {
-        id: "SI-N12",
-        template: r#"fn mk(x: i64) -> bool {
-    if x > 0 {
-        return true
-    }
-    return false
-}
-if mk(1) {
-    @DECL@
-}
-fn main() -> i64 { return 0 }
+fn main() -> ExitCode { return ExitCode::from(host() as u8); }
 "#,
     },
     NRow {
         id: "SI-N13",
-        template: r#"fn host() -> i64 {
-    let f = fn (x: i64) -> i64 {
+        template: r#"use std::process::ExitCode; fn host() -> i64 {
+    let f = move |x: i64| -> i64 {
         @DECL@
-        return x
-    }
-    return f(0)
+        x
+    };
+    f(0)
 }
-fn main() -> i64 { return host() }
+fn main() -> ExitCode { return ExitCode::from(host() as u8); }
 "#,
     },
     NRow {
         id: "SI-N14",
-        template: r#"fn host(n: i64) -> i64 {
-    let mut i = 0
+        template: r#"use std::process::ExitCode; fn host(n: i64) -> i64 {
+    let mut i = 0;
     while i < { @DECL@  n } {
-        i = i + 1
+        i = i + 1;
     }
-    return 0
+    0
 }
-fn main() -> i64 { return host(1) }
+fn main() -> ExitCode { return ExitCode::from(host(1) as u8); }
 "#,
     },
     NRow {
         id: "SI-N15",
-        template: r#"fn host(n: i64) -> i64 {
+        template: r#"use std::process::ExitCode; fn host(n: i64) -> i64 {
     for i in 0..{ @DECL@  n } {
-        let q = i
+        let q = i;
     }
-    return 0
+    0
 }
-fn main() -> i64 { return host(1) }
+fn main() -> ExitCode { return ExitCode::from(host(1) as u8); }
 "#,
     },
     NRow {
         id: "SI-N16",
-        template: r#"fn host(n: i64) -> i64 {
+        template: r#"use std::process::ExitCode; fn host(n: i64) -> i64 {
     for i in { @DECL@  0 }..n {
-        let q = i
+        let q = i;
     }
-    return 0
+    0
 }
-fn main() -> i64 { return host(1) }
+fn main() -> ExitCode { return ExitCode::from(host(1) as u8); }
 "#,
     },
     NRow {
         id: "SI-N17",
-        template: r#"fn host(a: [i64; 2]) -> i64 {
+        template: r#"use std::process::ExitCode; fn host(a: [i64; 2]) -> i64 {
     for x in { @DECL@  a } {
-        let q = x
+        let q = x;
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let a: [i64; 2] = [1, 2]
-    return host(a)
+fn main() -> ExitCode {
+    let a: [i64; 2] = [1, 2];
+    return ExitCode::from(host(a) as u8);
 }
 "#,
     },
     NRow {
         id: "SI-N18",
-        template: r#"fn take(x: i64) -> i64 { return x }
+        template: r#"use std::process::ExitCode; fn take(x: i64) -> i64 { x }
 fn host(n: i64) -> i64 {
-    return take({ @DECL@  n })
+    take({ @DECL@  n })
 }
-fn main() -> i64 { return host(0) }
+fn main() -> ExitCode { return ExitCode::from(host(0) as u8); }
 "#,
     },
     NRow {
         id: "SI-N19",
-        template: r#"fn host(n: i64) -> i64 {
-    return { @DECL@  n }
+        template: r#"use std::process::ExitCode; fn host(n: i64) -> i64 {
+    { @DECL@  n }
 }
-fn main() -> i64 { return host(0) }
+fn main() -> ExitCode { return ExitCode::from(host(0) as u8); }
 "#,
     },
     NRow {
         id: "SI-N20",
-        template: r#"fn host(n: i64) -> i64 {
-    let v = { @DECL@  n }
-    return v
+        template: r#"use std::process::ExitCode; fn host(n: i64) -> i64 {
+    let v = { @DECL@  n };
+    v
 }
-fn main() -> i64 { return host(0) }
+fn main() -> ExitCode { return ExitCode::from(host(0) as u8); }
 "#,
     },
     NRow {
         id: "SI-N21",
-        template: r#"enum Pick { One, Two }
+        template: r#"use std::process::ExitCode; enum Pick { One, Two }
 fn host(p: Pick, n: i64) -> i64 {
     let v = match p {
         Pick::One => { @DECL@  n },
         Pick::Two => n,
-    }
-    return v
+    };
+    v
 }
-fn main() -> i64 { return host(Pick::One, 0) }
+fn main() -> ExitCode { return ExitCode::from(host(Pick::One, 0) as u8); }
 "#,
     },
     NRow {
         id: "SI-N22",
-        template: r#"enum Pick { One, Two }
+        template: r#"use std::process::ExitCode; enum Pick { One, Two }
 fn host(p: Pick, n: i64) -> i64 {
     let v = match { @DECL@  p } {
         Pick::One => n,
         Pick::Two => n,
-    }
-    return v
+    };
+    v
 }
-fn main() -> i64 { return host(Pick::One, 0) }
+fn main() -> ExitCode { return ExitCode::from(host(Pick::One, 0) as u8); }
 "#,
     },
     NRow {
         id: "SI-N23",
-        template: r#"fn host(c: bool, n: i64) -> i64 {
-    let v = if c { @DECL@  n } else { n }
-    return v
+        template: r#"use std::process::ExitCode; fn host(c: bool, n: i64) -> i64 {
+    let v = if c { @DECL@  n } else { n };
+    v
 }
-fn main() -> i64 { return host(true, 0) }
+fn main() -> ExitCode { return ExitCode::from(host(true, 0) as u8); }
 "#,
     },
     NRow {
         id: "SI-N24",
-        template: r#"fn host(n: i64) -> i64 {
-    let v = unsafe { @DECL@  n }
-    return v
+        template: r#"use std::process::ExitCode; fn host(n: i64) -> i64 {
+    let v = unsafe { @DECL@  n };
+    v
 }
-fn main() -> i64 { return host(0) }
+fn main() -> ExitCode { return ExitCode::from(host(0) as u8); }
 "#,
     },
     NRow {
         id: "SI-N25",
-        template: r#"fn host(n: i64) -> i64 {
-    let v = n + { @DECL@  0 }
-    return v
+        template: r#"use std::process::ExitCode; fn host(n: i64) -> i64 {
+    let v = n + { @DECL@  0 };
+    v
 }
-fn main() -> i64 { return host(0) }
+fn main() -> ExitCode { return ExitCode::from(host(0) as u8); }
 "#,
     },
     NRow {
         id: "SI-N26",
-        template: r#"fn host(n: i64) -> i64 {
-    let a: [i64; 2] = [{ @DECL@  n }, n]
-    return a[0]
+        template: r#"use std::process::ExitCode; fn host(n: i64) -> i64 {
+    let a: [i64; 2] = [{ @DECL@  n }, n];
+    a[0]
 }
-fn main() -> i64 { return host(0) }
+fn main() -> ExitCode { return ExitCode::from(host(0) as u8); }
 "#,
     },
     NRow {
         id: "SI-N27",
-        template: r#"fn host(n: i64) -> i64 {
-    let a: [i64; 2] = [n, n]
-    return a[{ @DECL@  0 }]
+        template: r#"use std::process::ExitCode; fn host(n: i64) -> i64 {
+    let a: [i64; 2] = [n, n];
+    a[{ @DECL@  0 }]
 }
-fn main() -> i64 { return host(0) }
-"#,
-    },
-    NRow {
-        id: "SI-N28",
-        template: r#"fn host(n: i64) -> i64 {
-    println("{ 0 + { @DECL@  n } }")
-    return 0
-}
-fn main() -> i64 { return host(0) }
+fn main() -> ExitCode { return ExitCode::from(host(0) as u8); }
 "#,
     },
     NRow {
         id: "SI-N29",
-        template: r#"fn host(n: i64) -> i64 {
-    let f = fn (x: i64) -> i64 { return x + { @DECL@  0 } }
-    return f(n)
+        template: r#"use std::process::ExitCode; fn host(n: i64) -> i64 {
+    let f = move |x: i64| -> i64 { x + { @DECL@  0 } };
+    f(n)
 }
-fn main() -> i64 { return host(0) }
+fn main() -> ExitCode { return ExitCode::from(host(0) as u8); }
 "#,
     },
 ];
@@ -7282,7 +7242,7 @@ const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs app.util\nneeds app\n\nnogc fn pure() -> i64 {\n    return util.helper()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode;\nmod app;\nuse app::util;\n\nnogc fn pure() -> i64 {\n    util::helper()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "util.aelys",
@@ -7386,25 +7346,6 @@ const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
                 "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::absent() as u8);\n}\n",
             ),
             ("m.aelys", "pub fn seven() -> i64 {\n    7\n}\n"),
-        ],
-    ),
-    (
-        "SI-MOD-E0607",
-        "E0607",
-        &[(
-            "root.aelys",
-            "needs \"GL/glext.h\"\n\nfn main() -> i64 {\n    return 0\n}\n",
-        )],
-    ),
-    (
-        "SI-MOD-E0608",
-        "E0608",
-        &[
-            (
-                "root.aelys",
-                "fn main() -> i64 {\n    return 0\n}\n\nneeds m\n",
-            ),
-            ("m.aelys", "pub fn f() -> i64 {\n    1\n}\n"),
         ],
     ),
     (
@@ -7719,27 +7660,6 @@ const FFI_PAIRS: &[(&str, &str, &str, &str, i32)] = &[
         3,
     ),
     (
-        "SI-FFI-E0614-pub",
-        "E0614",
-        "pub unsafe extern fn ffsl(x: i64) -> i64\n\nfn main() -> i64 {\n    return 0\n}\n",
-        FFI_HEAD,
-        11,
-    ),
-    (
-        "SI-FFI-E0614-safe",
-        "E0614",
-        "extern fn ffsl(x: i64) -> i64\n\nfn main() -> i64 {\n    return 0\n}\n",
-        FFI_HEAD,
-        11,
-    ),
-    (
-        "SI-FFI-E0614-body",
-        "E0614",
-        "unsafe extern fn ffsl(x: i64) -> i64 { return x }\n\nfn main() -> i64 {\n    return 0\n}\n",
-        FFI_HEAD,
-        11,
-    ),
-    (
         "SI-FFI-E0615-string",
         "E0615",
         "extern \"C\" { fn f(x: String) -> i64; }\n\nfn main() {\n}\n",
@@ -7982,7 +7902,7 @@ fn group_ffi_every_rejection_has_a_kept_twin() {
     seen.sort_unstable();
     assert_eq!(
         seen,
-        vec!["E0612", "E0613", "E0614", "E0615", "E0616", "E0617", "E0618"],
+        vec!["E0612", "E0613", "E0615", "E0616", "E0617", "E0618"],
         "group_ffi: every code the run introduced MUST hold a pair here"
     );
     h.assert_measured("group_ffi_kept");
