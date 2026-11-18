@@ -40,13 +40,27 @@ pub struct ConstLit {
     pub value: ConstScalar,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum ConstScalar {
     Int(i64),
     Float(f64),
     Bool(bool),
     Char(u32),
     Str(String),
+}
+
+impl PartialEq for ConstScalar {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            // a nan const has to equal itself or a module cycle holding one never settles
+            (ConstScalar::Float(a), ConstScalar::Float(b)) => a.to_bits() == b.to_bits(),
+            (ConstScalar::Int(a), ConstScalar::Int(b)) => a == b,
+            (ConstScalar::Bool(a), ConstScalar::Bool(b)) => a == b,
+            (ConstScalar::Char(a), ConstScalar::Char(b)) => a == b,
+            (ConstScalar::Str(a), ConstScalar::Str(b)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

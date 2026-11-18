@@ -1,28 +1,28 @@
 use super::InferType;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StructField {
     pub name: String,
     pub ty: InferType,
     pub is_pub: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StructDef {
     pub name: String,
     pub type_params: Vec<String>,
     pub fields: Vec<StructField>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EnumVariant {
     pub name: String,
     pub tag: u32,
     pub data: Vec<InferType>, // empty = unit variant, non-empty = tuple variant
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EnumDef {
     pub name: String,
     pub type_params: Vec<String>,

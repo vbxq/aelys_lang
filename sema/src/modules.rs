@@ -10,7 +10,7 @@ pub enum ItemKind {
     Const,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ModuleValue {
     pub kind: ItemKind,
     pub ty: InferType,
@@ -22,13 +22,13 @@ pub struct ModuleValue {
     pub literal: Option<crate::typed_ast::LiteralInit>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ModuleTypeDef {
     Struct(StructDef),
     Enum(EnumDef),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ModuleType {
     pub def: ModuleTypeDef,
     // the air type name, carrying the `__q.` head so mono cannot strip a module segment
@@ -36,14 +36,14 @@ pub struct ModuleType {
     pub is_pub: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AliasDef {
     pub params: Vec<String>,
     pub target: aelys_syntax::TypeAnnotation,
     pub is_pub: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MethodEntry {
     pub name: String,
     pub receiver: aelys_syntax::Receiver,
@@ -54,7 +54,7 @@ pub struct MethodEntry {
     pub head: Option<(Vec<String>, InferType)>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TraitMethodSig {
     pub name: String,
     pub receiver: aelys_syntax::Receiver,
@@ -63,7 +63,7 @@ pub struct TraitMethodSig {
     pub ty: InferType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TraitDef {
     pub name: String,
     pub qualified: String,
@@ -73,7 +73,7 @@ pub struct TraitDef {
     pub methods: Vec<TraitMethodSig>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ImplDef {
     pub trait_q: String,
     pub trait_args: Vec<InferType>,
@@ -86,7 +86,7 @@ pub struct ImplDef {
     pub values: Vec<ModuleValue>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct ModuleExports {
     pub path: String,
     pub values: HashMap<String, ModuleValue>,

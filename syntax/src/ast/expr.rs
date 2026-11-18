@@ -6,7 +6,7 @@ pub enum RefKind {
     Mut,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeAnnotation {
     pub name: String,
     pub type_param: Option<Box<TypeAnnotation>>,

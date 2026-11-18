@@ -23,7 +23,6 @@ pub(super) fn declare(
             ..Default::default()
         })
     }));
-    let mut prints = vec![String::new(); units.len() - first];
     let rounds = units[first..].iter().map(|unit| unit.stmts.len()).sum::<usize>() + 2;
     for _ in 0..rounds {
         let mut settled = true;
@@ -41,12 +40,10 @@ pub(super) fn declare(
             );
             let mut declared = collect_exports(&unit.dotted, &program);
             erase_type_vars(&mut declared);
-            let print = fingerprint(&declared);
-            if print != prints[index - first] {
+            if *exports[index] != declared {
                 settled = false;
-                prints[index - first] = print;
+                exports[index] = Arc::new(declared);
             }
-            exports[index] = Arc::new(declared);
         }
         if settled {
             return Ok(());
@@ -91,17 +88,6 @@ pub(super) fn settle_effects(
             break;
         }
     }
-}
-
-fn fingerprint(exports: &ModuleExports) -> String {
-    let mut lines: Vec<String> = Vec::new();
-    lines.extend(exports.values.iter().map(|(name, v)| format!("{name} {v:?}")));
-    lines.extend(exports.types.iter().map(|(name, t)| format!("{name} {t:?}")));
-    lines.extend(exports.methods.iter().map(|(ty, e)| format!("{ty} {e:?}")));
-    lines.extend(exports.traits.iter().map(|(name, t)| format!("{name} {t:?}")));
-    lines.extend(exports.impls.iter().map(|imp| format!("{imp:?}")));
-    lines.sort();
-    lines.join("\n")
 }
 
 // neighbours' functions are assumed to return fresh values until their own lowering proves it
