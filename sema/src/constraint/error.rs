@@ -209,6 +209,7 @@ impl fmt::Display for TypeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
             TypeErrorKind::Mismatch { expected, found } => {
+                let (expected, found) = InferType::shown_pair(expected, found);
                 write!(
                     f,
                     "type mismatch: expected {}, found {} ({})",
@@ -263,12 +264,15 @@ impl fmt::Display for TypeError {
                 carrier,
                 operand,
                 ret,
-            } => write!(
-                f,
-                "[?-stage1] `?` cannot bridge `{operand}` and `{ret}`: they are two distinct \
-                 `{carrier}` types, and their variant tags need not agree. use one of the two on \
-                 both sides, by importing it or by annotating this function with it"
-            ),
+            } => {
+                let (operand, ret) = InferType::shown_pair(operand, ret);
+                write!(
+                    f,
+                    "[?-stage1] `?` cannot bridge `{operand}` and `{ret}`: they are two distinct \
+                     `{carrier}` types, and their variant tags need not agree. use one of the two \
+                     on both sides, by importing it or by annotating this function with it"
+                )
+            }
             TypeErrorKind::RecursionLimit => {
                 write!(f, "type inference recursion limit exceeded")
             }

@@ -296,7 +296,7 @@ fn s33_no_prelude_takes_the_name_back_out_of_scope() {
         &[("root.aelys", PRELUDE_OPTION)],
         &sources,
         "[E0301]",
-        &["unknown type 'Option'"],
+        &["unknown type `Option<i64>`"],
     );
 }
 

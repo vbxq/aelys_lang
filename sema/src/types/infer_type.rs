@@ -425,8 +425,45 @@ impl InferType {
     }
 }
 
-impl fmt::Display for InferType {
+pub struct QualifiedType<'a>(&'a InferType);
+
+impl fmt::Display for QualifiedType<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.render(f, true)
+    }
+}
+
+impl InferType {
+    pub fn qualified(&self) -> QualifiedType<'_> {
+        QualifiedType(self)
+    }
+
+    pub fn shown_pair(a: &InferType, b: &InferType) -> (String, String) {
+        let (left, right) = (a.to_string(), b.to_string());
+        if left == right && a != b {
+            (a.qualified().to_string(), b.qualified().to_string())
+        } else {
+            (left, right)
+        }
+    }
+
+    fn render(&self, f: &mut fmt::Formatter<'_>, qualified: bool) -> fmt::Result {
+        let list = |f: &mut fmt::Formatter<'_>, items: &[InferType]| -> fmt::Result {
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                item.render(f, qualified)?;
+            }
+            Ok(())
+        };
+        let name = |n: &str| -> String {
+            if qualified {
+                crate::modules::strip_type_head(n).to_string()
+            } else {
+                crate::modules::source_type_name(n).to_string()
+            }
+        };
         match self {
             InferType::I8 => write!(f, "i8"),
             InferType::I16 => write!(f, "i16"),
@@ -443,53 +480,65 @@ impl fmt::Display for InferType {
             InferType::String => write!(f, "string"),
             InferType::Null => write!(f, "null"),
             InferType::Never => write!(f, "Never"),
-            InferType::Function { params, ret, .. } => {
-                write!(f, "(")?;
-                for (i, p) in params.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{}", p)?;
+            InferType::Function { params, ret, nogc } => {
+                write!(f, "{}fn(", if *nogc { "nogc " } else { "" })?;
+                list(f, params)?;
+                write!(f, ")")?;
+                if !matches!(**ret, InferType::Null) {
+                    write!(f, " -> ")?;
+                    ret.render(f, qualified)?;
                 }
-                write!(f, ") -> {}", ret)
+                Ok(())
             }
-            InferType::Array(inner, Some(n)) => write!(f, "[{}; {}]", inner, n),
-            InferType::Array(inner, None) => write!(f, "[{}]", inner),
-            InferType::Vec(inner) => write!(f, "vec[{}]", inner),
-            InferType::Rc(inner) => write!(f, "Rc<{}>", inner),
+            InferType::Array(inner, size) => {
+                write!(f, "[")?;
+                inner.render(f, qualified)?;
+                match size {
+                    Some(n) => write!(f, "; {}]", n),
+                    None => write!(f, "]"),
+                }
+            }
+            InferType::Vec(inner) => {
+                write!(f, "Vec<")?;
+                inner.render(f, qualified)?;
+                write!(f, ">")
+            }
+            InferType::Rc(inner) => {
+                write!(f, "Rc<")?;
+                inner.render(f, qualified)?;
+                write!(f, ">")
+            }
             InferType::Ref { referent, mutable } => {
-                write!(f, "&{}{}", if *mutable { "mut " } else { "" }, referent)
+                write!(f, "&{}", if *mutable { "mut " } else { "" })?;
+                referent.render(f, qualified)
             }
             InferType::Slice { elem, mutable } => {
-                write!(f, "&{}[{}]", if *mutable { "mut " } else { "" }, elem)
+                write!(f, "&{}[", if *mutable { "mut " } else { "" })?;
+                elem.render(f, qualified)?;
+                write!(f, "]")
             }
             InferType::Tuple(elems) => {
                 write!(f, "(")?;
-                for (i, e) in elems.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{}", e)?;
-                }
+                list(f, elems)?;
                 write!(f, ")")
             }
             InferType::Range => write!(f, "range"),
-            InferType::Struct(name, type_args) | InferType::Enum(name, type_args) => {
-                write!(f, "{}", crate::modules::strip_type_head(name))?;
+            InferType::Struct(n, type_args) | InferType::Enum(n, type_args) => {
+                write!(f, "{}", name(n))?;
                 if !type_args.is_empty() {
                     write!(f, "<")?;
-                    for (i, arg) in type_args.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "{}", arg)?;
-                    }
+                    list(f, type_args)?;
                     write!(f, ">")?;
                 }
                 Ok(())
             }
-            InferType::Var(id) => write!(f, "{}", id),
-            InferType::Dynamic => write!(f, "dynamic"),
+            InferType::Var(_) | InferType::Dynamic => write!(f, "_"),
         }
+    }
+}
+
+impl fmt::Display for InferType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.render(f, false)
     }
 }

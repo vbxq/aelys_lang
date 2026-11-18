@@ -177,19 +177,6 @@ pub fn source_type_name(name: &str) -> &str {
     bare.rsplit('.').next().unwrap_or(bare)
 }
 
-pub fn source_shown(ty: &InferType) -> String {
-    let args = |args: &[InferType]| args.iter().map(source_shown).collect::<Vec<_>>().join(", ");
-    match ty {
-        InferType::Enum(name, targs) | InferType::Struct(name, targs) if targs.is_empty() => {
-            source_type_name(name).to_string()
-        }
-        InferType::Enum(name, targs) | InferType::Struct(name, targs) => {
-            format!("{}<{}>", source_type_name(name), args(targs))
-        }
-        other => other.to_string(),
-    }
-}
-
 pub fn qualify_infer_type(ty: &InferType, path: &str, owned: &HashSet<String>) -> InferType {
     if path.is_empty() {
         return ty.clone();

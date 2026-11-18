@@ -1,5 +1,5 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, TypeError};
+use crate::constraint::{Constraint, ConstraintReason, TypeError};
 use crate::types::InferType;
 use crate::unify::{Substitution, unify, unify_dir, unify_error_to_type_error};
 
@@ -59,6 +59,19 @@ impl TypeInference {
         err
     }
 
+    fn validation_refuses_callee(
+        callee: &InferType,
+        expected: &InferType,
+        reason: &ConstraintReason,
+    ) -> bool {
+        matches!(reason, ConstraintReason::Other(r) if r == "function call")
+            && matches!(expected, InferType::Function { .. })
+            && !matches!(
+                callee,
+                InferType::Function { .. } | InferType::Var(_) | InferType::Dynamic
+            )
+    }
+
     pub(super) fn solve_constraints(&mut self) -> Substitution {
         let mut subst = Substitution::new();
         let mut pending: Vec<usize> = (0..self.deferred.len()).collect();
@@ -80,6 +93,8 @@ impl TypeInference {
                     Ok(()) => {}
                     Err(e) => {
                         subst.restore(saved);
+                        let refused_callee =
+                            Self::validation_refuses_callee(&left_resolved, &right, &reason);
 
                         let mut err = self
                             .name_the_type_params(unify_error_to_type_error(e, span, reason, dir));
@@ -110,7 +125,9 @@ impl TypeInference {
                         {
                             err.help = Some(format!("convert explicitly: `as {expected}`"));
                         }
-                        self.errors.push(err);
+                        if !refused_callee {
+                            self.errors.push(err);
+                        }
 
                         self.force_dynamic(&left_resolved, &mut subst);
                         self.force_dynamic(&right_resolved, &mut subst);

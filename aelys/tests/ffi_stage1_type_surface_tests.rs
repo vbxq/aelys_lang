@@ -175,8 +175,8 @@ fn an_unannotated_parameter_is_e0615_and_not_the_downstream_vec_surface() {
          the unwritten type itself:\n{rendered}"
     );
     assert!(
-        rendered.contains("'dynamic'"),
-        "F2-15: an unwritten parameter annotation reaches the surface as `dynamic`:\n{rendered}"
+        rendered.contains("'_'"),
+        "F2-15: an unwritten parameter annotation reaches the surface as `_`:\n{rendered}"
     );
     let rendered = rejected_e0615("F2-16", "unsafe extern fn probe(x) -> i64");
     assert!(

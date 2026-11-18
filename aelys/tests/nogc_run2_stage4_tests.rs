@@ -53,7 +53,7 @@ fn main() -> i64 { let v = vec[1, 2]; return keep(v) }
     );
     assert_code(&err, "E0730");
     assert!(
-        err.contains("`T` of `keep`") && err.contains("vec[i64]"),
+        err.contains("`T` of `keep`") && err.contains("Vec<i64>"),
         "must name the type param and the offending type: {err}"
     );
 }
@@ -508,7 +508,7 @@ fn main() -> i64 { let v = vec[1, 2]; return h(v, 1) + outer() }
     );
     assert_code(&err, "E0730");
     assert!(
-        err.contains("`A` of `h`") && err.contains("vec[i64]"),
+        err.contains("`A` of `h`") && err.contains("Vec<i64>"),
         "the bound on the FIRST type param must survive the shadow: {err}"
     );
 }
@@ -527,7 +527,7 @@ fn main() -> i64 { let v = vec[1, 2]; return h(v, 1) + outer() }
     );
     assert_code(&err, "E0730");
     assert!(
-        err.contains("`A` of `h`") && err.contains("vec[i64]"),
+        err.contains("`A` of `h`") && err.contains("Vec<i64>"),
         "the wider signature's bound must survive the narrower shadow: {err}"
     );
 }
@@ -550,7 +550,7 @@ fn main() -> i64 { return a() + b() }
     );
     assert_code(&err, "E0730");
     assert!(
-        err.contains("`A` of `h`") && err.contains("vec[i64]"),
+        err.contains("`A` of `h`") && err.contains("Vec<i64>"),
         "a sibling scope's weaker signature must not erase the bound: {err}"
     );
 }

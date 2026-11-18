@@ -2660,7 +2660,7 @@ fn rc2_90_a_multi_variant_enum_carrying_an_imported_rc_carrier_is_refused() {
         &[("m.aelys", "pub struct W { pub r: Rc<i64> }\n")],
         "E0410",
         &[
-            "variant `L::V` has a payload of type `m.W`",
+            "variant `L::V` has a payload of type `W`",
             MULTI_VARIANT_RC,
         ],
         &[],
@@ -3771,7 +3771,7 @@ fn rc2_153_equality_on_functions_is_refused_by_name() {
         RC2_153,
         &[],
         "E0304",
-        &["comparison (`==`) is not supported for `() -> i64`"],
+        &["comparison (`==`) is not supported for `fn() -> i64`"],
         &["E0902"],
     );
 }

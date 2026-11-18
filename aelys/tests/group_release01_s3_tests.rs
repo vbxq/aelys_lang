@@ -779,7 +779,7 @@ fn release01_89_the_names_resolve_to_the_enum_in_scope_or_say_why_not() {
                 expect: Expect::Refused {
                     code: "E0301",
                     at: (2, 12),
-                    says: "unknown type 'std.result.Result'",
+                    says: "unknown type `std.result.Result<i64, i64>`",
                 },
             },
         ],

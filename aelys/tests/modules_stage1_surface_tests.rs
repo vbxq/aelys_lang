@@ -1003,7 +1003,7 @@ fn group_mod_t2_a_transitive_type_is_not_a_free_variable() {
             ("a.aelys", DEEP_STRUCT),
         ],
         "[E0301]",
-        "a.P",
+        "found `P`",
     );
 }
 

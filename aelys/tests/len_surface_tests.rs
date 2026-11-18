@@ -406,7 +406,7 @@ fn len7_the_length_did_not_open_a_field_access_hole() {
         "LEN-7c",
         L7_UNKNOWN_ON_VEC,
         "E0304",
-        "unknown field 'cap' on vec[i64]",
+        "unknown field 'cap' on Vec<i64>",
     );
     h.fenced_row(
         "LEN-7d",

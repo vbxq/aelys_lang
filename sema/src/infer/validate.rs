@@ -654,7 +654,7 @@ impl TypeInference {
                         self.errors.push(TypeError::member_access(
                             format!(
                                 "field access on non-struct type {}",
-                                crate::modules::source_shown(other)
+                                other
                             ),
                             expr.span,
                         ));

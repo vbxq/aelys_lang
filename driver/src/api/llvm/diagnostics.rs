@@ -611,11 +611,14 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
     let (code, message, annotation) = match &error.kind {
         TypeErrorKind::Mismatch { expected, found } => match &promoted {
             Some(reason) => ("E0301", reason.clone(), reason.clone()),
-            None => (
-                "E0301",
-                format!("expected `{}`, found `{}`", expected, found),
-                format!("expected `{}`, found `{}`", expected, found),
-            ),
+            None => {
+                let (expected, found) = InferType::shown_pair(expected, found);
+                (
+                    "E0301",
+                    format!("expected `{}`, found `{}`", expected, found),
+                    format!("expected `{}`, found `{}`", expected, found),
+                )
+            }
         },
         TypeErrorKind::RefMutability { found, required } => (
             "E0416",

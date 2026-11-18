@@ -284,7 +284,7 @@ fn main() -> i64 {
     );
     assert_nogc_code(&err, "E0730");
     assert!(
-        err.contains("`T` of `keep` is bound `nogc`") && err.contains("vec[i64]"),
+        err.contains("`T` of `keep` is bound `nogc`") && err.contains("Vec<i64>"),
         "must name the type param and the offending type: {err}"
     );
     assert_anchor(&err, "5:17");

@@ -187,7 +187,7 @@ impl TypeInference {
                                 },
                                 span: ann.span,
                                 reason: ConstraintReason::UnknownType {
-                                    name: ann.name.clone(),
+                                    name: ann.to_string(),
                                 },
                                 secondary_spans: Vec::new(),
                                 help: Some(format!(
@@ -350,6 +350,13 @@ impl TypeInference {
             return;
         }
 
+        if ann.is_slice {
+            if let Some(ref elem) = ann.type_param {
+                self.check_type_annotation(elem);
+            }
+            return;
+        }
+
         if ann.is_function_type() {
             if let Some(ref params) = ann.fn_params {
                 for p in params {
@@ -372,7 +379,7 @@ impl TypeInference {
                 },
                 span: ann.span,
                 reason: ConstraintReason::UnknownType {
-                    name: ann.name.clone(),
+                    name: ann.to_string(),
                 },
                 secondary_spans: Vec::new(),
                 help: Some("use [T; N] syntax instead of Array<T>".to_string()),
@@ -417,7 +424,7 @@ impl TypeInference {
                 },
                 span: ann.span,
                 reason: ConstraintReason::UnknownType {
-                    name: ann.name.clone(),
+                    name: ann.to_string(),
                 },
                 secondary_spans: Vec::new(),
                 help: None,
@@ -433,7 +440,7 @@ impl TypeInference {
             },
             span: ann.span,
             reason: ConstraintReason::UnknownType {
-                name: ann.name.clone(),
+                name: ann.to_string(),
             },
             secondary_spans: Vec::new(),
             help: None,

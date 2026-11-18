@@ -160,18 +160,22 @@ impl fmt::Display for ResolvedType {
             ResolvedType::String => write!(f, "string"),
             ResolvedType::Null => write!(f, "null"),
             ResolvedType::Function { params, ret } => {
-                write!(f, "(")?;
+                write!(f, "fn(")?;
                 for (i, p) in params.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
                     write!(f, "{}", p)?;
                 }
-                write!(f, ") -> {}", ret)
+                write!(f, ")")?;
+                if !matches!(**ret, ResolvedType::Null) {
+                    write!(f, " -> {}", ret)?;
+                }
+                Ok(())
             }
             ResolvedType::Array(inner, Some(n)) => write!(f, "[{}; {}]", inner, n),
             ResolvedType::Array(inner, None) => write!(f, "[{}]", inner),
-            ResolvedType::Vec(inner) => write!(f, "vec[{}]", inner),
+            ResolvedType::Vec(inner) => write!(f, "Vec<{}>", inner),
             ResolvedType::Rc(inner) => write!(f, "Rc<{}>", inner),
             ResolvedType::Ref(inner, mutable) => {
                 write!(f, "&{}{}", if *mutable { "mut " } else { "" }, inner)
@@ -190,9 +194,11 @@ impl fmt::Display for ResolvedType {
                 write!(f, ")")
             }
             ResolvedType::Range => write!(f, "range"),
-            ResolvedType::Struct(name) => write!(f, "{}", name),
-            ResolvedType::Dynamic => write!(f, "dynamic"),
-            ResolvedType::Uncertain(inner) => write!(f, "?{}", inner),
+            ResolvedType::Struct(name) => {
+                write!(f, "{}", crate::modules::source_type_name(name))
+            }
+            ResolvedType::Dynamic => write!(f, "_"),
+            ResolvedType::Uncertain(inner) => write!(f, "{}", inner),
         }
     }
 }

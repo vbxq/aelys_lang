@@ -77,7 +77,7 @@ impl fmt::Display for ConstraintReason {
             ConstraintReason::ArrayIndex => write!(f, "array index"),
             ConstraintReason::RangeBound => write!(f, "range bound"),
             ConstraintReason::InvalidCast => write!(f, "invalid cast"),
-            ConstraintReason::UnknownType { name } => write!(f, "unknown type '{}'", name),
+            ConstraintReason::UnknownType { name } => write!(f, "unknown type `{}`", name),
             ConstraintReason::IntLiteralOverflow { value, target } => {
                 write!(f, "integer literal {} does not fit in {:?}", value, target)
             }

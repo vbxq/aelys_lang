@@ -217,7 +217,7 @@ impl TypeInference {
                             offenders.push((
                                 field_ast.name.clone(),
                                 field_ast.span,
-                                vec_spelling(&field_def.ty),
+                                field_def.ty.to_string(),
                             ));
                         }
                     }
@@ -253,7 +253,7 @@ impl TypeInference {
                                 offenders.push((
                                     variant_ast.name.clone(),
                                     payload_ann.span,
-                                    vec_spelling(payload_ty),
+                                    payload_ty.to_string(),
                                 ));
                             }
                         }
@@ -272,13 +272,5 @@ impl TypeInference {
                 _ => {}
             }
         }
-    }
-}
-
-fn vec_spelling(ty: &InferType) -> String {
-    if let InferType::Vec(elem) = ty {
-        format!("Vec<{elem}>")
-    } else {
-        ty.to_string()
     }
 }

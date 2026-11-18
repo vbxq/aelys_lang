@@ -439,7 +439,7 @@ impl TypeInference {
                         self.errors.push(TypeError::member_access(
                             format!(
                                 "field assignment on non-struct type {}",
-                                crate::modules::source_shown(&object.ty)
+                                object.ty
                             ),
                             span,
                         ));

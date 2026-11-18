@@ -147,6 +147,53 @@ impl TypeAnnotation {
     }
 }
 
+impl std::fmt::Display for TypeAnnotation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let list = |f: &mut std::fmt::Formatter<'_>, items: &[TypeAnnotation]| {
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{item}")?;
+            }
+            Ok(())
+        };
+        match self.reference {
+            Some(RefKind::Shared) => write!(f, "&")?,
+            Some(RefKind::Mut) => write!(f, "&mut ")?,
+            None => {}
+        }
+        if let Some(params) = &self.fn_params {
+            write!(f, "{}fn(", if self.nogc { "nogc " } else { "" })?;
+            list(f, params)?;
+            write!(f, ")")?;
+            if let Some(ret) = self.fn_ret.as_deref().filter(|r| r.name != "null") {
+                write!(f, " -> {ret}")?;
+            }
+            return Ok(());
+        }
+        if self.is_slice || self.array_size.is_some() {
+            write!(f, "[")?;
+            if let Some(elem) = &self.type_param {
+                write!(f, "{elem}")?;
+            }
+            if let Some(n) = self.array_size {
+                write!(f, "; {n}")?;
+            }
+            return write!(f, "]");
+        }
+        write!(f, "{}", self.name)?;
+        if !self.type_params.is_empty() {
+            write!(f, "<")?;
+            list(f, &self.type_params)?;
+            write!(f, ">")?;
+        } else if let Some(param) = &self.type_param {
+            write!(f, "<{param}>")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Parameter {
     pub name: String,

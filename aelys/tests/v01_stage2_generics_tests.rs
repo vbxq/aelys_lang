@@ -772,7 +772,7 @@ fn s2_a_vec_satisfies_no_bound() {
         "S2-VEC-NOT-EQ",
         A_VEC_SATISFIES_NEITHER,
         "E0732",
-        &["is bound `eq`, but this call instantiates it with `vec[i64]`, which is not `eq`"],
+        &["is bound `eq`, but this call instantiates it with `Vec<i64>`, which is not `eq`"],
     );
 }
 
