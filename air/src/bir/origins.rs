@@ -60,6 +60,12 @@ fn summarize_body(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> ReturnOrig
             Some(base) => holds.get(base.0 as usize).cloned().unwrap_or_default(),
             None => HashSet::new(),
         };
+        if origin_set.is_empty() && body.name.starts_with("__trait$") {
+            for (i, p) in params.iter_mut().enumerate() {
+                *p |= is_ref_ty(&body.locals[i].ty);
+            }
+            continue;
+        }
         if origin_set.is_empty() {
             // has no call edges) cannot be proven loan-free, so reject conservatively (the floor)
             escapes_local = true;
