@@ -437,6 +437,11 @@ pub enum Pattern {
         hi: PatLit,
         span: Span,
     },
+    ConstRange {
+        lo: Box<Pattern>,
+        hi: Box<Pattern>,
+        span: Span,
+    },
     Variant {
         enum_name: String,
         variant: String,
@@ -464,6 +469,7 @@ impl Pattern {
             | Pattern::Binding { span, .. }
             | Pattern::Lit(_, span)
             | Pattern::Range { span, .. }
+            | Pattern::ConstRange { span, .. }
             | Pattern::Variant { span, .. }
             | Pattern::Struct { span, .. }
             | Pattern::Tuple { span, .. }

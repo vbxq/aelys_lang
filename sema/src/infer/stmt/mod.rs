@@ -89,7 +89,7 @@ impl TypeInference {
                         walk(e, seen, out);
                     }
                 }
-                Pattern::Lit(..) | Pattern::Range { .. } => {}
+                Pattern::Lit(..) | Pattern::Range { .. } | Pattern::ConstRange { .. } => {}
                 Pattern::Wildcard(_) => {}
             }
         }
@@ -174,6 +174,7 @@ impl TypeInference {
             Pattern::Variant { span, .. }
             | Pattern::Lit(_, span)
             | Pattern::Range { span, .. }
+            | Pattern::ConstRange { span, .. }
             | Pattern::Struct { span, .. }
             | Pattern::Or(_, span) => {
                 self.errors.push(TypeError::coded(
@@ -219,7 +220,10 @@ impl TypeInference {
                     self.bind_refused_pattern(first);
                 }
             }
-            Pattern::Wildcard(_) | Pattern::Lit(..) | Pattern::Range { .. } => {}
+            Pattern::Wildcard(_)
+            | Pattern::Lit(..)
+            | Pattern::Range { .. }
+            | Pattern::ConstRange { .. } => {}
         }
     }
 

@@ -169,7 +169,19 @@ impl Parser {
                 }
                 self.parse_primary_pattern()
             }
-            TokenKind::Identifier(_) | TokenKind::Null => self.parse_path_pattern(),
+            TokenKind::Identifier(_) | TokenKind::Null => {
+                let lo = self.parse_path_pattern()?;
+                if is_const_reference(&lo) && self.match_token(&TokenKind::DotDotEq) {
+                    let hi = self.parse_range_bound()?;
+                    let span = span.merge(self.previous().span);
+                    return Ok(Pattern::ConstRange {
+                        lo: Box::new(lo),
+                        hi: Box::new(hi),
+                        span,
+                    });
+                }
+                Ok(lo)
+            }
             other => Err(self.error(CompileErrorKind::UnexpectedToken {
                 expected: "pattern".to_string(),
                 found: other.to_string(),
@@ -235,6 +247,19 @@ impl Parser {
             }
             if self.check(&TokenKind::LBrace) && enum_name.contains('.') {
                 return self.parse_struct_pattern(enum_name, span);
+            }
+            if !self.check(&TokenKind::ColonColon)
+                && let Some((module, value)) = enum_name.rsplit_once('.')
+                && !module.starts_with(char::is_uppercase)
+            {
+                let end = self.previous().span;
+                return Ok(Pattern::Variant {
+                    enum_name: module.to_string(),
+                    variant: value.to_string(),
+                    fields: Vec::new(),
+                    span: span.merge(end),
+                    unqualified: false,
+                });
             }
             self.consume(&TokenKind::ColonColon, "::")?;
             let variant = self.consume_identifier("variant name")?;
@@ -354,9 +379,46 @@ impl Parser {
         }))
     }
 
+    fn parse_range_bound(&mut self) -> Result<Pattern> {
+        let span = self.peek().span;
+        if matches!(self.peek().kind, TokenKind::Identifier(_)) {
+            let bound = self.parse_path_pattern()?;
+            if !is_const_reference(&bound) {
+                self.refuse_pattern(
+                    "a range bound is a literal or a const; write `lo..=hi`",
+                    bound.span(),
+                );
+                return Ok(Pattern::Wildcard(bound.span()));
+            }
+            return Ok(bound);
+        }
+        let lit = self.parse_pat_lit()?;
+        let span = span.merge(self.previous().span);
+        Ok(match lit {
+            Some(lit) => Pattern::Lit(lit, span),
+            None => Pattern::Wildcard(span),
+        })
+    }
+
     fn parse_literal_pattern(&mut self) -> Result<Pattern> {
         let span = self.peek().span;
         let lo = self.parse_pat_lit()?;
+        if self.check(&TokenKind::DotDotEq)
+            && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
+        {
+            self.advance();
+            let lo_span = span.merge(self.previous().span);
+            let hi = self.parse_range_bound()?;
+            let span = span.merge(self.previous().span);
+            let Some(lo) = lo else {
+                return Ok(Pattern::Wildcard(span));
+            };
+            return Ok(Pattern::ConstRange {
+                lo: Box::new(Pattern::Lit(lo, lo_span)),
+                hi: Box::new(hi),
+                span,
+            });
+        }
         if self.match_token(&TokenKind::DotDotEq) {
             let hi = self.parse_pat_lit()?;
             let end = self.previous().span;
@@ -453,5 +515,23 @@ fn show_lit(lit: &PatLit) -> String {
         },
         PatLit::Bool(b) => b.to_string(),
         PatLit::Str(s) => format!("{s:?}"),
+    }
+}
+
+fn is_const_reference(p: &Pattern) -> bool {
+    match p {
+        Pattern::Variant {
+            enum_name,
+            variant,
+            fields,
+            unqualified,
+            ..
+        } => {
+            fields.is_empty()
+                && variant.starts_with(char::is_uppercase)
+                && (*unqualified && enum_name.is_empty()
+                    || !*unqualified && !enum_name.starts_with(char::is_uppercase))
+        }
+        _ => false,
     }
 }

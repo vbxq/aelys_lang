@@ -1,0 +1,12 @@
+needs m
+fn cls(x: i64) -> i64 {
+    match x {
+        m.LIM => { return 1 }
+        _ => { return 0 }
+    }
+    return 9
+}
+fn main() -> i64 {
+    println(cls(4) * 10 + cls(5))
+    return 0
+}

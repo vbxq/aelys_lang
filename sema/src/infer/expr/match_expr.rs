@@ -245,6 +245,30 @@ impl TypeInference {
         }
     }
 
+    fn pattern_bound_literal(&mut self, bound: &Pattern) -> Option<PatLit> {
+        match bound {
+            Pattern::Lit(lit, _) => Some(lit.clone()),
+            Pattern::Variant {
+                enum_name,
+                variant,
+                fields,
+                unqualified: true,
+                ..
+            } if enum_name.is_empty() && fields.is_empty() => self.const_pattern_literal(variant),
+            Pattern::Variant {
+                enum_name,
+                variant,
+                fields,
+                unqualified: false,
+                span,
+            } if fields.is_empty() && self.is_module_namespace(enum_name) => {
+                let (qualified, _) = self.resolve_module_member(enum_name, variant, *span);
+                self.const_pattern_literal(&qualified)
+            }
+            _ => None,
+        }
+    }
+
     fn const_pattern_literal(&self, name: &str) -> Option<PatLit> {
         use crate::typed_ast::ConstScalar;
         match &self.consts.get(name)?.value {
@@ -331,6 +355,43 @@ impl TypeInference {
                     expected.clone(),
                     span,
                 ))
+            }
+            Pattern::ConstRange { lo, hi, .. } => {
+                let mut bounds = Vec::with_capacity(2);
+                for bound in [lo.as_ref(), hi.as_ref()] {
+                    let Some(lit) = self.pattern_bound_literal(bound) else {
+                        self.pattern_error(
+                            TypeErrorKind::PatternUnsupported {
+                                detail: "a range bound is an integer or `char` literal or a \
+                                         const of that type"
+                                    .to_string(),
+                            },
+                            bound.span(),
+                        );
+                        return None;
+                    };
+                    bounds.push(lit);
+                }
+                let hi = bounds.pop()?;
+                let lo = bounds.pop()?;
+                let empty = match (&lo, &hi) {
+                    (PatLit::Int(a), PatLit::Int(b)) => a > b,
+                    (PatLit::Char(a), PatLit::Char(b)) => a > b,
+                    _ => false,
+                };
+                if empty {
+                    self.pattern_error(
+                        TypeErrorKind::PatternUnsupported {
+                            detail: "empty range pattern: no value lies between these bounds; \
+                                     write the smaller bound first"
+                                .to_string(),
+                        },
+                        span,
+                    );
+                    return None;
+                }
+                let resolved = Pattern::Range { lo, hi, span };
+                self.check_pattern(&resolved, expected, seen)
             }
             Pattern::Range { lo, hi, .. } => {
                 let same_kind = matches!(
@@ -564,6 +625,36 @@ impl TypeInference {
         span: Span,
         seen: &mut Vec<String>,
     ) -> Option<TypedPattern> {
+        if !unqualified
+            && fields.is_empty()
+            && self.is_module_namespace(written_enum)
+        {
+            let module_const = Pattern::Variant {
+                enum_name: written_enum.to_string(),
+                variant: variant.to_string(),
+                fields: Vec::new(),
+                span,
+                unqualified: false,
+            };
+            let Some(lit) = self.pattern_bound_literal(&module_const) else {
+                self.errors.push(TypeError::coded(
+                    "E0101",
+                    format!(
+                        "`{written_enum}.{variant}` names no const of the module `{written_enum}`; \
+                         a module value in a pattern must be a const"
+                    ),
+                    "not a const",
+                    span,
+                ));
+                return None;
+            };
+            self.check_pattern_literal(&lit, expected, span)?;
+            return Some(TypedPattern::new(
+                TypedPatternKind::Lit(lit),
+                expected.clone(),
+                span,
+            ));
+        }
         if unqualified && written_enum.is_empty() {
             if fields.is_empty()
                 && let Some(lit) = self.const_pattern_literal(variant)

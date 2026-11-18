@@ -537,6 +537,10 @@ fn subst_pattern(pattern: &mut Pattern, head: &TypeAnnotation) {
                 subst_pattern(p, head);
             }
         }
+        Pattern::ConstRange { lo, hi, .. } => {
+            subst_pattern(lo, head);
+            subst_pattern(hi, head);
+        }
         Pattern::Wildcard(_) | Pattern::Lit(..) | Pattern::Range { .. } => {}
     }
 }
