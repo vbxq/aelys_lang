@@ -1,0 +1,16 @@
+fn class(c: char) -> string {
+    return match c {
+        'a'..='z' => "lower",
+        'A'..='Z' => "upper",
+        '0'..='9' => "digit",
+        _ => "other"
+    }
+}
+
+fn main() -> i64 {
+    let s: string = "aZ5-z"
+    for c in s {
+        println(class(c))
+    }
+    return 0
+}

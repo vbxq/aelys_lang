@@ -1,0 +1,12 @@
+fn show(o: Option<i64>) {
+    if let Some(x) = o {
+        println(x)
+    }
+}
+
+fn main() -> i64 {
+    show(Some(3))
+    show(None)
+    println("done")
+    return 0
+}

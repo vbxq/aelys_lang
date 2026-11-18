@@ -1,0 +1,13 @@
+fn f(o: &Option<i64>) -> i64 {
+    return match o { Some(3) => 30, Some(x) => x, None => 0 }
+}
+
+fn main() -> i64 {
+    let a: Option<i64> = Some(3)
+    let b: Option<i64> = Some(4)
+    let c: Option<i64> = None
+    println(f(&a))
+    println(f(&b))
+    println(f(&c))
+    return 0
+}

@@ -1,0 +1,15 @@
+fn clear(o: &mut Option<string>) -> bool {
+    *o = None
+    return true
+}
+
+fn main() -> i64 {
+    let mut o: Option<string> = Some("a" + "b")
+    let n: i64 = match o {
+        Some(s) if clear(&mut o) => s.len,
+        Some(s) => 0,
+        None => -1
+    }
+    println(n)
+    return 0
+}

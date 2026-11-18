@@ -1,0 +1,13 @@
+fn costly(n: i64) -> bool {
+    let s: string = "n{n}"
+    return s.len > 2
+}
+
+nogc fn f(o: Option<i64>) -> i64 {
+    return match o { Some(x) if costly(x) => 1, Some(x) => 2, None => 0 }
+}
+
+fn main() -> i64 {
+    println(f(Some(3)))
+    return 0
+}

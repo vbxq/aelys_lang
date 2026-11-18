@@ -1,0 +1,15 @@
+fn take(v: &mut Vec<string>) -> Option<string> {
+    if Vec::len(*v) == 0 { return None }
+    return Some(Vec::pop(*v))
+}
+
+fn main() -> i64 {
+    let mut v: Vec<string> = vec["a", "b", "c"]
+    let mut n: i64 = 0
+    while let Some(s) = take(&mut v) {
+        println(s + "!")
+        n = n + 1
+    }
+    println(n)
+    return 0
+}

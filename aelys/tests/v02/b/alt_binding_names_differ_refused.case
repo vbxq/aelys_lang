@@ -1,0 +1,6 @@
+enum Ev { Key(i64), Click(i64), Quit }
+
+fn main() -> i64 {
+    let e = Ev::Key(1)
+    return match e { Ev::Key(n) | Ev::Click(m) => 0, Ev::Quit => 1 }
+}

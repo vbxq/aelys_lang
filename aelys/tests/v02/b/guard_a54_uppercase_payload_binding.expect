@@ -1,0 +1,2 @@
+refuse E0101
+a capitalized name in a pattern names a variant, never a binding

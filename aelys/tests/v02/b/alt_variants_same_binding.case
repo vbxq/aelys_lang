@@ -1,0 +1,12 @@
+enum Ev { Key(i64), Click(i64), Quit }
+
+fn code(e: Ev) -> i64 {
+    return match e { Ev::Key(n) | Ev::Click(n) => n, Ev::Quit => -1 }
+}
+
+fn main() -> i64 {
+    println(code(Ev::Key(4)))
+    println(code(Ev::Click(9)))
+    println(code(Ev::Quit))
+    return 0
+}

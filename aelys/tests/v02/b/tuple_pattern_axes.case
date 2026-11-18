@@ -1,0 +1,13 @@
+fn f(a: i64, b: i64) -> string {
+    return match (a, b) {
+        (0, 0) => "origin",
+        (0, _) => "y-axis",
+        (_, 0) => "x-axis",
+        _ => "other"
+    }
+}
+
+fn main() -> i64 {
+    println("{f(0, 0)} {f(0, 2)} {f(3, 0)} {f(1, 1)}")
+    return 0
+}

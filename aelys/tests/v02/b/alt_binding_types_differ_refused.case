@@ -1,0 +1,6 @@
+enum V { I(i64), S(string) }
+
+fn main() -> i64 {
+    let v = V::I(1)
+    return match v { V::I(x) | V::S(x) => 0 }
+}

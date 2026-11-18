@@ -1,0 +1,7 @@
+fn main() -> i64 {
+    let n: i64 = 5
+    if let k = n {
+        println(k)
+    }
+    return 0
+}

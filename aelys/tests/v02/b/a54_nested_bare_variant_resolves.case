@@ -1,0 +1,10 @@
+fn f(o: Option<Option<i64>>) -> i64 {
+    return match o { Some(None) => 1, Some(Some(_)) => 2, None => 3 }
+}
+
+fn main() -> i64 {
+    println(f(Some(None)))
+    println(f(Some(Some(8))))
+    println(f(None))
+    return 0
+}

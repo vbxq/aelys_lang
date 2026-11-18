@@ -1,0 +1,2 @@
+refuse E0101
+`Red` alone does not name a variant; write `Color::Red`

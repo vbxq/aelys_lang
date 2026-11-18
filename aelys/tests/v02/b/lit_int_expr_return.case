@@ -1,0 +1,12 @@
+fn name(n: i64) -> string {
+    return match n { 0 => "zero", 1 => "one", _ => "many" }
+}
+
+fn main() -> i64 {
+    let mut acc: string = ""
+    acc = acc + name(1) + ","
+    acc = acc + name(7) + ","
+    acc = acc + name(0) + ","
+    println(acc)
+    return 0
+}

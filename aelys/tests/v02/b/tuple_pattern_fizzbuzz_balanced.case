@@ -1,0 +1,14 @@
+fn main() -> i64 {
+    let mut out: string = ""
+    for i in 1..=15 {
+        let w: string = match (i % 3, i % 5) {
+            (0, 0) => "FizzBuzz",
+            (0, _) => "Fizz",
+            (_, 0) => "Buzz",
+            _ => "{i}"
+        }
+        out = out + w + " "
+    }
+    println(out)
+    return 0
+}
