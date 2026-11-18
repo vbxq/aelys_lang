@@ -1,45 +1,40 @@
 use super::TypeEnv;
 use crate::types::InferType;
 use aelys_syntax::Span;
+use std::rc::Rc;
 
 impl TypeEnv {
     /// Enter a new scope
     pub fn push_scope(&mut self) {
-        self.locals.push(std::collections::HashMap::new());
-        self.mutable_locals.push(std::collections::HashSet::new());
-        self.function_scopes.push(std::collections::HashMap::new());
+        self.locals.push(Rc::default());
+        self.function_scopes.push(Rc::default());
         self.binding_spans.push(std::collections::HashMap::new());
-        self.binding_ids.push(std::collections::HashMap::new());
     }
 
     /// Exit the current scope
     pub fn pop_scope(&mut self) {
         if self.locals.len() > 1 {
             self.locals.pop();
-            self.mutable_locals.pop();
             self.function_scopes.pop();
             self.binding_spans.pop();
-            self.binding_ids.pop();
         }
     }
 
     /// Define a local variable in the current scope
     pub fn define_local(&mut self, name: String, ty: InferType) {
-        if let Some(ids) = self.binding_ids.last_mut() {
-            ids.insert(name.clone(), super::BindingId::fresh());
-        }
         if let Some(scope) = self.locals.last_mut() {
-            scope.insert(name, ty);
+            let scope = Rc::make_mut(scope);
+            scope.ids.insert(name.clone(), super::BindingId::fresh());
+            scope.types.insert(name, ty);
         }
     }
 
     /// Define a local variable and record the span where it was first bound
     pub fn define_local_with_span(&mut self, name: String, ty: InferType, span: Span) {
-        if let Some(ids) = self.binding_ids.last_mut() {
-            ids.insert(name.clone(), super::BindingId::fresh());
-        }
         if let Some(scope) = self.locals.last_mut() {
-            scope.insert(name.clone(), ty);
+            let scope = Rc::make_mut(scope);
+            scope.ids.insert(name.clone(), super::BindingId::fresh());
+            scope.types.insert(name.clone(), ty);
         }
         if let Some(spans) = self.binding_spans.last_mut() {
             spans.insert(name, span);
@@ -57,45 +52,30 @@ impl TypeEnv {
     }
 
     pub fn lookup_binding_id(&self, name: &str) -> Option<super::BindingId> {
-        for (scope, ids) in self.locals.iter().zip(self.binding_ids.iter()).rev() {
-            if scope.contains_key(name) {
-                return ids.get(name).copied();
-            }
-        }
-        if self.captures.contains_key(name) {
-            return self.capture_ids.get(name).copied();
-        }
-        None
+        self.binding_scope(name)
+            .and_then(|scope| scope.ids.get(name).copied())
+    }
+
+    fn binding_scope(&self, name: &str) -> Option<&super::VarScope> {
+        self.captures
+            .iter()
+            .chain(&self.locals)
+            .rev()
+            .map(|scope| scope.as_ref())
+            .find(|scope| scope.types.contains_key(name))
     }
 
     /// Look up a variable (searches from innermost to outermost scope)
     pub fn lookup(&self, name: &str) -> Option<&InferType> {
-        for scope in self.locals.iter().rev() {
-            if let Some(ty) = scope.get(name) {
-                return Some(ty);
-            }
-        }
-
-        if let Some(ty) = self.captures.get(name) {
-            return Some(ty);
-        }
-
-        if let Some(ty) = self.lookup_function_ref(name) {
-            return Some(ty);
-        }
-
-        None
+        self.lookup_local(name)
+            .or_else(|| self.lookup_function_ref(name))
     }
 
     /// look up a variable among locals and captures only, never function signatures.
     /// mirrors the bir's name_map (locals-only) so a fn name is not resolved as a local.
     pub fn lookup_local(&self, name: &str) -> Option<&InferType> {
-        for scope in self.locals.iter().rev() {
-            if let Some(ty) = scope.get(name) {
-                return Some(ty);
-            }
-        }
-        self.captures.get(name)
+        self.binding_scope(name)
+            .and_then(|scope| scope.types.get(name))
     }
 
     /// Check if a variable exists
@@ -110,8 +90,8 @@ impl TypeEnv {
 
     /// Mark a variable as mutable
     pub fn mark_mutable(&mut self, name: String) {
-        if let Some(scope) = self.mutable_locals.last_mut() {
-            scope.insert(name);
+        if let Some(scope) = self.locals.last_mut() {
+            Rc::make_mut(scope).mutable.insert(name);
         }
     }
 
@@ -119,16 +99,7 @@ impl TypeEnv {
     pub fn is_mutable(&self, name: &str) -> bool {
         // resolve mutability against the same lexical binding that lookup() would resolve
         // this prevents an inner `let mut x` from making an outer immutable `x` mutable
-        for (scope, mutable_scope) in self.locals.iter().zip(self.mutable_locals.iter()).rev() {
-            if scope.contains_key(name) {
-                return mutable_scope.contains(name);
-            }
-        }
-
-        if self.captures.contains_key(name) {
-            return self.mutable_captures.contains(name);
-        }
-
-        false
+        self.binding_scope(name)
+            .is_some_and(|scope| scope.mutable.contains(name))
     }
 }

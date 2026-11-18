@@ -118,7 +118,7 @@ impl TypeInference {
                 if !locals.contains(name)
                     && !seen.contains(name)
                     && !self.imported_globals.contains(name)
-                    && let Some(ty) = self.env.captures().get(name)
+                    && let Some(ty) = self.env.lookup_capture(name)
                 {
                     captures.push((name.clone(), ty.clone()));
                     seen.insert(name.clone());
@@ -145,7 +145,7 @@ impl TypeInference {
                 if !locals.contains(name)
                     && !seen.contains(name)
                     && !self.imported_globals.contains(name)
-                    && let Some(ty) = self.env.captures().get(name)
+                    && let Some(ty) = self.env.lookup_capture(name)
                 {
                     captures.push((name.clone(), ty.clone()));
                     seen.insert(name.clone());

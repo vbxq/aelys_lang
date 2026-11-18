@@ -6,22 +6,28 @@ impl TypeEnv {
     /// Define a function signature (takes Rc to avoid cloning)
     pub fn define_function(&mut self, name: String, ty: Rc<InferType>) {
         if let Some(scope) = self.function_scopes.last_mut() {
-            scope.insert(name, ty);
+            Rc::make_mut(scope).insert(name, ty);
         }
     }
 
     /// Define a function signature from an InferType (wraps in Rc)
     pub fn define_function_owned(&mut self, name: String, ty: InferType) {
         if let Some(scope) = self.function_scopes.last_mut() {
-            scope.insert(name, Rc::new(ty));
+            Rc::make_mut(scope).insert(name, Rc::new(ty));
         }
     }
 
     /// Check if a function is defined
     pub fn has_function(&self, name: &str) -> bool {
-        self.function_scopes
-            .last()
-            .is_some_and(|scope| scope.contains_key(name))
+        let len = self.function_scopes.len();
+        let first = if len == self.own_function_scope + 1 {
+            0
+        } else {
+            len.saturating_sub(1)
+        };
+        self.function_scopes[first..]
+            .iter()
+            .any(|scope| scope.contains_key(name))
     }
 
     /// Look up a function type (returns Rc for cheap cloning)

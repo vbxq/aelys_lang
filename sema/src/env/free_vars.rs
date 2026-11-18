@@ -32,14 +32,10 @@ impl TypeEnv {
             }
         }
 
-        for scope in &self.locals {
-            for ty in scope.values() {
+        for scope in self.captures.iter().chain(&self.locals) {
+            for ty in scope.types.values() {
                 collect_vars(ty, &mut vars);
             }
-        }
-
-        for ty in self.captures.values() {
-            collect_vars(ty, &mut vars);
         }
 
         vars
