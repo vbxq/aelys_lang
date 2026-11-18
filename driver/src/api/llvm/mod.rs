@@ -476,12 +476,14 @@ fn typecheck(
 ) -> Result<Typed, AelysError> {
     let src = unit.source.clone();
     let globals = imported_global_symbols(&imports);
-    let inference = aelys_sema::TypeInference::infer_program_full(
-        unit.stmts.clone(),
-        src.clone(),
-        imports,
-        known_globals(),
-    )
+    let inference = crate::timing::phase("sema", || {
+        aelys_sema::TypeInference::infer_program_full(
+            unit.stmts.clone(),
+            src.clone(),
+            imports,
+            known_globals(),
+        )
+    })
     .map_err(|errors| sema_errors_to_diagnostics(errors, src))?;
     Ok(Typed { inference, globals })
 }
@@ -505,7 +507,9 @@ fn front_stage(
     let mut effects = std::collections::HashMap::new();
     let mut chains = std::collections::HashMap::new();
     let mut externs = std::collections::HashMap::new();
-    let checked = match aelys_air::bir::check_with_imports(program, bir_imports) {
+    let checked = match crate::timing::phase("bir", || {
+        aelys_air::bir::check_with_imports(program, bir_imports)
+    }) {
         Ok((checked, published)) => {
             let qualify = |name: &str| aelys_sema::modules::qualify_value(&unit.dotted, name);
             effects = published
@@ -647,28 +651,29 @@ fn air_stage(
             file: file as u32,
         };
 
-        let mut air = aelys_air::lower::try_lower_with_imports(typed_program, imported).map_err(
-            |failure| match failure {
-                aelys_air::lower::LowerFailure::Borrow(diags) => {
-                    bir_diagnostics_to_error(diags, src.clone())
+        let mut air = crate::timing::phase("lower", || {
+            aelys_air::lower::try_lower_with_imports(typed_program, imported)
+        })
+        .map_err(|failure| match failure {
+            aelys_air::lower::LowerFailure::Borrow(diags) => {
+                bir_diagnostics_to_error(diags, src.clone())
+            }
+            aelys_air::lower::LowerFailure::Lowering(errors) => {
+                if errors.is_empty() {
+                    backend_diagnostic_error(
+                        src.clone(),
+                        fallback_source_span(src.as_ref()),
+                        "air-lowering",
+                        "AIR lowering failed with an unknown error",
+                        None,
+                        None,
+                        Fault::Compiler,
+                    )
+                } else {
+                    lowering_errors_to_error(errors, src.clone())
                 }
-                aelys_air::lower::LowerFailure::Lowering(errors) => {
-                    if errors.is_empty() {
-                        backend_diagnostic_error(
-                            src.clone(),
-                            fallback_source_span(src.as_ref()),
-                            "air-lowering",
-                            "AIR lowering failed with an unknown error",
-                            None,
-                            None,
-                            Fault::Compiler,
-                        )
-                    } else {
-                        lowering_errors_to_error(errors, src.clone())
-                    }
-                }
-            },
-        )?;
+            }
+        })?;
 
         // mono is function-destroying as well as function-creating: two block-nested `fn g<t>` in
         let duplicates = aelys_air::symbols::duplicate_symbols(&air);
@@ -731,9 +736,10 @@ fn air_stage(
         );
     }
 
-    let mut air = aelys_air::mono::monomorphize(air).map_err(|errors| {
-        mono_errors_to_error(errors, fallback_source_span(src.as_ref()), src.clone())
-    })?;
+    let mut air =
+        crate::timing::phase("mono", || aelys_air::mono::monomorphize(air)).map_err(|errors| {
+            mono_errors_to_error(errors, fallback_source_span(src.as_ref()), src.clone())
+        })?;
     aelys_air::passes::never_arms::cut_never_arms(&mut air);
     let effect_errors = {
         let mut effects = std::collections::HashMap::new();
@@ -912,7 +918,9 @@ fn lower_file_to_air_with_source(
             grouped.push(typed);
             continue;
         }
-        let (front, unit_checked) = front_stage(unit, typecheck(unit, imports)?, &bir_imports)?;
+        let (front, unit_checked) = crate::timing::phase("front", || {
+            front_stage(unit, typecheck(unit, imports)?, &bir_imports)
+        })?;
         if let Some(mut scope) = prelude_own_scope {
             widen_with_exports(&mut scope, &front.exports);
             prelude_scope = Some(scope);
@@ -945,17 +953,19 @@ fn lower_file_to_air_with_source(
     }
 
     let reference = (opt_level != OptimizationLevel::None).then(|| {
-        let unoptimized: Vec<&aelys_sema::TypedProgram> =
-            checked.iter().map(|unit| unit.program()).collect();
-        air_stage(
-            &fronts,
-            &unoptimized,
-            &src,
-            &module_sources,
-            OptimizationLevel::None,
-            true,
-            group_start,
-        )
+        crate::timing::phase("air (reference)", || {
+            let unoptimized: Vec<&aelys_sema::TypedProgram> =
+                checked.iter().map(|unit| unit.program()).collect();
+            air_stage(
+                &fronts,
+                &unoptimized,
+                &src,
+                &module_sources,
+                OptimizationLevel::None,
+                true,
+                group_start,
+            )
+        })
     });
     let reference = reference.transpose().map_err(|failure| failure.error)?;
 
@@ -963,7 +973,7 @@ fn lower_file_to_air_with_source(
     let mut optimized: Vec<aelys_sema::TypedProgram> = Vec::with_capacity(checked.len());
     for (front, unit_checked) in fronts.iter_mut().zip(checked) {
         let mut optimizer = Optimizer::new(opt_level);
-        let program = optimizer.optimize(unit_checked);
+        let program = crate::timing::phase("opt", || optimizer.optimize(unit_checked));
         warnings.append(&mut front.warnings);
         warnings.extend(sourced(optimizer.take_warnings(), &front.source));
         optimized.push(program);
@@ -971,15 +981,17 @@ fn lower_file_to_air_with_source(
 
     let optimized_refs: Vec<&aelys_sema::TypedProgram> = optimized.iter().collect();
     // the instance verdict reads the declared types, which optimization may drop
-    let actual = air_stage(
-        &fronts,
-        &optimized_refs,
-        &src,
-        &module_sources,
-        opt_level,
-        opt_level == OptimizationLevel::None,
-        group_start,
-    );
+    let actual = crate::timing::phase("air", || {
+        air_stage(
+            &fronts,
+            &optimized_refs,
+            &src,
+            &module_sources,
+            opt_level,
+            opt_level == OptimizationLevel::None,
+            group_start,
+        )
+    });
 
     let level = format!("-O{}", opt_level.numeric());
     let mut required_externs: Option<Vec<String>> = None;
@@ -1121,21 +1133,23 @@ pub fn compile_file_with_llvm_artifact(
     sources: &SourceOptions,
     output: Option<&Path>,
 ) -> Result<(Vec<Warning>, CompiledArtifact), AelysError> {
-    let artifacts = lower_file_to_air_with_source(path, opt_level, sources)?;
-    let artifact = compile_air_with_llvm_linked(
-        path,
-        &artifacts.air,
-        opt_level,
-        emit_llvm_ir,
-        runtime,
-        artifacts.source.clone(),
-        link,
-        output,
-        ObjectPath::Private,
-        None,
-        &artifacts.required_externs,
-    )?;
-    Ok((artifacts.warnings, artifact))
+    crate::timing::phase("total", || {
+        let artifacts = lower_file_to_air_with_source(path, opt_level, sources)?;
+        let artifact = compile_air_with_llvm_linked(
+            path,
+            &artifacts.air,
+            opt_level,
+            emit_llvm_ir,
+            runtime,
+            artifacts.source.clone(),
+            link,
+            output,
+            ObjectPath::Private,
+            None,
+            &artifacts.required_externs,
+        )?;
+        Ok((artifacts.warnings, artifact))
+    })
 }
 
 pub struct BuildRequest<'a> {

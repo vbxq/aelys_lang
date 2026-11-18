@@ -302,12 +302,11 @@ impl Discovery {
                 Source::new(embedded_std_path(name), *content)
             }
         };
-        let tokens = Lexer::with_source(source.clone())
-            .scan()
-            .map_err(|error| ModuleError { error })?;
-        let mut stmts = Parser::new(tokens, source.clone())
-            .parse()
-            .map_err(|error| ModuleError { error })?;
+        let mut stmts = crate::timing::phase("parse", || {
+            let tokens = Lexer::with_source(source.clone()).scan()?;
+            Parser::new(tokens, source.clone()).parse()
+        })
+        .map_err(|error| ModuleError { error })?;
         self.items_imported_by_path(&mut stmts);
 
         let mut bound: HashMap<String, TopLevelBinding> = HashMap::new();

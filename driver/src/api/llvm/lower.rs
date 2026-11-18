@@ -89,12 +89,12 @@ pub(super) fn compile_air_with_llvm_linked(
     }
     let mut codegen = aelys_codegen::CodegenContext::new(module_name);
 
-    codegen
-        .compile(air)
+    crate::timing::phase("codegen", || codegen.compile(air))
         .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
-    codegen
-        .optimize(opt_level.llvm_pass_pipeline(), opt_level.numeric())
-        .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
+    crate::timing::phase("llvm opt", || {
+        codegen.optimize(opt_level.llvm_pass_pipeline(), opt_level.numeric())
+    })
+    .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
 
     let has_main_entry = air
         .functions
@@ -152,9 +152,10 @@ pub(super) fn compile_air_with_llvm_linked(
         })?,
     };
     let object_path_str = object_path.to_string_lossy().to_string();
-    codegen
-        .emit_object(&object_path_str, opt_level.numeric())
-        .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
+    crate::timing::phase("emit object", || {
+        codegen.emit_object(&object_path_str, opt_level.numeric())
+    })
+    .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
 
     if !has_main_entry {
         return Ok(CompiledArtifact::Object(object_path));
@@ -175,20 +176,21 @@ pub(super) fn compile_air_with_llvm_linked(
                 )
             })?,
         };
-        link_native_executable(&object_path, &exe_path, &core_lib, runtime, link, require).map_err(
-            |message| {
-                backend_diagnostic_error(
-                    source.clone(),
-                    anchor,
-                    "llvm-linker",
-                    message,
-                    None,
-                    foreign_declaration_help(air, source.as_ref()),
-                    // linker stderr cannot separate a missing library from a broken object
-                    Fault::Environment,
-                )
-            },
-        )?;
+        crate::timing::phase("link", || {
+            link_native_executable(&object_path, &exe_path, &core_lib, runtime, link, require)
+        })
+        .map_err(|message| {
+            backend_diagnostic_error(
+                source.clone(),
+                anchor,
+                "llvm-linker",
+                message,
+                None,
+                foreign_declaration_help(air, source.as_ref()),
+                // linker stderr cannot separate a missing library from a broken object
+                Fault::Environment,
+            )
+        })?;
         if let Some(symbol) = linked_library_claims_runtime_symbol(&exe_path, &core_lib, link) {
             // the executable is the evidence, so it must not survive the verdict
             let _ = std::fs::remove_file(&exe_path);
