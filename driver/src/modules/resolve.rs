@@ -470,7 +470,7 @@ impl Discovery {
         Ok(index)
     }
 
-    // `use a::b::f;` names the item `f` of module `a::b` when no module `a/b/f` exists, and `use a::E::V;` the variant `V` of `E`
+    // `use a::b::f;` names the item `f` of module `a::b` when no module `a/b/f` exists
     fn items_imported_by_path(&self, stmts: &mut [Stmt]) {
         for stmt in stmts {
             let StmtKind::Needs(NeedsStmt {
