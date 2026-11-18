@@ -45,7 +45,6 @@ pub enum InferType {
 
     Struct(std::string::String, Vec<InferType>),
     Enum(std::string::String, Vec<InferType>),
-    // the unsized trait object, only ever behind `Rc` or a reference
     Dyn(std::string::String),
 
     Var(TypeVarId),

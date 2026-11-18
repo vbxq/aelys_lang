@@ -251,9 +251,7 @@ impl TypeInference {
             self.errors.push(TypeError::coded(
                 "E0302",
                 format!(
-                    "`{member}` takes {} argument(s) but {} were supplied; expected {}, found {}",
-                    params.len() - 1,
-                    args.len(),
+                    "`{member}` takes {} argument(s) but {} were supplied",
                     params.len() - 1,
                     args.len()
                 ),

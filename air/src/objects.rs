@@ -49,7 +49,6 @@ impl DynTables {
                 self.slots.push((q, methods));
             }
         }
-        self.vtables.extend(other.vtables);
     }
 }
 
