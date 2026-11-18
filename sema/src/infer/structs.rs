@@ -117,32 +117,32 @@ impl TypeInference {
 
     pub(super) fn reject_polymorphic_recursion(&mut self, stmts: &[Stmt]) {
         for stmt in stmts {
-            let StmtKind::StructDecl {
-                name, type_params, ..
-            } = &stmt.kind
-            else {
-                continue;
+            let (kind, name, type_params) = match &stmt.kind {
+                StmtKind::StructDecl {
+                    name, type_params, ..
+                } => ("struct", name, type_params),
+                StmtKind::EnumDecl {
+                    name, type_params, ..
+                } => ("enum", name, type_params),
+                _ => continue,
             };
             if type_params.is_empty() {
                 continue;
             }
-            let Some(def) = self.type_table.get_struct(name) else {
-                continue;
-            };
             let own: Vec<InferType> = type_params
                 .iter()
                 .map(|p| InferType::Struct(p.clone(), Vec::new()))
                 .collect();
-            let culprit = def
-                .fields
-                .iter()
-                .find(|f| Self::names_with_other_args(&f.ty, name, &own))
-                .map(|f| f.name.clone());
-            if let Some(field) = culprit {
+            let culprit = self
+                .nominal_members(name, &own)
+                .into_iter()
+                .find(|(_, ty)| self.names_with_other_args(ty, name, &own, &mut HashSet::new(), 0))
+                .map(|(member, _)| member);
+            if let Some(member) = culprit {
                 self.errors.push(TypeError::not_supported_yet(
                     format!(
-                        "struct `{name}<{}>` names itself with different type arguments in \
-                         field `{field}`; polymorphic recursion is not supported",
+                        "{kind} `{name}<{}>` names itself with different type arguments in \
+                         {member}; polymorphic recursion is not supported",
                         type_params.join(", ")
                     ),
                     stmt.span,
@@ -151,17 +151,61 @@ impl TypeInference {
         }
     }
 
-    fn names_with_other_args(ty: &InferType, name: &str, own: &[InferType]) -> bool {
-        let go = |t: &InferType| Self::names_with_other_args(t, name, own);
+    fn nominal_members(&self, name: &str, args: &[InferType]) -> Vec<(String, InferType)> {
+        if let Some(fields) = self.type_table.struct_fields(name, args) {
+            return fields
+                .into_iter()
+                .map(|f| (format!("field `{}`", f.name), f.ty))
+                .collect();
+        }
+        let Some(def) = self.type_table.get_enum(name) else {
+            return Vec::new();
+        };
+        if def.type_params.len() != args.len() {
+            return Vec::new();
+        }
+        def.variants
+            .iter()
+            .flat_map(|v| {
+                v.data.iter().map(|d| {
+                    (
+                        format!("variant `{}`", v.name),
+                        d.subst_params(&def.type_params, args),
+                    )
+                })
+            })
+            .collect()
+    }
+
+    fn names_with_other_args(
+        &self,
+        ty: &InferType,
+        name: &str,
+        own: &[InferType],
+        expanded: &mut HashSet<String>,
+        depth: usize,
+    ) -> bool {
+        let mut go = |t: &InferType| self.names_with_other_args(t, name, own, expanded, depth);
         match ty {
-            InferType::Struct(n, args) if n == name => args != own || args.iter().any(go),
-            InferType::Struct(_, args) | InferType::Enum(_, args) | InferType::Tuple(args) => {
-                args.iter().any(go)
+            InferType::Struct(n, args) | InferType::Enum(n, args) if n == name => {
+                args != own || args.iter().any(go)
             }
+            InferType::Struct(n, args) | InferType::Enum(n, args) => {
+                if args.iter().any(&mut go) {
+                    return true;
+                }
+                if args.is_empty() || depth >= 16 || !expanded.insert(format!("{n}{args:?}")) {
+                    return false;
+                }
+                self.nominal_members(n, args).iter().any(|(_, member)| {
+                    self.names_with_other_args(member, name, own, expanded, depth + 1)
+                })
+            }
+            InferType::Tuple(args) => args.iter().any(go),
             InferType::Array(inner, _) | InferType::Vec(inner) | InferType::Rc(inner) => go(inner),
             InferType::Ref { referent, .. } => go(referent),
             InferType::Slice { elem, .. } => go(elem),
-            InferType::Function { params, ret, .. } => params.iter().any(go) || go(ret),
+            InferType::Function { params, ret, .. } => params.iter().any(&mut go) || go(ret),
             _ => false,
         }
     }

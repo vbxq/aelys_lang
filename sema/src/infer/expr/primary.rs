@@ -98,6 +98,11 @@ impl TypeInference {
                 type_param_names,
                 mapping,
             ))),
+            InferType::Rc(inner) => InferType::Rc(Box::new(self.instantiate_enum_type_param(
+                inner,
+                type_param_names,
+                mapping,
+            ))),
             InferType::Ref { referent, mutable } => InferType::Ref {
                 referent: Box::new(self.instantiate_enum_type_param(
                     referent,
@@ -348,7 +353,8 @@ impl TypeInference {
                         let mut typed_arg = self.infer_expr(arg_expr);
 
                         let rc_slot = def.variants.len() > 1
-                            && matches!(&v.data[i], InferType::Struct(p, _) if def.type_params.contains(p));
+                            && (v.data[i].is_rc()
+                                || matches!(&v.data[i], InferType::Struct(p, _) if def.type_params.contains(p)));
                         self.check_carrier(crate::infer::projection::CarrierCheck::Surface {
                             ty: typed_arg.ty.clone(),
                             generic: is_generic.then_some("enum"),

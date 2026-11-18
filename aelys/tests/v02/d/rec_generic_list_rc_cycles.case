@@ -1,0 +1,30 @@
+enum List<T> { Nil, Cons(T, Rc<List<T>>) }
+fn sum(l: List<i64>) -> i64 {
+    let mut cur: List<i64> = l
+    let mut s: i64 = 0
+    let mut go: bool = true
+    while go {
+        match cur {
+            List::Cons(x, rest) => { s = s + x
+                cur = Rc::get(rest) }
+            List::Nil => { go = false }
+        }
+    }
+    return s
+}
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut k: i64 = 0
+    while k < 100 {
+        let mut l: List<i64> = List::Nil
+        let mut i: i64 = 0
+        while i < 100 {
+            l = List::Cons(i * k, Rc::new(l))
+            i = i + 1
+        }
+        t = t + sum(l)
+        k = k + 1
+    }
+    println(t)
+    return 0
+}

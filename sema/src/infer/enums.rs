@@ -4,6 +4,21 @@ use aelys_syntax::{Stmt, StmtKind};
 
 impl TypeInference {
     pub(super) fn collect_enums(&mut self, stmts: &[Stmt]) {
+        let mut pending = std::collections::HashSet::new();
+        for stmt in stmts {
+            if let StmtKind::EnumDecl {
+                name, type_params, ..
+            } = &stmt.kind
+                && !self.type_table.has_enum(name)
+            {
+                pending.insert(name.clone());
+                self.type_table.register_enum(EnumDef {
+                    name: name.clone(),
+                    type_params: type_params.clone(),
+                    variants: Vec::new(),
+                });
+            }
+        }
         for stmt in stmts {
             if let StmtKind::EnumDecl {
                 name,
@@ -12,7 +27,7 @@ impl TypeInference {
                 ..
             } = &stmt.kind
             {
-                if self.type_table.has_enum(name) {
+                if !pending.remove(name) {
                     continue;
                 }
 

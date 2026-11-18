@@ -1,0 +1,22 @@
+enum Tree { Leaf(i64), Node(Rc<Tree>, Rc<Tree>) }
+fn build(d: i64, base: i64) -> Rc<Tree> {
+    if d == 0 { return Rc::new(Tree::Leaf(base)) }
+    return Rc::new(Tree::Node(build(d - 1, base), build(d - 1, base + 1)))
+}
+fn sum(t: Tree) -> i64 {
+    match t {
+        Tree::Leaf(n) => n,
+        Tree::Node(l, r) => sum(Rc::get(l)) + sum(Rc::get(r)),
+    }
+}
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 50 {
+        let tr = build(6, i)
+        t = t + sum(Rc::get(tr))
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

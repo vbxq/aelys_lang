@@ -1,0 +1,29 @@
+struct Cell { k: i64, e: E }
+enum E { Leaf(i64), Wrap(Rc<E>), Hold(i64, Rc<Cell>) }
+fn churn(i: i64) -> i64 {
+    let c: Rc<Cell> = Rc::new(Cell { k: i, e: E::Leaf(1) })
+    let w: Rc<E> = Rc::new(E::Wrap(Rc::new(E::Hold(5, c))))
+    c.e = E::Wrap(w)
+    let mut r: i64 = Rc::get(c).k
+    match Rc::get(c).e {
+        E::Wrap(x) => match Rc::get(x) {
+            E::Wrap(y) => match Rc::get(y) {
+                E::Hold(n, cc) => { r = r + n + Rc::get(cc).k }
+                _ => { r = r - 1000 }
+            },
+            _ => { r = r - 1000 }
+        },
+        _ => { r = r - 1000 }
+    }
+    return r
+}
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        t = t + churn(i)
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

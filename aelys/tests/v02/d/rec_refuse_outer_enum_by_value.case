@@ -1,0 +1,7 @@
+enum Expr { Num(i64), Neg(Rc<Expr>) }
+enum Outer { A(Expr), B }
+fn main() -> i64 {
+    let o = Outer::A(Expr::Neg(Rc::new(Expr::Num(3))))
+    match o { Outer::A(e) => { println(1) } Outer::B => { println(0) } }
+    return 0
+}

@@ -1,0 +1,5 @@
+enum Expr { Num(i64), Neg(Expr) }
+fn main() -> i64 {
+    let e = Expr::Neg(Expr::Num(1))
+    return 0
+}

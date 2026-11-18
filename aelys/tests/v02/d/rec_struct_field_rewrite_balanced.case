@@ -1,0 +1,22 @@
+enum Expr { Num(i64), Neg(Rc<Expr>) }
+struct Holder { e: Expr, k: i64 }
+fn ev(e: Expr) -> i64 {
+    match e {
+        Expr::Num(n) => n,
+        Expr::Neg(x) => 0 - ev(Rc::get(x)),
+    }
+}
+fn main() -> i64 {
+    let mut h = Holder { e: Expr::Num(3), k: 2 }
+    let mut i: i64 = 0
+    let mut t: i64 = 0
+    while i < 101 {
+        h.e = Expr::Neg(Rc::new(h.e))
+        t = t + ev(h.e) * (i + 1)
+        i = i + 1
+    }
+    let o: Option<Rc<Expr>> = Some(Rc::new(h.e))
+    match o { Some(r) => { t = t + ev(Rc::get(r)) * 1000 } None => { t = t - 1 } }
+    println(t + h.k)
+    return 0
+}

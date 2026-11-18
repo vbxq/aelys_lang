@@ -1,0 +1,3 @@
+refuse E0904
+recursive type cycle involving by-value enums/structs: enum Expr
+!unknown type
