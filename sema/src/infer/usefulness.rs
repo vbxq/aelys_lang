@@ -639,11 +639,6 @@ impl TypeInference {
         if witnesses.is_empty() {
             return;
         }
-        let what = if origin == MatchOrigin::Catch {
-            "catch"
-        } else {
-            "match"
-        };
         let heads: Vec<&Wit> = witnesses.iter().map(|w| &w[0]).collect();
         let flat = heads.iter().all(|w| {
             matches!(w, Wit::Ctor(Ctor::Variant(_), args, _) if args.iter().all(|a| matches!(a, Wit::Wild)))
@@ -670,7 +665,7 @@ impl TypeInference {
                 })
                 .collect();
             let mut text = format!(
-                "non-exhaustive {what}: missing variant{} {}",
+                "non-exhaustive match: missing variant{} {}",
                 if names.len() == 1 { "" } else { "s" },
                 names.join(", ")
             );
@@ -689,7 +684,7 @@ impl TypeInference {
             let listed: Vec<String> = shown.iter().take(3).map(|s| format!("`{s}`")).collect();
             let more = if shown.len() > 3 { " and more" } else { "" };
             format!(
-                "non-exhaustive {what}: pattern{} {}{more} not covered",
+                "non-exhaustive match: pattern{} {}{more} not covered",
                 if listed.len() == 1 { "" } else { "s" },
                 listed.join(", ")
             )

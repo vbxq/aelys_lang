@@ -402,12 +402,6 @@ pub enum ExprKind {
     // postfix ?; desugared away in sema, has no typed-ast counterpart
     Try(Box<Expr>),
 
-    // postfix catch; desugared to a match in sema, has no typed-ast counterpart
-    Catch {
-        scrutinee: Box<Expr>,
-        handler: CatchHandler,
-    },
-
     Unsafe(Box<Expr>),
 
     Tuple(Vec<Expr>),
@@ -417,18 +411,11 @@ pub enum ExprKind {
     Loop(Vec<crate::ast::Stmt>),
 }
 
-#[derive(Debug, Clone)]
-pub enum CatchHandler {
-    Binding { name: String, body: Box<Expr> },
-    Arms(Vec<MatchArm>),
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MatchOrigin {
     Match,
     IfLet,
     WhileLet,
-    Catch,
 }
 
 #[derive(Debug, Clone)]

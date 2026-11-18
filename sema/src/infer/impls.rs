@@ -3,7 +3,7 @@ use crate::constraint::TypeError;
 use crate::modules::MethodEntry;
 use crate::types::InferType;
 use aelys_syntax::{
-    CatchHandler, Expr, ExprKind, FmtStringPart, Function, ImplDecl, MatchArm, Parameter, Pattern,
+    Expr, ExprKind, FmtStringPart, Function, ImplDecl, MatchArm, Parameter, Pattern,
     Receiver, RefKind, Span, Stmt, StmtKind, TypeAnnotation, TypeBounds,
 };
 use std::collections::HashSet;
@@ -885,12 +885,5 @@ fn subst_expr(expr: &mut Expr, head: &TypeAnnotation) {
             subst_expr(tail, head);
         }
         ExprKind::Loop(body) => subst_stmts(body, head),
-        ExprKind::Catch { scrutinee, handler } => {
-            subst_expr(scrutinee, head);
-            match handler {
-                CatchHandler::Binding { body, .. } => subst_expr(body, head),
-                CatchHandler::Arms(arms) => subst_arms(arms, head),
-            }
-        }
     }
 }

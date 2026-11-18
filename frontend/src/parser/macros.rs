@@ -1,5 +1,5 @@
 use super::Parser;
-use super::expr::is_pure;
+use super::expr::{expr, is_pure};
 use aelys_common::Result;
 use aelys_syntax::{
     BinaryOp, Expr, ExprKind, FMT_SPEC_MARKER, FmtStringPart, Span, Stmt, StmtKind, TokenKind,
@@ -25,10 +25,6 @@ struct FmtArgs {
     span: Span,
     positional: Vec<Expr>,
     named: Vec<(String, Expr)>,
-}
-
-fn expr(kind: ExprKind, span: Span) -> Expr {
-    Expr::new(kind, span)
 }
 
 fn call(name: &str, args: Vec<Expr>, span: Span) -> Expr {
@@ -297,7 +293,6 @@ impl Parser {
         Ok(pieces)
     }
 
-    // explicit arguments are evaluated once, left to right, before any of them is rendered
     fn render(&mut self, args: FmtArgs, span: Span) -> Result<(Vec<Stmt>, Vec<FmtStringPart>)> {
         let pieces = self.pieces(&args)?;
         let FmtArgs {

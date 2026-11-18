@@ -2,7 +2,6 @@ mod array;
 mod assign;
 mod binary;
 mod call;
-mod catch_expr;
 mod fmt_spec;
 mod if_expr;
 mod lambda;
@@ -429,9 +428,6 @@ impl TypeInference {
                 )
             }
             ExprKind::Try(inner) => self.infer_try_expr(inner, expr.span),
-            ExprKind::Catch { scrutinee, handler } => {
-                self.infer_catch_expr(scrutinee, handler, expr.span)
-            }
             ExprKind::Loop(body) => self.infer_loop_expr(body, expr.span),
             ExprKind::Panic(message) => {
                 let t = self.infer_expr(&panic_call(message, expr.span));

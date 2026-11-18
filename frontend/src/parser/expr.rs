@@ -111,7 +111,7 @@ fn is_comparison(kind: &TokenKind) -> bool {
     )
 }
 
-fn expr(kind: ExprKind, span: Span) -> Expr {
+pub(super) fn expr(kind: ExprKind, span: Span) -> Expr {
     Expr::new(kind, span)
 }
 
@@ -360,7 +360,6 @@ impl Parser {
         Ok(expr(kind, span))
     }
 
-    // the place of a compound assignment is evaluated once: impure index and receiver expressions go to temporaries
     fn stabilize(&mut self, e: Expr, lets: &mut Vec<Stmt>) -> Expr {
         let span = e.span;
         match e.kind {
@@ -729,7 +728,7 @@ impl Parser {
                 if let TokenKind::Lifetime(name) = &kind
                     && self.peek_at(1).kind != TokenKind::Colon
                 {
-                    return self.fail(123, &format!("Aelys has no lifetime annotations; remove `'{name}`"), span);
+                    return self.no_lifetime(name, span);
                 }
                 return self.block_like_value();
             }

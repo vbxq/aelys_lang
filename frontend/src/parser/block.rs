@@ -1,4 +1,5 @@
 use super::Parser;
+use super::expr::expr;
 use aelys_common::Result;
 use aelys_syntax::{
     BinaryOp, Expr, ExprKind, MatchArm, MatchOrigin, Pattern, Span, Stmt, StmtKind, TokenKind,
@@ -59,10 +60,6 @@ pub(super) struct LoopForm {
     span: Span,
 }
 
-fn expr(kind: ExprKind, span: Span) -> Expr {
-    Expr::new(kind, span)
-}
-
 fn ident(name: &str, span: Span) -> Expr {
     expr(ExprKind::Identifier(name.to_string()), span)
 }
@@ -121,6 +118,24 @@ fn if_then(cond: Expr, then: Vec<Stmt>, span: Span) -> Stmt {
         },
         span,
     )
+}
+
+fn bounded_range(e: &Expr) -> bool {
+    matches!(e.kind, ExprKind::Range { start: Some(_), end: Some(_), .. })
+}
+
+fn stepped_range(e: &Expr) -> bool {
+    let ExprKind::Call { callee, args } = &e.kind else {
+        return false;
+    };
+    let ExprKind::Member { object, member } = &callee.kind else {
+        return false;
+    };
+    let mut range = object.as_ref();
+    while let ExprKind::Grouping(inner) = &range.kind {
+        range = inner;
+    }
+    member == "step_by" && args.len() == 1 && bounded_range(range)
 }
 
 fn diverges(e: &Expr) -> bool {
@@ -266,7 +281,6 @@ fn expr_breaks(e: &Expr) -> bool {
                     .any(|a| a.guard.as_deref().is_some_and(expr_breaks) || expr_breaks(&a.body))
         }
         ExprKind::Block { stmts, tail } => stmts.iter().any(breaks) || expr_breaks(tail),
-        ExprKind::Catch { scrutinee, .. } => expr_breaks(scrutinee),
     }
 }
 
@@ -749,50 +763,32 @@ impl Parser {
                 self.peek().span,
             );
         }
-        let head = match iterable.kind {
-            ExprKind::Range {
+        let head = if bounded_range(&iterable) || stepped_range(&iterable) {
+            let (range, step) = match iterable.kind {
+                ExprKind::Call { callee, mut args } => {
+                    let ExprKind::Member { object, .. } = callee.kind else {
+                        unreachable!("a stepped range calls `step_by`")
+                    };
+                    (Self::unwrap_grouping(*object), args.pop())
+                }
+                kind => (expr(kind, iterable.span), None),
+            };
+            let ExprKind::Range {
                 start: Some(lo),
                 end: Some(hi),
                 inclusive,
-            } => Ok((*lo, *hi, inclusive, None)),
-            ExprKind::Call { callee, mut args } => match callee.kind {
-                ExprKind::Member { object, member } if member == "step_by" && args.len() == 1 => {
-                    match Self::unwrap_grouping(*object).kind {
-                        ExprKind::Range {
-                            start: Some(lo),
-                            end: Some(hi),
-                            inclusive,
-                        } => {
-                            let step = args.pop().unwrap();
-                            if matches!(step.kind, ExprKind::Int(n) if n <= 0) {
-                                return self.fail(120, "`step_by` takes a positive step", step.span);
-                            }
-                            Ok((*lo, *hi, inclusive, Some(step)))
-                        }
-                        other => Err(expr(
-                            ExprKind::Call {
-                                callee: Box::new(expr(
-                                    ExprKind::Member {
-                                        object: Box::new(expr(other, iterable.span)),
-                                        member,
-                                    },
-                                    iterable.span,
-                                )),
-                                args,
-                            },
-                            iterable.span,
-                        )),
-                    }
-                }
-                other => Err(expr(
-                    ExprKind::Call {
-                        callee: Box::new(expr(other, callee.span)),
-                        args,
-                    },
-                    iterable.span,
-                )),
-            },
-            other => Err(expr(other, iterable.span)),
+            } = range.kind
+            else {
+                unreachable!("checked to be a bounded range")
+            };
+            if let Some(step) = &step
+                && matches!(step.kind, ExprKind::Int(n) if n <= 0)
+            {
+                return self.fail(120, "`step_by` takes a positive step", step.span);
+            }
+            Ok((*lo, *hi, inclusive, step))
+        } else {
+            Err(iterable)
         };
         self.push_loop(label, false);
         let body = self.loop_body();

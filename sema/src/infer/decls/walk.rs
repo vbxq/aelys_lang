@@ -1,4 +1,4 @@
-use aelys_syntax::{CatchHandler, Expr, ExprKind, FmtStringPart, Stmt, StmtKind, TypeAnnotation};
+use aelys_syntax::{Expr, ExprKind, FmtStringPart, Stmt, StmtKind, TypeAnnotation};
 
 pub(super) fn stmts(list: &mut [Stmt], f: &mut dyn FnMut(&mut TypeAnnotation)) {
     for s in list {
@@ -280,19 +280,5 @@ fn expr(e: &mut Expr, f: &mut dyn FnMut(&mut TypeAnnotation)) {
             expr(tail, f);
         }
         ExprKind::Loop(body) => stmts(body, f),
-        ExprKind::Catch { scrutinee, handler } => {
-            expr(scrutinee, f);
-            match handler {
-                CatchHandler::Binding { body, .. } => expr(body, f),
-                CatchHandler::Arms(arms) => {
-                    for arm in arms {
-                        if let Some(guard) = &mut arm.guard {
-                            expr(guard, f);
-                        }
-                        expr(&mut arm.body, f);
-                    }
-                }
-            }
-        }
     }
 }

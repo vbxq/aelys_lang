@@ -2,7 +2,7 @@ mod expr;
 mod stmt;
 
 pub use expr::{
-    BinaryOp, CatchHandler, Expr, ExprKind, FmtStringPart, MatchArm, MatchOrigin, Parameter,
+    BinaryOp, Expr, ExprKind, FmtStringPart, MatchArm, MatchOrigin, Parameter,
     PatLit, Pattern, RefKind, StructFieldInit, TypeAnnotation, UnaryOp, prelude_variant_enum,
 };
 pub use stmt::{

@@ -28,6 +28,15 @@ pub(super) struct Generics {
 }
 
 impl Parser {
+    pub(super) fn no_lifetime<T>(&self, name: &str, span: Span) -> Result<T> {
+        self.fail_help(
+            123,
+            &format!("Aelys has no lifetime annotations; remove `'{name}`"),
+            "values are managed, so a reference needs no lifetime",
+            span,
+        )
+    }
+
     pub(super) fn parse_type(&mut self) -> Result<TypeAnnotation> {
         self.enter_recursion()?;
         let result = self.parse_type_inner();
@@ -42,12 +51,7 @@ impl Parser {
             TokenKind::Ampersand => {
                 self.advance();
                 if let TokenKind::Lifetime(name) = self.peek().kind.clone() {
-                    return self.fail_help(
-                        123,
-                        &format!("Aelys has no lifetime annotations; remove `'{name}`"),
-                        "values are managed, so a reference needs no lifetime",
-                        self.peek().span,
-                    );
+                    return self.no_lifetime(&name, self.peek().span);
                 }
                 let mutable = self.match_token(&TokenKind::Mut);
                 self.reference_type(start, mutable)
@@ -274,7 +278,7 @@ impl Parser {
         let mut args = Vec::new();
         loop {
             if let TokenKind::Lifetime(l) = self.peek().kind.clone() {
-                return self.fail(123, &format!("Aelys has no lifetime annotations; remove `'{l}`"), self.peek().span);
+                return self.no_lifetime(&l, self.peek().span);
             }
             args.push(self.parse_type()?);
             if !self.match_token(&TokenKind::Comma) || matches!(self.peek().kind, TokenKind::Gt | TokenKind::Shr) {
@@ -313,7 +317,7 @@ impl Parser {
         }
         loop {
             if let TokenKind::Lifetime(l) = self.peek().kind.clone() {
-                return self.fail(123, &format!("Aelys has no lifetime annotations; remove `'{l}`"), self.peek().span);
+                return self.no_lifetime(&l, self.peek().span);
             }
             if self.check(&TokenKind::Const) {
                 return self.fail(137, "const generic parameters are not supported", self.peek().span);
@@ -359,7 +363,7 @@ impl Parser {
         }
         let span = self.peek().span;
         if let TokenKind::Lifetime(l) = self.peek().kind.clone() {
-            return self.fail(123, &format!("Aelys has no lifetime annotations; remove `'{l}`"), span);
+            return self.no_lifetime(&l, span);
         }
         let name = self.type_path_name()?;
         match name.as_str() {
