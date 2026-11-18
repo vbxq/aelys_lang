@@ -439,6 +439,23 @@ impl TypeInference {
                     self.validate_expr(arg, generic_scope, declared_type_params);
                 }
                 self.check_bound_call(callee, args);
+                if self.lambda_depth > 0
+                    && let Some(TypedExprKind::Reference {
+                        receiver_of: Some(m),
+                        operand,
+                        ..
+                    }) = args.first().map(|a| &a.kind)
+                    && Self::bare_binding(operand)
+                    && Self::type_holds_ref(&expr.ty)
+                {
+                    self.errors.push(TypeError::closure_ref_unchecked(
+                        format!(
+                            "the receiver of `{m}` is borrowed by a call that returns a reference, \
+                             and such a borrow"
+                        ),
+                        expr.span,
+                    ));
+                }
                 if let (TypedExprKind::Identifier(name), InferType::Function { params, .. }) =
                     (&callee.kind, &callee.ty)
                     && (name == "print" || name == "println")
@@ -600,10 +617,21 @@ impl TypeInference {
                     InferType::Struct(name, _) => {
                         if let Some(def) = self.type_table.get_struct(name) {
                             if !def.fields.iter().any(|f| f.name == *member) {
-                                self.errors.push(TypeError::member_access(
+                                let mut err = TypeError::member_access(
                                     format!("unknown field '{}' on struct '{}'", member, name),
                                     expr.span,
-                                ));
+                                );
+                                if self
+                                    .methods
+                                    .get(name)
+                                    .is_some_and(|ms| ms.iter().any(|m| m.name == *member))
+                                {
+                                    err.help = Some(format!(
+                                        "`{member}` is a method of `{}`; call it as `.{member}(..)`",
+                                        crate::modules::source_type_name(name)
+                                    ));
+                                }
+                                self.errors.push(err);
                             } else {
                                 let (name, member) = (name.clone(), member.clone());
                                 self.reject_private_field(&name, &member, expr.span);
@@ -841,7 +869,11 @@ impl TypeInference {
                 }
                 self.check_slice_form(object, range, expr, generic_scope, declared_type_params);
             }
-            TypedExprKind::Reference { mutable, operand } => {
+            TypedExprKind::Reference {
+                mutable,
+                operand,
+                receiver_of,
+            } => {
                 self.validate_expr(operand, generic_scope, declared_type_params);
                 if let Some(ty) = computed_len_receiver(operand) {
                     self.errors
@@ -852,27 +884,61 @@ impl TypeInference {
                         expr.span,
                     ));
                 }
+                let takes = |m: &str| {
+                    if *mutable {
+                        format!("`{m}` takes `&mut self`")
+                    } else {
+                        format!("`{m}` takes `&self`")
+                    }
+                };
                 // `&mut *<shared &>` reborrows a shared borrow mutably
                 if *mutable && spine_is_shared(operand) {
-                    self.errors.push(TypeError::shared_mut(
-                        "a `&mut` reborrow of a shared reference",
-                        expr.span,
-                    ));
+                    let what = match receiver_of {
+                        Some(m) => format!("{}, and its receiver", takes(m)),
+                        None => "a `&mut` reborrow of a shared reference".to_string(),
+                    };
+                    self.errors.push(TypeError::shared_mut(what, expr.span));
                 }
                 // a global has no borrow-checked local to attach a loan to
                 if let Some(name) = self.names_a_global(operand) {
-                    self.errors
-                        .push(TypeError::global_borrow(name, *mutable, expr.span));
+                    let mut err = TypeError::global_borrow(name, *mutable, expr.span);
+                    if let Some(m) = receiver_of {
+                        err.help = Some(format!(
+                            "{} and its receiver is module-level storage",
+                            takes(m)
+                        ));
+                    }
+                    self.errors.push(err);
                 }
                 if self.lambda_depth > 0 {
-                    self.errors.push(TypeError::closure_ref_unchecked(
-                        "a reference is formed",
-                        expr.span,
-                    ));
+                    match receiver_of {
+                        Some(_) if Self::bare_binding(operand) => {}
+                        Some(m) => self.errors.push(TypeError::closure_ref_unchecked(
+                            format!(
+                                "the receiver of `{m}` is a projection borrowed by the call, \
+                                 and such a borrow"
+                            ),
+                            expr.span,
+                        )),
+                        None => self.errors.push(TypeError::closure_ref_unchecked(
+                            "a reference is formed",
+                            expr.span,
+                        )),
+                    }
                 }
-                if *mutable && Self::ref_operand_has_index_projection(&operand.kind) {
-                    self.errors
-                        .push(TypeError::mut_index_ref_unsupported(expr.span));
+                if *mutable
+                    && Self::ref_operand_has_index_projection(&operand.kind)
+                    && !(receiver_of.is_some() && self.projected_receiver_ok(operand))
+                {
+                    let mut err = TypeError::mut_index_ref_unsupported(expr.span);
+                    if let Some(m) = receiver_of {
+                        err.help = Some(format!(
+                            "{}, and its receiver is a field or element projection whose root \
+                             is not a `let mut` binding nor a `&mut` reference",
+                            takes(m)
+                        ));
+                    }
+                    self.errors.push(err);
                 }
             }
             TypedExprKind::Deref(operand) => {
@@ -1106,6 +1172,47 @@ impl TypeInference {
     }
 
     // spine is fine, a reborrow is the pointer itself.
+    fn bare_binding(e: &TypedExpr) -> bool {
+        match &e.kind {
+            TypedExprKind::Grouping(inner) => Self::bare_binding(inner),
+            TypedExprKind::Identifier(_) => true,
+            _ => false,
+        }
+    }
+
+    fn type_holds_ref(ty: &InferType) -> bool {
+        match ty {
+            InferType::Ref { .. } | InferType::Slice { .. } => true,
+            InferType::Struct(_, args) | InferType::Enum(_, args) | InferType::Tuple(args) => {
+                args.iter().any(Self::type_holds_ref)
+            }
+            InferType::Array(inner, _) | InferType::Vec(inner) | InferType::Rc(inner) => {
+                Self::type_holds_ref(inner)
+            }
+            _ => false,
+        }
+    }
+
+    fn projected_receiver_ok(&self, e: &TypedExpr) -> bool {
+        match &e.kind {
+            TypedExprKind::Grouping(inner) => self.projected_receiver_ok(inner),
+            TypedExprKind::Member { object, .. } => {
+                !matches!(object.ty, InferType::Rc(_)) && self.projected_receiver_ok(object)
+            }
+            TypedExprKind::Index { object, .. } => match &object.ty {
+                InferType::Slice { mutable, .. } => *mutable,
+                InferType::Array(..) | InferType::Vec(_) => self.projected_receiver_ok(object),
+                _ => false,
+            },
+            TypedExprKind::Deref(inner) => {
+                matches!(inner.ty, InferType::Ref { mutable: true, .. })
+                    && Self::bare_binding(inner)
+            }
+            TypedExprKind::Identifier(_) => self.names_a_global(e).is_none(),
+            _ => false,
+        }
+    }
+
     fn ref_operand_has_index_projection(kind: &TypedExprKind) -> bool {
         match kind {
             TypedExprKind::Index { .. } | TypedExprKind::Member { .. } => true,

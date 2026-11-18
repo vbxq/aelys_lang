@@ -49,6 +49,9 @@ pub enum CompileErrorKind {
     UppercaseBinding {
         name: String,
     },
+    MethodSyntax {
+        message: String,
+    },
     CommentNestingTooDeep {
         max: usize,
     },

@@ -7,6 +7,7 @@ mod enums;
 mod expr;
 mod finalize;
 mod functions;
+mod impls;
 mod imports;
 mod lambda;
 pub(crate) mod projection;
@@ -84,4 +85,11 @@ pub struct TypeInference {
     failed_consts: HashSet<String>,
     alias_checks: Vec<(Vec<String>, aelys_syntax::TypeAnnotation)>,
     module_decls: crate::typed_ast::ModuleDecls,
+    pub(crate) methods: HashMap<String, Vec<crate::modules::MethodEntry>>,
+    pub(crate) trait_methods: HashMap<String, Vec<crate::modules::MethodEntry>>,
+    recv_counter: usize,
+    pretyped: HashMap<String, crate::typed_ast::TypedExpr>,
+    method_tparams: HashMap<String, Vec<String>>,
+    probe_subst: crate::unify::Substitution,
+    probe_upto: usize,
 }

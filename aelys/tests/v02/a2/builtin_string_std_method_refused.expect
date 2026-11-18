@@ -1,3 +1,5 @@
 refuse E0304
 no method `trim` on `string`
 `str.trim`
+!__recv
+!__pre$

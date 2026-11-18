@@ -265,6 +265,7 @@ pub enum TypedExprKind {
     Reference {
         mutable: bool,
         operand: Box<TypedExpr>,
+        receiver_of: Option<String>,
     },
     Deref(Box<TypedExpr>),
     DerefAssign {

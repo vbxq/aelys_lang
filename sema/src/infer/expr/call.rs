@@ -132,29 +132,25 @@ impl TypeInference {
                 .push(TypeError::foreign_call_outside_unsafe(name, span));
         }
         let typed_callee = if let ExprKind::Member { object, member } = &callee.kind
-            && matches!(
-                member.as_str(),
-                "unwrap" | "expect" | "map_error" | "into_ok" | "unwrap_unchecked"
-            )
             && !self.member_names_a_module(object)
         {
             let typed_object = self.infer_expr(object);
-            if let InferType::Enum(name, targs) = &typed_object.ty
+            if matches!(
+                member.as_str(),
+                "unwrap" | "expect" | "map_error" | "into_ok" | "unwrap_unchecked"
+            ) && let InferType::Enum(name, targs) = &typed_object.ty
                 && source_type_name(name) == "Result"
                 && targs.len() == 2
             {
                 let payload_ty = targs[0].clone();
                 return self.infer_result_builtin(member, typed_object, payload_ty, args, span);
             }
-            let member_ty = self.member_result_type(&typed_object.ty, member);
-            TypedExpr::new(
-                TypedExprKind::Member {
-                    object: Box::new(typed_object),
-                    member: member.clone(),
-                },
-                member_ty,
-                callee.span,
-            )
+            let typed_object = match self.infer_method_call(typed_object, member, args, span) {
+                Ok(done) => return done,
+                Err(typed_object) => typed_object,
+            };
+            let (kind, ty) = self.member_of_typed(typed_object, member, callee.span);
+            TypedExpr::new(kind, ty, callee.span)
         } else {
             self.infer_expr(callee)
         };

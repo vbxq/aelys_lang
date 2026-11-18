@@ -43,6 +43,16 @@ pub struct AliasDef {
     pub is_pub: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct MethodEntry {
+    pub name: String,
+    pub receiver: aelys_syntax::Receiver,
+    pub fn_name: String,
+    pub is_pub: bool,
+    pub module: String,
+    pub value: Option<ModuleValue>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ModuleExports {
     pub path: String,
@@ -50,6 +60,7 @@ pub struct ModuleExports {
     pub types: HashMap<String, ModuleType>,
     pub reachable: HashMap<String, ModuleTypeDef>,
     pub aliases: HashMap<String, AliasDef>,
+    pub methods: HashMap<String, Vec<MethodEntry>>,
 }
 
 pub enum Lookup<'a, T> {
@@ -83,6 +94,7 @@ pub struct ModuleImports {
     pub values: HashMap<String, ModuleValue>,
     pub types: HashMap<String, ModuleType>,
     pub aliases: HashMap<String, AliasDef>,
+    pub methods: HashMap<String, Vec<MethodEntry>>,
 }
 
 impl ModuleImports {
@@ -314,18 +326,40 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
                         set
                     })
                     .collect();
-                exports.values.insert(
-                    func.name.clone(),
-                    ModuleValue {
-                        kind: ItemKind::Function,
-                        ty,
-                        qualified: qualify_value(path, &func.name),
-                        is_pub: func.is_pub,
-                        type_params: func.type_params.clone(),
-                        bounds,
-                        literal: None,
-                    },
-                );
+                let value = ModuleValue {
+                    kind: ItemKind::Function,
+                    ty,
+                    qualified: qualify_value(path, &func.name),
+                    is_pub: func.is_pub,
+                    type_params: func.type_params.clone(),
+                    bounds,
+                    literal: None,
+                };
+                if let Some((tname, mname)) = func.name.split_once("::")
+                    && owned.contains(tname)
+                {
+                    let receiver = match func.params.first() {
+                        Some(p) if p.name == "self" => match &p.ty {
+                            InferType::Ref { mutable: true, .. } => aelys_syntax::Receiver::RefMut,
+                            InferType::Ref { .. } => aelys_syntax::Receiver::Ref,
+                            _ => aelys_syntax::Receiver::Value,
+                        },
+                        _ => aelys_syntax::Receiver::None,
+                    };
+                    exports
+                        .methods
+                        .entry(qualify_type_name(path, tname))
+                        .or_default()
+                        .push(MethodEntry {
+                            name: mname.to_string(),
+                            receiver,
+                            fn_name: value.qualified.clone(),
+                            is_pub: func.is_pub,
+                            module: path.to_string(),
+                            value: Some(value.clone()),
+                        });
+                }
+                exports.values.insert(func.name.clone(), value);
             }
             TypedStmtKind::Let {
                 name,

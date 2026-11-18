@@ -419,6 +419,42 @@ name twice is E0204.
     match p { Point { z, .. } => z }      // E0313, `Point` has no field `z`",
         severity: Severity::Error,
     },
+    DiagnosticInfo {
+        code: "E0340",
+        title: "malformed `impl` block",
+        explanation: "\
+An `impl` block names one struct or enum and lists its methods. Every type
+parameter it declares must appear in the type it names, and the block sits
+at the top level of a module:
+
+    impl<T> Pair<T, T> { ... }   // ok
+    impl<T> P { ... }            // E0340, `T` does not appear in `P`",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0341",
+        title: "`impl` for a type this module does not declare",
+        explanation: "\
+Methods live in the module that declares the type. A type imported from
+another module, a builtin (`Vec`, `Rc`, `string`, the numbers) or a prelude
+type (`Option`, `Result`) cannot receive an `impl` block here:
+
+    needs Pt from geom
+    impl Pt { ... }              // E0341, write it in `geom`",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0342",
+        title: "method name already taken",
+        explanation: "\
+A method name is unique for its type across all its `impl` blocks, and it
+cannot share the name of one of the struct's fields or one of the enum's
+variants, since `x.f(..)` and `T::f(..)` would then name two things:
+
+    struct P { x: i64 }
+    impl P { fn x(&self) -> i64 { ... } }   // E0342",
+        severity: Severity::Error,
+    },
     // mutability (e04xx)
     DiagnosticInfo {
         code: "E0401",

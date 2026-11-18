@@ -192,9 +192,14 @@ impl TypeInference {
                 object: Box::new(self.apply_substitution_expr(object, subst)),
                 range: Box::new(self.apply_substitution_expr(range, subst)),
             },
-            TypedExprKind::Reference { mutable, operand } => TypedExprKind::Reference {
+            TypedExprKind::Reference {
+                mutable,
+                operand,
+                receiver_of,
+            } => TypedExprKind::Reference {
                 mutable: *mutable,
                 operand: Box::new(self.apply_substitution_expr(operand, subst)),
+                receiver_of: receiver_of.clone(),
             },
             TypedExprKind::Deref(operand) => {
                 TypedExprKind::Deref(Box::new(self.apply_substitution_expr(operand, subst)))

@@ -1,2 +1,4 @@
 refuse E0423
 the receiver of `get`
+!__recv
+!__pre$

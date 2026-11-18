@@ -1,5 +1,6 @@
 use super::Parser;
 use aelys_common::Result;
+use aelys_common::error::CompileErrorKind;
 use aelys_syntax::{Parameter, RefKind, TokenKind, TypeAnnotation};
 
 impl Parser {
@@ -187,6 +188,11 @@ impl Parser {
 
     pub fn parse_parameter(&mut self) -> Result<Parameter> {
         let span = self.peek().span;
+        if self.receiver_ahead().is_some() {
+            return Err(self.error(CompileErrorKind::MethodSyntax {
+                message: Self::self_param_message(),
+            }));
+        }
         let mutable = self.match_token(&TokenKind::Mut);
         let name = self.consume_value_name("parameter name")?;
 

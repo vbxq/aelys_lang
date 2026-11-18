@@ -31,6 +31,14 @@ impl TypeInference {
             self.import_aliases
                 .insert(local.clone(), ty.qualified.clone());
         }
+        for (ty, entries) in &imports.methods {
+            for entry in entries {
+                if let Some(value) = &entry.value {
+                    self.define_imported_value(value);
+                }
+            }
+            self.methods.insert(ty.clone(), entries.clone());
+        }
         self.module_imports = imports;
     }
 

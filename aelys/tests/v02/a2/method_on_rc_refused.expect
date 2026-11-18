@@ -1,3 +1,5 @@
 refuse E0304
 no method `v` on `Rc<Node>`
 Rc::get(r)
+!__recv
+!__pre$

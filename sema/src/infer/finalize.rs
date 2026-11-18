@@ -306,9 +306,14 @@ impl TypeInference {
                 range: Box::new(self.finalize_expr(*range)),
             },
 
-            TypedExprKind::Reference { mutable, operand } => TypedExprKind::Reference {
+            TypedExprKind::Reference {
+                mutable,
+                operand,
+                receiver_of,
+            } => TypedExprKind::Reference {
                 mutable,
                 operand: Box::new(self.finalize_expr(*operand)),
+                receiver_of,
             },
             TypedExprKind::Deref(operand) => {
                 TypedExprKind::Deref(Box::new(self.finalize_expr(*operand)))

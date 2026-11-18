@@ -4,6 +4,25 @@ use crate::types::InferType;
 use crate::unify::{Substitution, unify, unify_dir, unify_error_to_type_error};
 
 impl TypeInference {
+    // a best effort view of the solution so far; the final solve still checks every constraint
+    pub(super) fn probe_type(&mut self, ty: &InferType) -> InferType {
+        while self.probe_upto < self.constraints.len() {
+            if let Constraint::Equal {
+                left, right, dir, ..
+            } = &self.constraints[self.probe_upto]
+            {
+                let l = self.probe_subst.apply(left);
+                let r = self.probe_subst.apply(right);
+                let saved = self.probe_subst.snapshot();
+                if unify_dir(&l, &r, &mut self.probe_subst, *dir).is_err() {
+                    self.probe_subst.restore(saved);
+                }
+            }
+            self.probe_upto += 1;
+        }
+        self.probe_subst.apply(ty)
+    }
+
     fn recover_param_name(&self, ty: &InferType) -> InferType {
         match ty {
             InferType::Var(id) => match self.instantiated_param_names.get(id) {

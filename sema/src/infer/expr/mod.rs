@@ -7,6 +7,7 @@ mod if_expr;
 mod lambda;
 mod match_expr;
 mod member;
+mod method;
 mod primary;
 mod try_expr;
 
@@ -234,6 +235,7 @@ impl TypeInference {
                     TypedExprKind::Reference {
                         mutable: *mutable,
                         operand: Box::new(typed_operand),
+                        receiver_of: None,
                     },
                     InferType::Ref {
                         referent: Box::new(referent),

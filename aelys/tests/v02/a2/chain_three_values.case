@@ -1,0 +1,13 @@
+struct P { x: i64, y: i64 }
+
+impl P {
+    fn scale(&self, k: i64) -> P { return P { x: self.x * k, y: self.y * k } }
+    fn shift(self, d: i64) -> Self { return P { x: self.x + d, y: self.y - d } }
+    fn sum(&self) -> i64 { return self.x * 100 + self.y }
+}
+
+fn main() {
+    let p = P { x: 3, y: 4 }
+    println(p.scale(2).shift(1).sum())
+    println(p.x)
+}

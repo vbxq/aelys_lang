@@ -2,11 +2,11 @@ use super::Parser;
 use aelys_common::Result;
 use aelys_common::error::CompileErrorKind;
 use aelys_syntax::{
-    Decorator, ForeignConv, ForeignDecl, Function, Stmt, StmtKind, TokenKind, TypeBounds,
+    Decorator, ForeignConv, ForeignDecl, Function, Receiver, Stmt, StmtKind, TokenKind, TypeBounds,
 };
 
 impl Parser {
-    fn parse_type_bound(&mut self, set: &mut TypeBounds) -> Result<()> {
+    pub(super) fn parse_type_bound(&mut self, set: &mut TypeBounds) -> Result<()> {
         if self.match_token(&TokenKind::Nogc) {
             set.nogc = true;
             return Ok(());
@@ -30,6 +30,43 @@ impl Parser {
         is_pub: bool,
         is_nogc: bool,
     ) -> Result<Stmt> {
+        let (function, _) = self.function_item(decorators, is_pub, is_nogc, false)?;
+        let span = function.span;
+        Ok(Stmt::new(StmtKind::Function(function), span))
+    }
+
+    pub(super) fn self_param_message() -> String {
+        "a `self` parameter is only valid in a method of an `impl` block, as its first parameter"
+            .to_string()
+    }
+
+    pub(super) fn receiver_ahead(&self) -> Option<(Receiver, usize)> {
+        let at = |i: usize| &self.peek_at(i).kind;
+        let is_self = |k: &TokenKind| matches!(k, TokenKind::Identifier(n) if n == "self");
+        if is_self(at(0)) {
+            return Some((Receiver::Value, 1));
+        }
+        if *at(0) == TokenKind::Ampersand {
+            if is_self(at(1)) {
+                return Some((Receiver::Ref, 2));
+            }
+            if *at(1) == TokenKind::Mut && is_self(at(2)) {
+                return Some((Receiver::RefMut, 3));
+            }
+        }
+        if *at(0) == TokenKind::Mut && is_self(at(1)) {
+            return Some((Receiver::Value, 2));
+        }
+        None
+    }
+
+    pub(super) fn function_item(
+        &mut self,
+        decorators: Vec<Decorator>,
+        is_pub: bool,
+        is_nogc: bool,
+        allow_receiver: bool,
+    ) -> Result<(Function, Receiver)> {
         let start_span = self.peek().span;
         self.advance();
 
@@ -61,6 +98,36 @@ impl Parser {
         };
 
         self.consume(&TokenKind::LParen, "(")?;
+
+        let mut receiver = Receiver::None;
+        if let Some((kind, len)) = self.receiver_ahead() {
+            if !allow_receiver {
+                return Err(self.error(CompileErrorKind::MethodSyntax {
+                    message: Self::self_param_message(),
+                }));
+            }
+            if self.peek_at(0).kind == TokenKind::Mut {
+                return Err(self.error(CompileErrorKind::MethodSyntax {
+                    message: "a `mut self` receiver is not supported; take `self` and write \
+                              `let mut s = self` in the body"
+                        .to_string(),
+                }));
+            }
+            for _ in 0..len {
+                self.advance();
+            }
+            if self.check(&TokenKind::Colon) {
+                return Err(self.error(CompileErrorKind::MethodSyntax {
+                    message: "a `self` receiver takes no type annotation; write `self`, `&self` \
+                              or `&mut self`"
+                        .to_string(),
+                }));
+            }
+            receiver = kind;
+            if !self.check(&TokenKind::RParen) {
+                self.consume(&TokenKind::Comma, ", or )")?;
+            }
+        }
 
         let mut params = Vec::new();
         if !self.check(&TokenKind::RParen) {
@@ -102,10 +169,7 @@ impl Parser {
             span: start_span.merge(end_span),
         };
 
-        Ok(Stmt::new(
-            StmtKind::Function(function),
-            start_span.merge(end_span),
-        ))
+        Ok((function, receiver))
     }
 
     pub(super) fn foreign_declaration(

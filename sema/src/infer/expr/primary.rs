@@ -11,6 +11,9 @@ impl TypeInference {
         name: &str,
         span: Span,
     ) -> (TypedExprKind, InferType) {
+        if let Some(typed) = self.take_pretyped(name) {
+            return (typed.kind, typed.ty);
+        }
         if self.foreign_sigs_shadowed_by_local(name) {
             self.foreign_shadowed_spans.insert((span.start, span.end));
         }
@@ -271,8 +274,20 @@ impl TypeInference {
             return (TypedExprKind::Null, InferType::Dynamic);
         }
 
+        if enum_name == "Self" {
+            self.errors.push(TypeError::self_outside_impl(span));
+            for a in args {
+                self.infer_expr(a);
+            }
+            return (TypedExprKind::Null, InferType::Dynamic);
+        }
         let resolved = self.air_type_name(enum_name, span);
         let enum_name = resolved.as_str();
+        if let crate::infer::impls::MethodLookup::Found(entry) =
+            self.lookup_method(enum_name, variant, span)
+        {
+            return self.infer_method_path_call(enum_name, entry, args, span);
+        }
         let enum_def = self.type_table.get_enum(enum_name).cloned();
         match enum_def {
             Some(def) => {
@@ -1295,7 +1310,7 @@ impl TypeInference {
     }
 }
 
-fn intrinsic_methods(head: &str) -> Option<&'static [&'static str]> {
+pub(super) fn intrinsic_methods(head: &str) -> Option<&'static [&'static str]> {
     match head {
         "Vec" => Some(&[
             "new",

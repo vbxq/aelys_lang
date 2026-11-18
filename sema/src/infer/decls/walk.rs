@@ -100,6 +100,20 @@ fn stmt(s: &mut Stmt, f: &mut dyn FnMut(&mut TypeAnnotation)) {
             expr(initializer, f);
         }
         StmtKind::TypeAlias { target, .. } => f(target),
+        StmtKind::Impl(decl) => {
+            f(&mut decl.self_ty);
+            for m in &mut decl.methods {
+                for p in &mut m.func.params {
+                    if let Some(ann) = &mut p.type_annotation {
+                        f(ann);
+                    }
+                }
+                if let Some(ann) = &mut m.func.return_type {
+                    f(ann);
+                }
+                stmts(&mut m.func.body, f);
+            }
+        }
         StmtKind::Break | StmtKind::Continue | StmtKind::Needs(_) => {}
     }
 }

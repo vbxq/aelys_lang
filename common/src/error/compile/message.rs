@@ -36,6 +36,7 @@ impl CompileErrorKind {
                 "the binding `{name}` starts with an uppercase letter; a capitalized name in a \
                  pattern names a variant, never a binding"
             ),
+            Self::MethodSyntax { message } => message.clone(),
             Self::ExpectedExpression => "expected expression".to_string(),
             Self::ExpectedIdentifier => "expected identifier".to_string(),
             Self::ParseRule { message, .. } => message.clone(),

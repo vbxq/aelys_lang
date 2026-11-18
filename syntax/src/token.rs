@@ -60,6 +60,7 @@ pub enum TokenKind {
     Nogc,
     Extern,
     Const,
+    Impl,
 
     Plus,
     Minus,
@@ -267,6 +268,7 @@ impl std::fmt::Display for TokenKind {
             Self::Nogc => write!(f, "nogc"),
             Self::Extern => write!(f, "extern"),
             Self::Const => write!(f, "const"),
+            Self::Impl => write!(f, "impl"),
             Self::Plus => write!(f, "+"),
             Self::Minus => write!(f, "-"),
             Self::Star => write!(f, "*"),

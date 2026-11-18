@@ -306,9 +306,14 @@ impl InlineExpander {
                 range: Box::new(self.substitute_expr(range, params, span)),
             },
 
-            TypedExprKind::Reference { mutable, operand } => TypedExprKind::Reference {
+            TypedExprKind::Reference {
+                mutable,
+                operand,
+                receiver_of,
+            } => TypedExprKind::Reference {
                 mutable: *mutable,
                 operand: Box::new(self.substitute_expr(operand, params, span)),
+                receiver_of: receiver_of.clone(),
             },
             TypedExprKind::Deref(operand) => {
                 TypedExprKind::Deref(Box::new(self.substitute_expr(operand, params, span)))

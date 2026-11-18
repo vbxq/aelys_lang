@@ -4,5 +4,5 @@ fn main() {
     println(s.len())
     println(a.len())
     println(a[..].len())
-    println(a[1..].len())
+    println(a[0..2].len())
 }

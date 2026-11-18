@@ -7,6 +7,7 @@ mod const_decl;
 mod decorators;
 mod enum_decl;
 mod function;
+mod impl_decl;
 mod let_decl;
 mod needs;
 mod struct_decl;
@@ -31,6 +32,7 @@ impl Parser {
             | TokenKind::Extern
             | TokenKind::Needs
             | TokenKind::At
+            | TokenKind::Impl
             | TokenKind::Let => true,
             TokenKind::Unsafe => self.peek_at(1).kind == TokenKind::Extern,
             _ => self.starts_type_alias() || contextual("impl") || contextual("trait"),
@@ -53,6 +55,17 @@ impl Parser {
                 }));
             }
             return self.struct_declaration(is_pub);
+        }
+
+        if self.check(&TokenKind::Impl) {
+            if !decorators.is_empty() || is_pub {
+                return Err(self.error(CompileErrorKind::MethodSyntax {
+                    message: "an `impl` block takes no decorator and no `pub`; mark each method \
+                              `pub` instead"
+                        .to_string(),
+                }));
+            }
+            return self.impl_declaration();
         }
 
         if self.check(&TokenKind::Enum) {

@@ -64,6 +64,13 @@ impl Default for TypeInference {
             failed_consts: HashSet::new(),
             alias_checks: Vec::new(),
             module_decls: Default::default(),
+            methods: HashMap::new(),
+            trait_methods: HashMap::new(),
+            recv_counter: 0,
+            pretyped: HashMap::new(),
+            method_tparams: HashMap::new(),
+            probe_subst: crate::unify::Substitution::new(),
+            probe_upto: 0,
         }
     }
 }
@@ -431,6 +438,11 @@ impl TypeInference {
             return;
         }
 
+        if ann.name == "Self" {
+            self.errors.push(TypeError::self_outside_impl(ann.span));
+            return;
+        }
+
         if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
             if self.type_table.has_struct(&ann.name)
                 || self.type_table.has_enum(&ann.name)
@@ -527,6 +539,7 @@ impl TypeInference {
         inf.collect_enums(&stmts);
         inf.resolve_struct_fields(&stmts);
         inf.check_alias_bodies();
+        let stmts = inf.collect_impls(stmts);
         // a nominal holding a vec by value would leak its buffer, since carrier-vec
         inf.reject_nominal_vec_carriers(&stmts);
         inf.reject_multi_variant_rc_enums(&stmts);

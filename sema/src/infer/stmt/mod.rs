@@ -357,6 +357,15 @@ impl TypeInference {
                 ));
                 TypedStmtKind::Block(Vec::new())
             }
+            StmtKind::Impl(decl) => {
+                self.errors.push(TypeError::coded(
+                    "E0340",
+                    "an `impl` block belongs at the top level of a module".to_string(),
+                    "nested impl",
+                    decl.span,
+                ));
+                TypedStmtKind::Block(Vec::new())
+            }
         };
 
         TypedStmt {

@@ -1518,6 +1518,15 @@ impl TypeError {
         }
     }
 
+    pub fn self_outside_impl(span: Span) -> Self {
+        Self::coded(
+            "E0306",
+            "`Self` is only valid inside an `impl` block".to_string(),
+            "outside an `impl` block",
+            span,
+        )
+    }
+
     pub fn member_access(message: String, span: Span) -> Self {
         TypeError {
             kind: TypeErrorKind::MemberAccess { message },

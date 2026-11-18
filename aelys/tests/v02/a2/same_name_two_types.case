@@ -1,0 +1,20 @@
+struct Sq { s: i64 }
+struct Rect { w: i64, h: i64 }
+
+impl Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+
+impl Rect {
+    fn area(&self) -> i64 { return self.w * self.h }
+}
+
+fn area(x: i64) -> i64 { return x + 1000 }
+
+fn main() {
+    let a = Sq { s: 3 }
+    let b = Rect { w: 2, h: 5 }
+    println(a.area())
+    println(b.area())
+    println(area(1))
+}

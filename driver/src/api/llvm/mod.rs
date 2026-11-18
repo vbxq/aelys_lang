@@ -156,6 +156,11 @@ fn build_imports(
         is_importable: !unit.dotted.is_empty(),
         ..Default::default()
     };
+    for module in exports {
+        for (ty, entries) in &module.methods {
+            imports.methods.insert(ty.clone(), entries.clone());
+        }
+    }
     for import in &unit.imports {
         match import {
             crate::modules::ResolvedImport::Namespace { local, target } => {

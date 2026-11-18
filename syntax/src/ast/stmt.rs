@@ -93,6 +93,31 @@ pub enum StmtKind {
         target: TypeAnnotation,
         is_pub: bool,
     },
+
+    Impl(ImplDecl),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Receiver {
+    None,
+    Value,
+    Ref,
+    RefMut,
+}
+
+#[derive(Debug, Clone)]
+pub struct Method {
+    pub func: Function,
+    pub receiver: Receiver,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImplDecl {
+    pub type_params: Vec<String>,
+    pub bounds: Vec<TypeBounds>,
+    pub self_ty: TypeAnnotation,
+    pub methods: Vec<Method>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

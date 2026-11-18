@@ -58,8 +58,28 @@ impl TypeInference {
         }
 
         let typed_object = self.infer_expr(object);
+        self.member_of_typed(typed_object, member, _span)
+    }
+
+    pub(super) fn deref_struct_ref(typed_object: TypedExpr) -> TypedExpr {
+        match &typed_object.ty {
+            InferType::Ref { referent, .. } if matches!(referent.as_ref(), InferType::Struct(..)) => {
+                let ty = (**referent).clone();
+                let span = typed_object.span;
+                TypedExpr::new(TypedExprKind::Deref(Box::new(typed_object)), ty, span)
+            }
+            _ => typed_object,
+        }
+    }
+
+    pub(super) fn member_of_typed(
+        &mut self,
+        typed_object: TypedExpr,
+        member: &str,
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
         if member.starts_with(|c: char| c.is_ascii_digit()) {
-            let ty = self.tuple_element_type(&typed_object.ty, member, _span);
+            let ty = self.tuple_element_type(&typed_object.ty, member, span);
             return (
                 TypedExprKind::Member {
                     object: Box::new(typed_object),
@@ -68,9 +88,10 @@ impl TypeInference {
                 ty,
             );
         }
+        let typed_object = Self::deref_struct_ref(typed_object);
         let ty = if Self::projection_waits(&typed_object.ty) {
             let kind = crate::infer::projection::ProjKind::Field(member.to_string());
-            self.defer_read(&typed_object.ty, kind, _span)
+            self.defer_read(&typed_object.ty, kind, span)
         } else {
             self.member_result_type(&typed_object.ty, member)
         };
@@ -191,11 +212,13 @@ impl TypeInference {
         span: Span,
     ) -> (TypedExprKind, InferType) {
         let typed_object = self.infer_expr(object);
+        let object_through_ref = matches!(&typed_object.ty, InferType::Ref { .. });
+        let typed_object = Self::deref_struct_ref(typed_object);
         let mut typed_value = self.infer_expr(value);
 
         let object_through_rc_handle = matches!(&typed_object.ty, InferType::Rc(_));
         if let ExprKind::Identifier(ref name) = object.kind {
-            if !object_through_rc_handle && !self.env.is_mutable(name) {
+            if !object_through_rc_handle && !object_through_ref && !self.env.is_mutable(name) {
                 let binding_span = self.env.lookup_binding_span(name);
                 let suggestion = binding_span.map(|bs| {
                     let insert_offset = bs.start + 4;
@@ -324,6 +347,13 @@ impl TypeInference {
         fields: &[StructFieldInit],
         span: Span,
     ) -> (TypedExprKind, InferType) {
+        if name == "Self" {
+            self.errors.push(TypeError::self_outside_impl(span));
+            for f in fields {
+                self.infer_expr(&f.value);
+            }
+            return (TypedExprKind::Null, InferType::Dynamic);
+        }
         {
             let mut seen = std::collections::HashSet::new();
             for f in fields {

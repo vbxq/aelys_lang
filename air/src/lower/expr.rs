@@ -462,7 +462,15 @@ impl<'a> LoweringContext<'a> {
             }
 
             // the reborrow short-circuit is gone: `&mut *p` is now just the deref line of
-            TypedExprKind::Reference { operand, .. } => match self.place_addr(operand) {
+            TypedExprKind::Reference {
+                operand,
+                mutable,
+                receiver_of,
+            } => match if *mutable && receiver_of.is_some() {
+                self.place_addr_mode(operand, PlaceMode::Store)
+            } else {
+                self.place_addr(operand)
+            } {
                 Some(addr) => Operand::Copy(addr.ptr),
                 None => {
                     self.report_ice(

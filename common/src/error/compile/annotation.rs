@@ -20,6 +20,7 @@ impl CompileErrorKind {
             Self::PatternUnsupported { .. } => "unsupported pattern",
             Self::PatternFormNotSupported { .. } => "unsupported pattern",
             Self::UppercaseBinding { .. } => "capitalized binding",
+            Self::MethodSyntax { .. } => "not valid here",
             Self::ReservedVariantName { .. } => "reserved for a prelude variant",
             Self::ReturnOutsideFunction => "not inside a function",
             Self::BreakOutsideLoop => "not inside a loop",

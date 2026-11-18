@@ -40,6 +40,7 @@ impl Lexer {
             "nogc" => TokenKind::Nogc,
             "extern" => TokenKind::Extern,
             "const" => TokenKind::Const,
+            "impl" => TokenKind::Impl,
             _ => TokenKind::Identifier(text),
         };
 

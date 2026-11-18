@@ -292,10 +292,7 @@ where
             decls_in_expr(object, parent, f);
             decls_in_expr(range, parent, f);
         }
-        TypedExprKind::Reference {
-            mutable: _,
-            operand,
-        } => decls_in_expr(operand, parent, f),
+        TypedExprKind::Reference { operand, .. } => decls_in_expr(operand, parent, f),
         TypedExprKind::Deref(inner) => decls_in_expr(inner, parent, f),
         TypedExprKind::DerefAssign { target, value } => {
             decls_in_expr(target, parent, f);
@@ -782,7 +779,36 @@ impl<'a> BodyBuilder<'a> {
         };
         let mut ops: Vec<Option<BirOperand>> = Vec::with_capacity(args.len());
         let mut deferred = Vec::new();
+        let mut reserved = None;
+        if let Some(first) = args.first()
+            && let TypedExprKind::Reference {
+                mutable: true,
+                receiver_of: Some(_),
+                operand,
+            } = &first.kind
+            && !index_roots_a_vec(operand)
+            && let Some(place) = self.rooted_place(operand)
+        {
+            // a shared reservation lets the other arguments read the receiver, never write it
+            let res_ty = InferType::Ref {
+                referent: Box::new(operand.ty.clone()),
+                mutable: false,
+            };
+            let res = self.emit_to_temp(
+                BirRvalue::Ref {
+                    place: place.clone(),
+                    mutable: false,
+                },
+                res_ty.clone(),
+                first.span,
+            );
+            reserved = Some((place, res, res_ty, first.ty.clone(), first.span));
+        }
         for (i, a) in args.iter().enumerate() {
+            if i == 0 && reserved.is_some() {
+                ops.push(None);
+                continue;
+            }
             let shared = matches!(
                 param_tys.get(i),
                 Some(InferType::Ref { mutable: false, .. })
@@ -809,6 +835,17 @@ impl<'a> BodyBuilder<'a> {
                     ));
                 }
             }
+        }
+        if let Some((place, res, res_ty, ty, span)) = reserved {
+            self.emit_to_temp(BirRvalue::Use(res), res_ty, span);
+            ops[0] = Some(self.emit_to_temp(
+                BirRvalue::Ref {
+                    place,
+                    mutable: true,
+                },
+                ty,
+                span,
+            ));
         }
         for (i, rvalue, ty, span) in deferred {
             ops[i] = Some(self.emit_to_temp(rvalue, ty, span));
@@ -1177,7 +1214,9 @@ impl<'a> BodyBuilder<'a> {
                 self.emit_to_temp(BirRvalue::Aggregate(ops), expr.ty.clone(), span)
             }
 
-            TypedExprKind::Reference { mutable, operand } => {
+            TypedExprKind::Reference {
+                mutable, operand, ..
+            } => {
                 // a reference to a reference lets a loan escape via a deref-copy that whole-local provenance misses
                 if is_ref_ty(&operand.ty) {
                     self.build_errors.push(BirDiagnostic::new(
@@ -1824,5 +1863,21 @@ impl<'a> BodyBuilder<'a> {
         }
         self.loop_stack.pop();
         self.start(exit_id);
+    }
+}
+
+fn index_roots_a_vec(e: &TypedExpr) -> bool {
+    match &e.kind {
+        TypedExprKind::Index { object, .. } => {
+            let mut t = &object.ty;
+            while let InferType::Ref { referent, .. } = t {
+                t = referent;
+            }
+            matches!(t, InferType::Vec(_)) || index_roots_a_vec(object)
+        }
+        TypedExprKind::Member { object, .. }
+        | TypedExprKind::Grouping(object)
+        | TypedExprKind::Deref(object) => index_roots_a_vec(object),
+        _ => false,
     }
 }

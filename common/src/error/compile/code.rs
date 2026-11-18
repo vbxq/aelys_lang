@@ -26,6 +26,7 @@ impl CompileErrorKind {
             Self::PatternUnsupported { .. } => 312,
             Self::PatternFormNotSupported { .. } => 101,
             Self::UppercaseBinding { .. } => 101,
+            Self::MethodSyntax { .. } => 101,
 
             Self::UndefinedVariable(_) => 201,
             Self::VariableAlreadyDefined(_) => 202,
