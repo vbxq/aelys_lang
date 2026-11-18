@@ -1,0 +1,27 @@
+trait Zero {
+    fn zero() -> Self
+    fn v(&self) -> i64
+}
+
+struct M { x: i64 }
+struct N { x: i64 }
+
+impl Zero for M {
+    fn zero() -> Self { return M { x: 7 } }
+    fn v(&self) -> i64 { return self.x }
+}
+
+impl Zero for N {
+    fn zero() -> Self { return N { x: 40 } }
+    fn v(&self) -> i64 { return self.x + 1 }
+}
+
+fn mk<T: Zero>() -> T { return T::zero() }
+
+fn main() -> i64 {
+    let m: M = mk()
+    let n: N = mk()
+    println(m.v())
+    println(n.v())
+    return 0
+}

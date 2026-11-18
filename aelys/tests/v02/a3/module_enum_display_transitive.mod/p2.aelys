@@ -1,0 +1,3 @@
+needs Shape from m
+
+pub fn get() -> Shape { return Shape::Sq }

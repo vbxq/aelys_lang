@@ -1,0 +1,20 @@
+struct Pair<T> { a: T, b: T }
+
+impl<T: Display> Display for Pair<T> {
+    fn to_string(&self) -> string { return "({self.a}, {self.b})" }
+}
+
+fn main() -> i64 {
+    let mut acc: i64 = 0
+    for i in 0..500 {
+        let p = Pair { a: "ab", b: "c" }
+        let s = "{p}"
+        acc = acc + s.len + i - i
+    }
+    println(acc)
+    let w: string = "q"
+    let t = w.to_string()
+    println(t)
+    println(w)
+    return 0
+}

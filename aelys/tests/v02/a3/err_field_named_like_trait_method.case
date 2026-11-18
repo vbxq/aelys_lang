@@ -1,0 +1,15 @@
+trait Area {
+    fn area(&self) -> i64
+}
+
+struct P { area: i64 }
+
+impl Area for P {
+    fn area(&self) -> i64 { return self.area * 2 }
+}
+
+fn main() -> i64 {
+    let p = P { area: 4 }
+    println(p.area())
+    return 0
+}
