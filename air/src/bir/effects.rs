@@ -731,7 +731,7 @@ mod tests {
             | InferType::Never
             | InferType::Range
             | InferType::Function { .. }
-            | InferType::Struct(_)
+            | InferType::Struct(..)
             | InferType::Enum(..)
             | InferType::Tuple(_)
             | InferType::Var(_)
@@ -797,7 +797,7 @@ mod tests {
             EdgeFive::ElementInheritsTheCategory
         );
         assert_eq!(
-            how_edge_five_is_held(&InferType::Struct("S".to_string())),
+            how_edge_five_is_held(&InferType::Struct("S".to_string(), Vec::new())),
             EdgeFive::NotIndexable("E0304")
         );
     }
