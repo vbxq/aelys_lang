@@ -131,6 +131,7 @@ pub struct ModuleImports {
     pub aliases: HashMap<String, AliasDef>,
     pub methods: HashMap<String, Vec<MethodEntry>>,
     pub module_path: String,
+    pub std_privilege: bool,
     pub traits: HashMap<String, TraitDef>,
     pub all_traits: HashMap<String, TraitDef>,
     pub impls: Vec<ImplDef>,
@@ -397,19 +398,15 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
                         },
                         _ => aelys_syntax::Receiver::None,
                     };
-                    exports
-                        .methods
-                        .entry(key)
-                        .or_default()
-                        .push(MethodEntry {
-                            name: mname.to_string(),
-                            receiver,
-                            fn_name: value.qualified.clone(),
-                            is_pub: func.is_pub,
-                            module: path.to_string(),
-                            value: Some(value.clone()),
-                            head: None,
-                        });
+                    exports.methods.entry(key).or_default().push(MethodEntry {
+                        name: mname.to_string(),
+                        receiver,
+                        fn_name: value.qualified.clone(),
+                        is_pub: func.is_pub,
+                        module: path.to_string(),
+                        value: Some(value.clone()),
+                        head: None,
+                    });
                 }
                 exports.values.insert(func.name.clone(), value);
             }

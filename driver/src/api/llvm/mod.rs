@@ -157,6 +157,8 @@ fn build_imports(
         ..Default::default()
     };
     imports.module_path = unit.dotted.clone();
+    imports.std_privilege = unit.dotted.starts_with("std.")
+        || (unit.dotted.is_empty() && names_a_std_module(&unit.source.name));
     let direct: HashSet<usize> = unit
         .imports
         .iter()
@@ -275,6 +277,77 @@ fn build_imports(
         }
     }
     Ok(imports)
+}
+
+fn names_a_std_module(path: &str) -> bool {
+    let path = Path::new(path);
+    let (Some(stem), Some(dir)) = (path.file_stem(), path.parent()) else {
+        return false;
+    };
+    dir.file_name().is_some_and(|d| d == "std")
+        && dir.join("prelude.aelys").is_file()
+        && crate::EMBEDDED_STD.iter().any(|(name, _)| stem == *name)
+}
+
+fn called_names(function: &aelys_air::AirFunction, out: &mut HashSet<String>) {
+    use aelys_air::{AirStmtKind, AirTerminator, Callee, Rvalue};
+    let mut take = |callee: &Callee| {
+        if let Callee::Named(name) | Callee::Extern(name, _) = callee {
+            out.insert(name.clone());
+        }
+    };
+    for block in &function.blocks {
+        for stmt in &block.stmts {
+            match &stmt.kind {
+                AirStmtKind::CallVoid { func, .. } => take(func),
+                AirStmtKind::Assign {
+                    rvalue: Rvalue::Call { func, .. },
+                    ..
+                } => take(func),
+                _ => {}
+            }
+        }
+        if let AirTerminator::Invoke { func, .. } = &block.terminator {
+            take(func);
+        }
+    }
+}
+
+// a prelude-only module is reached through its types alone, so only what another module calls survives
+fn drop_unreached_prelude_functions(
+    fronts: &[ModuleFront],
+    programs: &mut [aelys_air::AirProgram],
+) {
+    if !fronts.iter().any(|front| front.functions_unreachable) {
+        return;
+    }
+    let mut wanted: HashSet<String> = HashSet::new();
+    for (front, program) in fronts.iter().zip(programs.iter()) {
+        if !front.functions_unreachable {
+            for function in &program.functions {
+                called_names(function, &mut wanted);
+            }
+        }
+    }
+    for (front, program) in fronts.iter().zip(programs.iter_mut()) {
+        if !front.functions_unreachable {
+            continue;
+        }
+        loop {
+            let before = wanted.len();
+            for function in &program.functions {
+                if wanted.contains(&function.name) {
+                    called_names(function, &mut wanted);
+                }
+            }
+            if wanted.len() == before {
+                break;
+            }
+        }
+        program
+            .functions
+            .retain(|function| wanted.contains(&function.name));
+    }
 }
 
 // a prelude name loses, silently, to anything the unit binds itself in the same namespace
@@ -544,9 +617,6 @@ fn air_stage(
         }
 
         aelys_air::modules::qualify(&mut air, &front.dotted);
-        if front.functions_unreachable {
-            air.functions.clear();
-        }
         let carriers = aelys_air::counts::Carriers::merged(&air.structs, &air.enums);
         let proven =
             aelys_air::lower::fresh_returning_functions(&air.functions, &carriers, &fresh_returns);
@@ -570,6 +640,8 @@ fn air_stage(
 
         programs.push(air);
     }
+
+    drop_unreached_prelude_functions(fronts, &mut programs);
 
     let typed_program = typed.last().copied().expect("a graph always holds its root");
     let src = root.clone();
@@ -768,7 +840,7 @@ fn lower_file_to_air_with_source(
         .is_some_and(|scope| scope.values.is_empty() && scope.namespaces.is_empty())
     {
         for (front, unit) in fronts.iter_mut().zip(&graph.units) {
-            front.functions_unreachable = unit.prelude_only && front.exports.methods.is_empty();
+            front.functions_unreachable = unit.prelude_only;
         }
     }
 

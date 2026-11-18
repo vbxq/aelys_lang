@@ -102,10 +102,7 @@ impl TypeInference {
             return (TypedExprKind::Null, InferType::Dynamic);
         }
         if parsed.width.is_some_and(|w| w > MAX_WIDTH) {
-            self.fmt_spec_error(
-                format!("the width in `:{text}` is above {MAX_WIDTH}"),
-                span,
-            );
+            self.fmt_spec_error(format!("the width in `:{text}` is above {MAX_WIDTH}"), span);
             return (TypedExprKind::Null, InferType::Dynamic);
         }
         if parsed.precision.is_some_and(|p| p > MAX_PRECISION) {

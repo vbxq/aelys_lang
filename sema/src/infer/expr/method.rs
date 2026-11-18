@@ -96,7 +96,15 @@ impl TypeInference {
         if let Some(key) = crate::infer::impls::builtin_type_key(&base)
             && let Some(entry) = self.builtin_entry(key, member)
         {
-            return Ok(self.builtin_method_call(typed_object, &base, via_ref, key, entry, args, span));
+            return Ok(self.builtin_method_call(
+                typed_object,
+                &base,
+                via_ref,
+                key,
+                entry,
+                args,
+                span,
+            ));
         }
         if let Some(key) = crate::infer::impls::builtin_type_key(&base)
             && let Some(module) = std_method_module(key, member)

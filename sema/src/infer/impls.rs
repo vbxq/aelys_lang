@@ -117,7 +117,7 @@ impl TypeInference {
     }
 
     fn in_std(&self) -> bool {
-        self.module_path().starts_with("std.")
+        self.module_imports.std_privilege || self.module_path().starts_with("std.")
     }
 
     fn impl_head_error(&mut self, decl: &ImplDecl) -> bool {
