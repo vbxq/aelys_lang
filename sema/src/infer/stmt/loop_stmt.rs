@@ -52,7 +52,9 @@ impl TypeInference {
             ConstraintReason::WhileCondition,
         ));
 
+        self.loop_breaks.push(None);
         let typed_body = self.infer_stmt(body);
+        self.loop_breaks.pop();
 
         TypedStmtKind::While {
             condition: typed_cond,
@@ -98,7 +100,9 @@ impl TypeInference {
         self.env.push_scope();
         let saved_for_literals = self.literal_init_vars.clone();
         self.env.define_local(iterator.to_string(), InferType::I64);
+        self.loop_breaks.push(None);
         let typed_body = self.infer_stmt(body);
+        self.loop_breaks.pop();
         self.env.pop_scope();
         self.literal_init_vars = saved_for_literals;
 
@@ -179,7 +183,9 @@ impl TypeInference {
         let saved_foreach_literals = self.literal_init_vars.clone();
         self.env
             .define_local(iterator.to_string(), elem_type.clone());
+        self.loop_breaks.push(None);
         let typed_body = self.infer_stmt(body);
+        self.loop_breaks.pop();
         self.env.pop_scope();
         self.literal_init_vars = saved_foreach_literals;
 

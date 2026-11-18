@@ -8,7 +8,7 @@ use aelys_syntax::{
 pub(super) struct LoopCtx {
     label: Option<String>,
     is_loop: bool,
-    slot: Option<String>,
+    has_value: bool,
     ctl: Option<String>,
     passing: Vec<(usize, bool, bool)>,
     plain_break: Option<Span>,
@@ -54,7 +54,8 @@ pub(super) struct LoopForm {
     pre: Vec<Stmt>,
     stmt: Stmt,
     post: Vec<Stmt>,
-    slot: Option<String>,
+    is_loop: bool,
+    has_value: bool,
     span: Span,
 }
 
@@ -85,35 +86,6 @@ fn let_mut(name: &str, init: Expr, span: Span) -> Stmt {
             type_annotation: None,
             initializer: init,
             is_pub: false,
-        },
-        span,
-    )
-}
-
-fn err_zero(span: Span) -> Expr {
-    expr(
-        ExprKind::EnumVariant {
-            enum_name: "Result".to_string(),
-            variant: "Err".to_string(),
-            args: vec![expr(ExprKind::Int(0), span)],
-            unqualified: true,
-        },
-        span,
-    )
-}
-
-pub(super) fn method_call(object: Expr, method: &str, args: Vec<Expr>, span: Span) -> Expr {
-    let callee = expr(
-        ExprKind::Member {
-            object: Box::new(object),
-            member: method.to_string(),
-        },
-        span,
-    );
-    expr(
-        ExprKind::Call {
-            callee: Box::new(callee),
-            args,
         },
         span,
     )
@@ -164,6 +136,7 @@ fn diverges(e: &Expr) -> bool {
             diverges(scrutinee) || !arms.is_empty() && arms.iter().all(|a| diverges(&a.body))
         }
         ExprKind::Call { callee, .. } => is_process_exit(callee),
+        ExprKind::Loop(body) => !body.iter().any(breaks),
         ExprKind::Grouping(inner) | ExprKind::Unsafe(inner) => diverges(inner),
         _ => false,
     }
@@ -171,7 +144,7 @@ fn diverges(e: &Expr) -> bool {
 
 fn stmt_diverges(stmt: &Stmt) -> bool {
     match &stmt.kind {
-        StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue => true,
+        StmtKind::Return(_) | StmtKind::Break(_) | StmtKind::Continue => true,
         StmtKind::Semi(e) | StmtKind::Expression(e) | StmtKind::Discard(e) => diverges(e),
         StmtKind::Let { initializer, .. } | StmtKind::LetPattern { initializer, .. } => diverges(initializer),
         StmtKind::Block(stmts) => stmts.iter().any(stmt_diverges),
@@ -201,7 +174,7 @@ fn is_process_exit(callee: &Expr) -> bool {
 
 fn breaks(stmt: &Stmt) -> bool {
     match &stmt.kind {
-        StmtKind::Break => true,
+        StmtKind::Break(_) => true,
         StmtKind::Semi(e) | StmtKind::Expression(e) | StmtKind::Discard(e) | StmtKind::Return(Some(e)) => {
             expr_breaks(e)
         }
@@ -232,6 +205,7 @@ fn expr_breaks(e: &Expr) -> bool {
         | ExprKind::Null
         | ExprKind::Identifier(_)
         | ExprKind::Panic(_)
+        | ExprKind::Loop(_)
         | ExprKind::Lambda { .. } => false,
         ExprKind::FmtString(parts) => parts
             .iter()
@@ -614,7 +588,7 @@ impl Parser {
                 let body = self.finish_loop_body(body)?;
                 let span = start.merge(self.previous().span);
                 let body_span = body.span;
-                let exit = unit_block(vec![Stmt::new(StmtKind::Break, span)], span);
+                let exit = unit_block(vec![Stmt::new(StmtKind::Break(None), span)], span);
                 let matched = expr(
                     ExprKind::Match {
                         scrutinee: Box::new(scrutinee),
@@ -663,7 +637,7 @@ impl Parser {
             _ => self.for_loop(start, label)?,
         };
         let ctx = self.loops.pop().expect("pushed by the loop parser");
-        if let (Some(_), Some(at)) = (&ctx.slot, ctx.plain_break) {
+        if let (true, Some(at)) = (ctx.has_value, ctx.plain_break) {
             return self.fail_help(
                 124,
                 "`break` without a value inside a `loop` that breaks with a value",
@@ -676,8 +650,12 @@ impl Parser {
         if let Some(ctl) = &ctx.ctl {
             pre.push(let_mut(ctl, expr(ExprKind::Int(0), span), span));
         }
-        if let Some(slot) = &ctx.slot {
-            pre.push(let_mut(slot, err_zero(span), span));
+        if ctx.has_value && !ctx.passing.is_empty() {
+            return self.fail(
+                126,
+                "a labeled `break` or `continue` cannot leave a `loop` that breaks with a value",
+                span,
+            );
         }
         let mut post = Vec::new();
         let parent = self.loops.len().checked_sub(1);
@@ -687,7 +665,7 @@ impl Parser {
                 if breaks {
                     post.push(if_then(
                         compare_ctl(&ctl, BinaryOp::Eq, 1, span),
-                        vec![Stmt::new(StmtKind::Break, span)],
+                        vec![Stmt::new(StmtKind::Break(None), span)],
                         span,
                     ));
                 }
@@ -704,7 +682,7 @@ impl Parser {
             } else {
                 post.push(if_then(
                     compare_ctl(&ctl, BinaryOp::Ne, 0, span),
-                    vec![Stmt::new(StmtKind::Break, span)],
+                    vec![Stmt::new(StmtKind::Break(None), span)],
                     span,
                 ));
             }
@@ -713,7 +691,8 @@ impl Parser {
             pre,
             stmt,
             post,
-            slot: ctx.slot,
+            is_loop: ctx.is_loop,
+            has_value: ctx.has_value,
             span,
         }))
     }
@@ -722,7 +701,7 @@ impl Parser {
         self.loops.push(LoopCtx {
             label,
             is_loop,
-            slot: None,
+            has_value: false,
             ctl: None,
             passing: Vec::new(),
             plain_break: None,
@@ -888,7 +867,7 @@ impl Parser {
     fn break_stmts(&mut self, label: Option<(String, Span)>, value: Option<Expr>, start: Span) -> Result<Vec<Stmt>> {
         let span = start.merge(self.previous().span);
         let Some(target) = self.jump_target(&label)? else {
-            return Ok(vec![Stmt::new(StmtKind::Break, span)]);
+            return Ok(vec![Stmt::new(StmtKind::Break(None), span)]);
         };
         let mut out = Vec::new();
         if value.is_none() && self.loops[target].plain_break.is_none() {
@@ -902,27 +881,18 @@ impl Parser {
                     span,
                 );
             }
-            let slot = match &self.loops[target].slot {
-                Some(s) => s.clone(),
-                None => {
-                    let s = self.temp("loop");
-                    self.loops[target].slot = Some(s.clone());
-                    s
-                }
-            };
-            let wrapped = expr(
-                ExprKind::EnumVariant {
-                    enum_name: "Result".to_string(),
-                    variant: "Ok".to_string(),
-                    args: vec![value],
-                    unqualified: true,
-                },
-                span,
-            );
-            out.push(assign(&slot, wrapped, span));
+            if target + 1 != self.loops.len() {
+                return self.fail(
+                    126,
+                    "a labeled `break` with a value cannot leave an inner loop",
+                    span,
+                );
+            }
+            self.loops[target].has_value = true;
+            return Ok(vec![Stmt::new(StmtKind::Break(Some(value)), span)]);
         }
         self.route_outer(target, true, span, &mut out);
-        out.push(Stmt::new(StmtKind::Break, span));
+        out.push(Stmt::new(StmtKind::Break(None), span));
         Ok(out)
     }
 
@@ -937,7 +907,7 @@ impl Parser {
             return Ok(out);
         }
         self.route_outer(target, false, span, &mut out);
-        out.push(Stmt::new(StmtKind::Break, span));
+        out.push(Stmt::new(StmtKind::Break(None), span));
         Ok(out)
     }
 
@@ -1269,12 +1239,13 @@ impl BlockLike {
                 let value = p.body_value(b, value_tail)?;
                 vec![Stmt::new(StmtKind::Expression(expr(ExprKind::Unsafe(Box::new(value)), span)), span)]
             }
+            BlockLike::Loop(form) if form.has_value => {
+                let span = form.span;
+                let value = BlockLike::Loop(form).into_value(p, true)?;
+                let kind = if value_tail { StmtKind::Expression(value) } else { StmtKind::Semi(value) };
+                vec![Stmt::new(kind, span)]
+            }
             BlockLike::Loop(form) => {
-                if value_tail && form.slot.is_some() {
-                    let span = form.span;
-                    let value = BlockLike::Loop(form).into_value(p, true)?;
-                    return Ok(vec![Stmt::new(StmtKind::Expression(value), span)]);
-                }
                 let mut out = form.pre;
                 out.push(form.stmt);
                 out.extend(form.post);
@@ -1335,27 +1306,41 @@ impl BlockLike {
                 let value = p.body_value(b, required)?;
                 Ok(expr(ExprKind::Unsafe(Box::new(value)), span))
             }
+            BlockLike::Loop(form) if form.is_loop && (required || form.has_value) => {
+                if !form.post.is_empty() {
+                    return p.fail(
+                        126,
+                        "a labeled `break` or `continue` cannot leave a `loop` used as a value",
+                        form.span,
+                    );
+                }
+                let StmtKind::While { body, .. } = form.stmt.kind else {
+                    unreachable!("a `loop` parses to a `while true`")
+                };
+                let StmtKind::Block(body) = body.kind else {
+                    unreachable!("a loop body is a block")
+                };
+                let value = expr(ExprKind::Loop(body), form.span);
+                if form.pre.is_empty() {
+                    return Ok(value);
+                }
+                Ok(expr(
+                    ExprKind::Block {
+                        stmts: form.pre,
+                        tail: Box::new(value),
+                    },
+                    form.span,
+                ))
+            }
             BlockLike::Loop(form) => {
                 let span = form.span;
+                if required {
+                    return p.fail_help(114, "a loop has no value", "only `loop` gives a value, with `break value;`", span);
+                }
                 let mut stmts = form.pre;
                 stmts.push(form.stmt);
                 stmts.extend(form.post);
-                match form.slot {
-                    Some(slot) => Ok(expr(
-                        ExprKind::Block {
-                            stmts,
-                            tail: Box::new(method_call(ident(&slot, span), "unwrap", Vec::new(), span)),
-                        },
-                        span,
-                    )),
-                    None if required => p.fail_help(
-                        114,
-                        "a loop has no value",
-                        "give `loop` a value with `break value;`",
-                        span,
-                    ),
-                    None => Ok(unit_block(stmts, span)),
-                }
+                Ok(unit_block(stmts, span))
             }
         }
     }
@@ -1397,7 +1382,7 @@ pub(super) fn if_let_match(pattern: Pattern, scrutinee: Expr, then: Expr, els: E
 fn discard_value(stmt: &mut Stmt) {
     match &mut stmt.kind {
         StmtKind::Expression(_) => {
-            let StmtKind::Expression(e) = std::mem::replace(&mut stmt.kind, StmtKind::Break) else {
+            let StmtKind::Expression(e) = std::mem::replace(&mut stmt.kind, StmtKind::Continue) else {
                 unreachable!()
             };
             stmt.kind = StmtKind::Semi(e);

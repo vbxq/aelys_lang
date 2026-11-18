@@ -150,12 +150,12 @@ where
             decls_in_expr(iterable, parent, f);
             decls_in_stmt(body, parent, f);
         }
-        TypedStmtKind::Return(value) => {
+        TypedStmtKind::Return(value) | TypedStmtKind::Break(value) => {
             if let Some(expr) = value {
                 decls_in_expr(expr, parent, f);
             }
         }
-        TypedStmtKind::Break | TypedStmtKind::Continue => {}
+        TypedStmtKind::Continue => {}
         TypedStmtKind::Function(func) => {
             if f(Decl::Fn(func), parent) {
                 for s in &func.body {
@@ -336,6 +336,7 @@ where
             }
             decls_in_expr(tail, parent, f);
         }
+        TypedExprKind::Loop(body) => decls_in_stmt(body, parent, f),
     }
 }
 
@@ -486,6 +487,7 @@ struct BodyBuilder<'a> {
     name_map: Vec<(String, BirLocalId)>,
     scopes: Vec<ScopeFrame>,
     loop_stack: Vec<(BirBlockId, BirBlockId)>,
+    loop_values: Vec<BirLocalId>,
     scope_exits: Vec<ScopeExit>,
     returns: Vec<ReturnPoint>,
     reassigns: Vec<Reassign>,
@@ -523,6 +525,7 @@ impl<'a> BodyBuilder<'a> {
             name_map: Vec::new(),
             scopes: Vec::new(),
             loop_stack: Vec::new(),
+            loop_values: Vec::new(),
             scope_exits: Vec::new(),
             returns: Vec::new(),
             reassigns: Vec::new(),
@@ -1344,6 +1347,7 @@ impl<'a> BodyBuilder<'a> {
                 scrutinee, arms, ..
             } => self.build_match_expr(scrutinee, arms, expr),
             TypedExprKind::Block { stmts, tail } => self.build_block_expr(stmts, tail),
+            TypedExprKind::Loop(looped) => self.build_loop_expr(looped, expr),
 
             TypedExprKind::ResultAssert { scrutinee, .. } => {
                 let op = self.build_operand(scrutinee);
@@ -1665,7 +1669,15 @@ impl<'a> BodyBuilder<'a> {
                     self.seal(BirTerminator::Return(op), span);
                 }
             }
-            TypedStmtKind::Break => {
+            TypedStmtKind::Break(value) => {
+                if let Some(value) = value {
+                    let op = self.build_operand(value);
+                    if self.cur_open
+                        && let Some(&out) = self.loop_values.last()
+                    {
+                        self.assign_temp(out, op, value.span);
+                    }
+                }
                 if let Some((_, exit)) = self.loop_stack.last().copied() {
                     self.seal(BirTerminator::Goto(exit), span);
                 } else {
@@ -1738,6 +1750,9 @@ impl<'a> BodyBuilder<'a> {
             TypedExprKind::Block { stmts, tail } => {
                 let _ = self.build_block_expr(stmts, tail);
             }
+            TypedExprKind::Loop(looped) => {
+                let _ = self.build_loop_expr(looped, expr);
+            }
             _ => {
                 self.read_operand(expr);
             }
@@ -1779,6 +1794,30 @@ impl<'a> BodyBuilder<'a> {
             }
         }
         self.start(merge_id);
+    }
+
+    fn build_loop_expr(&mut self, looped: &TypedStmt, expr: &TypedExpr) -> BirOperand {
+        let TypedStmtKind::While { body, .. } = &looped.kind else {
+            unreachable!("a loop expression holds its `while true`")
+        };
+        let out = self.new_temp(expr.ty.clone(), expr.span);
+        let header_id = self.new_block_id();
+        let exit_id = self.new_block_id();
+        self.seal(BirTerminator::Goto(header_id), expr.span);
+        self.start(header_id);
+        self.loop_stack.push((header_id, exit_id));
+        self.loop_values.push(out);
+        self.build_stmt(body);
+        if self.cur_open {
+            self.seal(BirTerminator::Goto(header_id), body.span);
+        }
+        self.loop_values.pop();
+        self.loop_stack.pop();
+        self.start(exit_id);
+        BirOperand::Copy(BirPlace {
+            local: out,
+            proj: Vec::new(),
+        })
     }
 
     fn build_while(&mut self, condition: &TypedExpr, body: &TypedStmt) {

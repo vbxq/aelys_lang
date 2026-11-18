@@ -87,7 +87,7 @@ impl TypeInference {
                 TypedStmtKind::Return(expr.map(|e| self.finalize_expr(e)))
             }
 
-            TypedStmtKind::Break => TypedStmtKind::Break,
+            TypedStmtKind::Break(expr) => TypedStmtKind::Break(expr.map(|e| self.finalize_expr(e))),
             TypedStmtKind::Continue => TypedStmtKind::Continue,
 
             TypedStmtKind::Function(func) => TypedStmtKind::Function(self.finalize_function(func)),
@@ -365,6 +365,7 @@ impl TypeInference {
                 stmts: self.finalize_stmts(stmts),
                 tail: Box::new(self.finalize_expr(*tail)),
             },
+            TypedExprKind::Loop(body) => TypedExprKind::Loop(Box::new(self.finalize_stmt(*body))),
 
             TypedExprKind::Match {
                 scrutinee,

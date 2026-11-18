@@ -1,0 +1,8 @@
+fn main() {
+    let x = 'outer: loop {
+        loop {
+            break 'outer 5;
+        }
+    };
+    println!("{}", x);
+}

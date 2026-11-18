@@ -38,7 +38,8 @@ pub fn rc_init_provenance(expr: &TypedExpr) -> RcInit {
         | TypedExprKind::Call { .. }
         | TypedExprKind::Block { .. }
         | TypedExprKind::If { .. }
-        | TypedExprKind::Match { .. } => RcInit::Fresh,
+        | TypedExprKind::Match { .. }
+        | TypedExprKind::Loop(_) => RcInit::Fresh,
         _ => RcInit::Borrowed,
     }
 }

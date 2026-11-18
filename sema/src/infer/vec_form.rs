@@ -60,13 +60,17 @@ impl TypeInference {
                 self.check_vec_producing(expr, "returned expression");
                 self.vec_form_expr(expr);
             }
+            TypedStmtKind::Break(Some(expr)) => {
+                self.check_vec_producing(expr, "value of this `break`");
+                self.vec_form_expr(expr);
+            }
             TypedStmtKind::Function(func) => {
                 for s in &func.body {
                     self.vec_form_stmt(s);
                 }
             }
             TypedStmtKind::Return(None)
-            | TypedStmtKind::Break
+            | TypedStmtKind::Break(None)
             | TypedStmtKind::Continue
             | TypedStmtKind::Needs(_)
             | TypedStmtKind::StructDecl { .. }
@@ -187,6 +191,7 @@ impl TypeInference {
                 }
                 self.vec_form_expr(tail);
             }
+            TypedExprKind::Loop(body) => self.vec_form_stmt(body),
             TypedExprKind::FmtString(parts) => {
                 for part in parts {
                     if let TypedFmtStringPart::Expr(inner) = part {
@@ -223,7 +228,7 @@ impl TypeInference {
                         matches!(&s.kind, TypedStmtKind::Let { name, .. } if name.starts_with("__recv$"))
                     })
             }
-            TypedExprKind::Match { .. } => true,
+            TypedExprKind::Match { .. } | TypedExprKind::Loop(_) => true,
             _ => false,
         };
         if accepted {

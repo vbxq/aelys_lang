@@ -135,7 +135,7 @@ impl LocalConstantPropagator {
                 self.scopes.pop();
             }
 
-            TypedStmtKind::Return(Some(expr)) => {
+            TypedStmtKind::Return(Some(expr)) | TypedStmtKind::Break(Some(expr)) => {
                 self.propagate_expr(expr);
             }
 
@@ -144,7 +144,7 @@ impl LocalConstantPropagator {
             }
 
             TypedStmtKind::Return(None)
-            | TypedStmtKind::Break
+            | TypedStmtKind::Break(None)
             | TypedStmtKind::Continue
             | TypedStmtKind::Needs(_)
             | TypedStmtKind::StructDecl { .. }
@@ -181,7 +181,9 @@ impl LocalConstantPropagator {
             }
             TypedStmtKind::For { body, .. } => Self::collect_assigned_vars(body, out),
             TypedStmtKind::ForEach { body, .. } => Self::collect_assigned_vars(body, out),
-            TypedStmtKind::Return(Some(expr)) => Self::collect_assigned_vars_expr(expr, out),
+            TypedStmtKind::Return(Some(expr)) | TypedStmtKind::Break(Some(expr)) => {
+                Self::collect_assigned_vars_expr(expr, out)
+            }
             _ => {}
         }
     }
@@ -300,6 +302,7 @@ impl LocalConstantPropagator {
                 }
                 Self::collect_assigned_vars_expr(tail, out);
             }
+            TypedExprKind::Loop(body) => Self::collect_assigned_vars(body, out),
             TypedExprKind::Match {
                 scrutinee, arms, ..
             } => {
@@ -495,6 +498,7 @@ impl LocalConstantPropagator {
                 self.propagate_expr(tail);
                 self.scopes.pop();
             }
+            TypedExprKind::Loop(body) => self.propagate_stmt(body),
             TypedExprKind::Match {
                 scrutinee, arms, ..
             } => {

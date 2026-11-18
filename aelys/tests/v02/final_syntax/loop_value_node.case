@@ -1,0 +1,56 @@
+struct N { name: String, tags: Vec<i64> }
+
+fn first_big(xs: Vec<i64>) -> i64 {
+    let mut i = 0;
+    loop {
+        if xs[i] > 10 {
+            break xs[i];
+        }
+        i += 1;
+    }
+}
+
+fn early(flag: bool) -> i64 {
+    let x: i64 = loop {
+        if flag {
+            return 3;
+        }
+        break 4;
+    };
+    x * 10
+}
+
+fn never() -> i64 {
+    let x: i64 = loop {
+        return 7;
+    };
+    x
+}
+
+fn main() {
+    let mut n = 0;
+    let w = loop {
+        n += 1;
+        if n == 2 {
+            break N { name: "abc".to_string(), tags: vec![1, 2, 3] };
+        }
+    };
+    println!("{} {}", w.name.len(), w.tags.len());
+    let v = loop {
+        let built = vec![n, n * 2];
+        break built;
+    };
+    println!("{} {}", v.len(), v[1]);
+    let s = loop {
+        let t = format!("n{}", n);
+        if t.len() > 1 {
+            break t;
+        }
+    };
+    println!("{}", s);
+    println!("{} {} {} {}", first_big(vec![1, 20, 30]), early(true), early(false), never());
+    let k = loop {
+        break 'x';
+    };
+    println!("{}", k);
+}

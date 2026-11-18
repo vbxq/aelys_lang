@@ -3,7 +3,7 @@ use super::{LoweringContext, infer_to_int_size, lower_binop, lower_unop};
 use crate::*;
 use aelys_sema::{
     InferType, ResultAssertOnErr, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedMatchArm,
-    TypedParam, TypedPattern, TypedPatternKind, TypedStmt,
+    TypedParam, TypedPattern, TypedPatternKind, TypedStmt, TypedStmtKind,
 };
 
 impl<'a> LoweringContext<'a> {
@@ -896,6 +896,7 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Match {
                 scrutinee, arms, ..
             } => self.lower_match_expr(scrutinee, arms, expr),
+            TypedExprKind::Loop(looped) => self.lower_loop_expr(looped, expr),
             TypedExprKind::ResultAssert {
                 scrutinee,
                 ok_tag,
@@ -1811,7 +1812,7 @@ impl<'a> LoweringContext<'a> {
         result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
     }
 
-    fn store_arm_value(
+    pub(super) fn store_arm_value(
         &mut self,
         result: LocalId,
         val: Operand,
@@ -1837,6 +1838,44 @@ impl<'a> LoweringContext<'a> {
             },
             None,
         );
+    }
+
+    fn lower_loop_expr(&mut self, looped: &TypedStmt, parent: &TypedExpr) -> Operand {
+        let TypedStmtKind::While { body, .. } = &looped.kind else {
+            unreachable!("a loop expression holds its `while true`")
+        };
+        let result_ty = self.lower_type_from_infer(&parent.ty);
+        let result = (!Self::is_void_like(&result_ty)).then(|| self.alloc_temp_mut(result_ty));
+        let str_result = result.is_some() && self.counted(&parent.ty);
+        let rc_result = result.and_then(|_| self.rc_shape(&parent.ty));
+        let value = result.map(|result| super::LoopValue {
+            result,
+            str_result,
+            rc_result: rc_result.clone(),
+            ty: parent.ty.clone(),
+        });
+        let header_id = self.alloc_block_id();
+        let exit_id = self.alloc_block_id();
+        let dominated = self.str_temps_posed_here();
+        self.seal_block(AirTerminator::Goto(header_id));
+        self.fixup_block_id_noop(header_id);
+        self.loop_stack.push(super::LoopBlocks {
+            header: header_id,
+            exit: exit_id,
+            body_scope_depth: self.locals_by_name.len(),
+            str_temps_at_entry: self.str_temp_ids(),
+            views_at_entry: (self.views.captures.len(), self.views.held.len()),
+            value,
+        });
+        self.lower_stmt(body);
+        if !self.last_block_is_terminated() {
+            self.seal_block(AirTerminator::Goto(header_id));
+        }
+        self.loop_stack.pop();
+        self.fixup_block_id_noop(exit_id);
+        self.restamp_str_temps(&dominated);
+        self.pose_owned_str_result(result, str_result || rc_result.is_some());
+        result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
     }
 
     fn store_arm_result(

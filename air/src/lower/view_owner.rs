@@ -205,6 +205,45 @@ fn collect<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr, Sig)) {
     collect_place(expr, f);
 }
 
+fn break_values<'e>(stmt: &'e TypedStmt, out: &mut Vec<&'e TypedExpr>) {
+    match &stmt.kind {
+        TypedStmtKind::Break(Some(v)) => out.push(v),
+        TypedStmtKind::Block(stmts) => stmts.iter().for_each(|s| break_values(s, out)),
+        TypedStmtKind::If {
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            break_values(then_branch, out);
+            if let Some(e) = else_branch {
+                break_values(e, out);
+            }
+        }
+        TypedStmtKind::Expression(e) => break_values_in(e, out),
+        _ => {}
+    }
+}
+
+fn break_values_in<'e>(expr: &'e TypedExpr, out: &mut Vec<&'e TypedExpr>) {
+    match &expr.kind {
+        TypedExprKind::Block { stmts, tail } => {
+            stmts.iter().for_each(|s| break_values(s, out));
+            break_values_in(tail, out);
+        }
+        TypedExprKind::If {
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            break_values_in(then_branch, out);
+            break_values_in(else_branch, out);
+        }
+        TypedExprKind::Match { arms, .. } => arms.iter().for_each(|a| break_values_in(a.body(), out)),
+        TypedExprKind::Grouping(inner) => break_values_in(inner, out),
+        _ => {}
+    }
+}
+
 fn collect_place<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr, Sig)) {
     match &expr.kind {
         TypedExprKind::Grouping(inner) | TypedExprKind::Deref(inner) => collect(inner, f),
@@ -231,6 +270,15 @@ fn collect_place<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr, Sig))
         }
         TypedExprKind::Identifier(_) if !matches!(expr.ty, InferType::Rc(_)) => f(expr, Sig::Plain),
         TypedExprKind::Block { tail, .. } => collect(tail, f),
+        TypedExprKind::Loop(looped) => {
+            if let TypedStmtKind::While { body, .. } = &looped.kind {
+                let mut values = Vec::new();
+                break_values(body, &mut values);
+                for v in values {
+                    collect(v, f);
+                }
+            }
+        }
         TypedExprKind::If {
             then_branch,
             else_branch,
@@ -464,13 +512,12 @@ impl Pass<'_> {
                 self.stmt(body);
                 self.scopes.pop();
             }
-            TypedStmtKind::Return(v) => {
+            TypedStmtKind::Return(v) | TypedStmtKind::Break(v) => {
                 if let Some(v) = v {
                     self.expr(v);
                 }
             }
-            TypedStmtKind::Break
-            | TypedStmtKind::Continue
+            TypedStmtKind::Continue
             | TypedStmtKind::Function(_)
             | TypedStmtKind::Needs(_)
             | TypedStmtKind::StructDecl { .. }
@@ -616,6 +663,7 @@ impl Pass<'_> {
             }
             TypedExprKind::ResultAssert { scrutinee, .. } => self.expr(scrutinee),
             TypedExprKind::Block { stmts, tail } => self.block(stmts, Some(tail)),
+            TypedExprKind::Loop(body) => self.stmt(body),
         }
     }
 }

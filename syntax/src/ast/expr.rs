@@ -413,6 +413,8 @@ pub enum ExprKind {
     Tuple(Vec<Expr>),
 
     Panic(String),
+
+    Loop(Vec<crate::ast::Stmt>),
 }
 
 #[derive(Debug, Clone)]

@@ -5,7 +5,7 @@ impl DeadCodeEliminator {
     // terminators: return, break, continue (nothing after them runs)
     fn is_terminator(stmt: &TypedStmt) -> bool {
         match &stmt.kind {
-            TypedStmtKind::Return(_) | TypedStmtKind::Break | TypedStmtKind::Continue => true,
+            TypedStmtKind::Return(_) | TypedStmtKind::Break(_) | TypedStmtKind::Continue => true,
             TypedStmtKind::Block(stmts) => stmts.last().map(Self::is_terminator).unwrap_or(false),
             TypedStmtKind::If {
                 then_branch,
@@ -122,7 +122,7 @@ impl DeadCodeEliminator {
             TypedStmtKind::Expression(expr) => self.eliminate_in_expr(expr),
             TypedStmtKind::Let { initializer, .. } => self.eliminate_in_expr(initializer),
             TypedStmtKind::Return(_)
-            | TypedStmtKind::Break
+            | TypedStmtKind::Break(_)
             | TypedStmtKind::Continue
             | TypedStmtKind::Needs(_)
             | TypedStmtKind::StructDecl { .. }

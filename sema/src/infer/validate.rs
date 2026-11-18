@@ -371,8 +371,11 @@ impl TypeInference {
                 }
             }
             TypedStmtKind::EnumDecl { .. } => {}
+            TypedStmtKind::Break(Some(expr)) => {
+                self.validate_expr(expr, generic_scope, declared_type_params);
+            }
             TypedStmtKind::Return(None)
-            | TypedStmtKind::Break
+            | TypedStmtKind::Break(None)
             | TypedStmtKind::Continue
             | TypedStmtKind::Needs(_) => {}
         }
@@ -1107,6 +1110,7 @@ impl TypeInference {
                 }
                 self.validate_expr(tail, generic_scope, declared_type_params);
             }
+            TypedExprKind::Loop(body) => self.validate_stmt(body, generic_scope, declared_type_params),
             TypedExprKind::Match {
                 scrutinee,
                 arms,
@@ -1533,7 +1537,7 @@ impl TypeInference {
             TypedStmtKind::Expression(_)
             | TypedStmtKind::Let { .. }
             | TypedStmtKind::Return(None)
-            | TypedStmtKind::Break
+            | TypedStmtKind::Break(_)
             | TypedStmtKind::Continue
             | TypedStmtKind::Needs(_)
             | TypedStmtKind::StructDecl { .. }

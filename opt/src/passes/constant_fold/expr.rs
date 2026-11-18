@@ -138,6 +138,7 @@ impl ConstantFolder {
                 }
                 self.optimize_expr(tail);
             }
+            TypedExprKind::Loop(body) => self.optimize_stmt(body),
             TypedExprKind::Match {
                 scrutinee, arms, ..
             } => {

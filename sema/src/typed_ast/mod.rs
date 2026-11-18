@@ -112,7 +112,7 @@ pub enum TypedStmtKind {
 
     Return(Option<TypedExpr>),
 
-    Break,
+    Break(Option<TypedExpr>),
     Continue,
 
     Function(TypedFunction),
@@ -324,6 +324,9 @@ pub enum TypedExprKind {
         stmts: Vec<TypedStmt>,
         tail: Box<TypedExpr>,
     },
+
+    // the statement is the `while true` loop whose `break value` statements give the value
+    Loop(Box<TypedStmt>),
 }
 
 #[derive(Debug, Clone)]

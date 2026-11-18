@@ -235,7 +235,7 @@ fn stmt_contains_return(stmt: &Stmt) -> bool {
 
 fn stmt_contains_break(stmt: &Stmt) -> bool {
     match &stmt.kind {
-        StmtKind::Break => true,
+        StmtKind::Break(_) => true,
         StmtKind::Block(stmts) => stmts.iter().any(stmt_contains_break),
         StmtKind::If {
             then_branch,

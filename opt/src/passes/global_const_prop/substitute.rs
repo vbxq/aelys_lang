@@ -113,6 +113,7 @@ impl GlobalConstantPropagator {
                 }
                 self.substitute_constants(tail);
             }
+            TypedExprKind::Loop(body) => self.substitute_in_stmt(body),
             TypedExprKind::Match {
                 scrutinee, arms, ..
             } => {
@@ -206,10 +207,10 @@ impl GlobalConstantPropagator {
                     self.constants.insert(iterator.clone(), val);
                 }
             }
-            TypedStmtKind::Return(Some(expr)) => self.substitute_constants(expr),
+            TypedStmtKind::Return(Some(expr)) | TypedStmtKind::Break(Some(expr)) => self.substitute_constants(expr),
             TypedStmtKind::Function(func) => self.substitute_in_function(func),
             TypedStmtKind::Return(None)
-            | TypedStmtKind::Break
+            | TypedStmtKind::Break(None)
             | TypedStmtKind::Continue
             | TypedStmtKind::Needs(_)
             | TypedStmtKind::StructDecl { .. }

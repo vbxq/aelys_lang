@@ -127,7 +127,8 @@ fn stmt(s: &mut Stmt, f: &mut dyn FnMut(&mut TypeAnnotation)) {
                 stmts(&mut m.func.body, f);
             }
         }
-        StmtKind::Break | StmtKind::Continue | StmtKind::Needs(_) => {}
+        StmtKind::Break(Some(e)) => expr(e, f),
+        StmtKind::Break(None) | StmtKind::Continue | StmtKind::Needs(_) => {}
     }
 }
 
@@ -278,6 +279,7 @@ fn expr(e: &mut Expr, f: &mut dyn FnMut(&mut TypeAnnotation)) {
             stmts(list, f);
             expr(tail, f);
         }
+        ExprKind::Loop(body) => stmts(body, f),
         ExprKind::Catch { scrutinee, handler } => {
             expr(scrutinee, f);
             match handler {

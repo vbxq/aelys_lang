@@ -35,6 +35,7 @@ impl Default for TypeInference {
             literal_globals: HashMap::new(),
             keep_binding_use: false,
             try_counter: 0,
+            loop_breaks: Vec::new(),
             unsafe_depth: 0,
             refused_matches: std::collections::HashSet::new(),
             nogc_fn_params: HashSet::new(),

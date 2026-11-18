@@ -245,6 +245,15 @@ pub(super) struct LoopBlocks {
     pub(super) body_scope_depth: usize,
     pub(super) str_temps_at_entry: Vec<LocalId>,
     pub(super) views_at_entry: (usize, usize),
+    pub(super) value: Option<LoopValue>,
+}
+
+#[derive(Clone)]
+pub(super) struct LoopValue {
+    pub(super) result: LocalId,
+    pub(super) str_result: bool,
+    pub(super) rc_result: Option<RcShape>,
+    pub(super) ty: InferType,
 }
 
 impl<'a> LoweringContext<'a> {

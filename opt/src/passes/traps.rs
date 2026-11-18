@@ -76,6 +76,7 @@ pub fn may_trap_or_allocate(expr: &TypedExpr) -> bool {
         TypedExprKind::Block { stmts, tail } => {
             stmts.iter().any(stmt_may_trap_or_allocate) || may_trap_or_allocate(tail)
         }
+        TypedExprKind::Loop(_) => true,
     }
 }
 

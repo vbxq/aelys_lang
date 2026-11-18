@@ -1211,7 +1211,27 @@ impl<'a> LoweringContext<'a> {
                 self.emit_affine_drops_for_return(stmt.span);
                 self.seal_block(AirTerminator::Return(operand));
             }
-            TypedStmtKind::Break => {
+            TypedStmtKind::Break(value) => {
+                if let Some(value) = value {
+                    let target = self.loop_stack.last().and_then(|l| l.value.clone());
+                    match target {
+                        Some(target) => {
+                            let val = self.lower_expr(value);
+                            self.store_arm_value(
+                                target.result,
+                                val,
+                                target.str_result,
+                                target.rc_result.as_ref(),
+                                value,
+                                &target.ty,
+                            );
+                        }
+                        None => self.lower_expr_discard(value),
+                    }
+                    if self.position_is_dead() {
+                        return;
+                    }
+                }
                 if let Some(loop_ctx) = self.loop_stack.last() {
                     let exit = loop_ctx.exit;
                     let body_depth = loop_ctx.body_scope_depth;
@@ -1366,6 +1386,7 @@ impl<'a> LoweringContext<'a> {
             body_scope_depth: self.locals_by_name.len(),
             str_temps_at_entry: self.str_temp_ids(),
             views_at_entry: (self.views.captures.len(), self.views.held.len()),
+            value: None,
         });
         self.fixup_block_id_noop(body_id);
         self.lower_stmt(body);

@@ -213,12 +213,12 @@ fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             walk_expr(iterable, tt, set, w, Pos::Value);
             walk_stmt(body, tt, set, w);
         }
-        TypedStmtKind::Return(val) => {
+        TypedStmtKind::Return(val) | TypedStmtKind::Break(val) => {
             if let Some(e) = val {
                 walk_expr(e, tt, set, w, Pos::Value);
             }
         }
-        TypedStmtKind::Break | TypedStmtKind::Continue => {}
+        TypedStmtKind::Continue => {}
         TypedStmtKind::Function(_)
         | TypedStmtKind::Needs(_)
         | TypedStmtKind::StructDecl { .. }
@@ -467,6 +467,7 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             }
             walk_expr(tail, tt, set, w, Pos::Value);
         }
+        TypedExprKind::Loop(body) => walk_stmt(body, tt, set, w),
     }
 }
 

@@ -77,7 +77,10 @@ impl TypeInference {
                 expr.as_ref()
                     .map(|e| self.apply_substitution_expr(e, subst)),
             ),
-            TypedStmtKind::Break => TypedStmtKind::Break,
+            TypedStmtKind::Break(expr) => TypedStmtKind::Break(
+                expr.as_ref()
+                    .map(|e| self.apply_substitution_expr(e, subst)),
+            ),
             TypedStmtKind::Continue => TypedStmtKind::Continue,
             TypedStmtKind::Function(func) => {
                 TypedStmtKind::Function(self.apply_substitution_func(func, subst))

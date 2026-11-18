@@ -240,6 +240,9 @@ impl TypeInference {
                     .collect(),
                 tail: Box::new(self.apply_substitution_expr(tail, subst)),
             },
+            TypedExprKind::Loop(body) => {
+                TypedExprKind::Loop(Box::new(self.apply_substitution_stmt(body, subst)))
+            }
             TypedExprKind::Match {
                 scrutinee,
                 arms,

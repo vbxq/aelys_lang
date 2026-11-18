@@ -401,7 +401,13 @@ impl TypeInference {
                 body,
             } => self.infer_for_each_stmt(iterator, iterable, body, stmt.span),
             StmtKind::Return(expr) => self.infer_return_stmt(stmt.span, expr.as_ref()),
-            StmtKind::Break => TypedStmtKind::Break,
+            StmtKind::Break(value) => {
+                let typed = value.as_ref().map(|v| self.infer_expr(v));
+                if let Some(Some(breaks)) = self.loop_breaks.last_mut() {
+                    breaks.push(typed.as_ref().map_or(InferType::Null, |t| t.ty.clone()));
+                }
+                TypedStmtKind::Break(typed)
+            }
             StmtKind::Continue => TypedStmtKind::Continue,
             StmtKind::Function(func) => {
                 let typed_func = self.infer_function(func);

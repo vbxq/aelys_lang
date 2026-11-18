@@ -16,7 +16,7 @@ pub(crate) use primary::intrinsic_methods as intrinsic_method_names;
 
 use super::{LiteralInit, TypeInference};
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
-use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart};
+use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart, TypedStmt, TypedStmtKind};
 use crate::types::InferType;
 use aelys_syntax::{BinaryOp, Expr, ExprKind};
 use std::collections::HashMap;
@@ -429,6 +429,7 @@ impl TypeInference {
             ExprKind::Catch { scrutinee, handler } => {
                 self.infer_catch_expr(scrutinee, handler, expr.span)
             }
+            ExprKind::Loop(body) => self.infer_loop_expr(body, expr.span),
             ExprKind::Panic(message) => {
                 let t = self.infer_expr(&panic_call(message, expr.span));
                 (t.kind, t.ty)
@@ -1286,6 +1287,43 @@ impl TypeInference {
                 return;
             }
         }
+    }
+}
+
+impl TypeInference {
+    fn infer_loop_expr(&mut self, body: &[aelys_syntax::Stmt], span: aelys_syntax::Span) -> (TypedExprKind, InferType) {
+        self.loop_breaks.push(Some(Vec::new()));
+        self.env.push_scope();
+        let typed_body = self.infer_stmts(body);
+        self.env.pop_scope();
+        let breaks = self.loop_breaks.pop().flatten().unwrap_or_default();
+        let ty = match breaks.split_first() {
+            None => InferType::Never,
+            Some((first, rest)) => {
+                for t in rest {
+                    self.constraints.push(Constraint::equal(
+                        t.clone(),
+                        first.clone(),
+                        span,
+                        ConstraintReason::Other("every `break` of a `loop` gives a value of the same type".to_string()),
+                    ));
+                }
+                first.clone()
+            }
+        };
+        let body = TypedStmt {
+            kind: TypedStmtKind::Block(typed_body),
+            span,
+        };
+        let condition = TypedExpr::new(TypedExprKind::Bool(true), InferType::Bool, span);
+        let looped = TypedStmt {
+            kind: TypedStmtKind::While {
+                condition,
+                body: Box::new(body),
+            },
+            span,
+        };
+        (TypedExprKind::Loop(Box::new(looped)), ty)
     }
 }
 

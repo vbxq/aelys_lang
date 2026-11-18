@@ -406,6 +406,7 @@ impl InlineExpander {
                     .collect(),
                 tail: Box::new(self.substitute_expr(tail, params, span)),
             },
+            TypedExprKind::Loop(body) => TypedExprKind::Loop(Box::new(self.substitute_stmt(body, params, span))),
             TypedExprKind::Match {
                 scrutinee,
                 arms,
@@ -517,6 +518,9 @@ impl InlineExpander {
             },
             TypedStmtKind::Return(e) => {
                 TypedStmtKind::Return(e.as_ref().map(|ex| self.substitute_expr(ex, params, span)))
+            }
+            TypedStmtKind::Break(e) => {
+                TypedStmtKind::Break(e.as_ref().map(|ex| self.substitute_expr(ex, params, span)))
             }
             other => other.clone(),
         };

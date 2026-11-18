@@ -67,7 +67,7 @@ pub enum StmtKind {
         body: Box<Stmt>,
     },
 
-    Break,
+    Break(Option<Expr>),
     Continue,
     Return(Option<Expr>),
     Function(Function),

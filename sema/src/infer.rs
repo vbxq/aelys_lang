@@ -59,6 +59,7 @@ pub struct TypeInference {
     pub(crate) literal_globals: HashMap<String, LiteralInit>,
     keep_binding_use: bool,
     try_counter: usize,
+    loop_breaks: Vec<Option<Vec<InferType>>>,
     unsafe_depth: usize,
     refused_matches: std::collections::HashSet<(usize, usize)>,
     nogc_fn_params: HashSet<String>,

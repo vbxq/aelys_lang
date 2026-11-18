@@ -667,7 +667,8 @@ fn subst_stmt(stmt: &mut Stmt, head: &TypeAnnotation) {
             }
         }
         StmtKind::Function(func) => subst_function(func, head),
-        StmtKind::Break
+        StmtKind::Break(Some(e)) => subst_expr(e, head),
+        StmtKind::Break(None)
         | StmtKind::Continue
         | StmtKind::Needs(_)
         | StmtKind::StructDecl { .. }
@@ -883,6 +884,7 @@ fn subst_expr(expr: &mut Expr, head: &TypeAnnotation) {
             subst_stmts(stmts, head);
             subst_expr(tail, head);
         }
+        ExprKind::Loop(body) => subst_stmts(body, head),
         ExprKind::Catch { scrutinee, handler } => {
             subst_expr(scrutinee, head);
             match handler {

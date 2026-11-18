@@ -241,10 +241,10 @@ fn sites_in_stmt(stmt: &TypedStmt, sites: &mut Vec<Site>) {
             push(sites, Rank::Binding, stmt.span, Some(iterator), elem_type);
             sites_in_stmt(body, sites);
         }
-        TypedStmtKind::Return(Some(expr)) => sites_in_expr(expr, sites),
+        TypedStmtKind::Return(Some(expr)) | TypedStmtKind::Break(Some(expr)) => sites_in_expr(expr, sites),
         TypedStmtKind::Function(func) => sites_in_function(func, sites),
         TypedStmtKind::Return(None)
-        | TypedStmtKind::Break
+        | TypedStmtKind::Break(None)
         | TypedStmtKind::Continue
         | TypedStmtKind::Needs(_)
         | TypedStmtKind::StructDecl { .. }
@@ -271,7 +271,7 @@ pub(crate) fn diverges(expr: &TypedExpr) -> bool {
 
 pub(crate) fn stmt_diverges(stmt: &TypedStmt) -> bool {
     match &stmt.kind {
-        TypedStmtKind::Return(_) | TypedStmtKind::Break | TypedStmtKind::Continue => true,
+        TypedStmtKind::Return(_) | TypedStmtKind::Break(_) | TypedStmtKind::Continue => true,
         TypedStmtKind::Expression(expr) => diverges(expr),
         TypedStmtKind::Block(stmts) => stmts.iter().any(stmt_diverges),
         TypedStmtKind::If {
@@ -380,6 +380,7 @@ fn sites_in_expr(expr: &TypedExpr, sites: &mut Vec<Site>) {
             stmts.iter().for_each(|s| sites_in_stmt(s, sites));
             sites_in_expr(tail, sites);
         }
+        TypedExprKind::Loop(body) => sites_in_stmt(body, sites),
         TypedExprKind::Match {
             scrutinee, arms, ..
         } => {

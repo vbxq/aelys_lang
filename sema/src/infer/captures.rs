@@ -96,10 +96,10 @@ impl TypeInference {
                 self.collect_captures_from_stmt(body, local_names, captures, seen);
                 *local_names = saved;
             }
-            TypedStmtKind::Return(Some(expr)) => {
+            TypedStmtKind::Return(Some(expr)) | TypedStmtKind::Break(Some(expr)) => {
                 self.collect_captures_inner(expr, local_names, captures, seen);
             }
-            TypedStmtKind::Return(None) | TypedStmtKind::Break | TypedStmtKind::Continue => {}
+            TypedStmtKind::Return(None) | TypedStmtKind::Break(None) | TypedStmtKind::Continue => {}
             TypedStmtKind::Function(_) => {}
             TypedStmtKind::Needs(_) => {}
             TypedStmtKind::StructDecl { .. } | TypedStmtKind::EnumDecl { .. } => {}
@@ -264,6 +264,10 @@ impl TypeInference {
                     self.collect_captures_from_stmt(stmt, &mut block_locals, captures, seen);
                 }
                 self.collect_captures_inner(tail, &block_locals, captures, seen);
+            }
+            TypedExprKind::Loop(body) => {
+                let mut loop_locals = locals.clone();
+                self.collect_captures_from_stmt(body, &mut loop_locals, captures, seen);
             }
             TypedExprKind::Match {
                 scrutinee, arms, ..

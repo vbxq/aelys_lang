@@ -110,6 +110,7 @@ impl DeadCodeEliminator {
                 self.eliminate_in_block(stmts);
                 self.eliminate_in_expr(tail);
             }
+            TypedExprKind::Loop(body) => self.eliminate_in_stmt(body),
             TypedExprKind::Match {
                 scrutinee, arms, ..
             } => {
