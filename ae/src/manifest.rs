@@ -114,22 +114,22 @@ const RESERVED: &[&str] = &[
     "while",
 ];
 
-pub fn check_name(name: &str) -> std::result::Result<(), String> {
+pub fn check_name(name: &str, kind: &str) -> std::result::Result<(), String> {
     let Some(first) = name.chars().next() else {
-        return Err("a package name cannot be empty".to_string());
+        return Err(format!("a {kind} name cannot be empty"));
     };
     if first.is_ascii_digit() {
-        return Err("a package name cannot start with a digit".to_string());
+        return Err(format!("a {kind} name cannot start with a digit"));
     }
     if first == '-' {
-        return Err("a package name cannot start with `-`".to_string());
+        return Err(format!("a {kind} name cannot start with `-`"));
     }
     if let Some(bad) = name
         .chars()
         .find(|c| !(c.is_ascii_alphanumeric() || *c == '_' || *c == '-'))
     {
         return Err(format!(
-            "the character `{bad}` is not allowed in a package name"
+            "the character `{bad}` is not allowed in a {kind} name"
         ));
     }
     if RESERVED.contains(&name) {
@@ -163,7 +163,7 @@ impl Manifest {
             if empty_is_fine && empty {
                 continue;
             }
-            let mut diagnostic = origin.at(
+            let mut diagnostic = origin.parse_error_at(
                 value.span(),
                 format!("`{key}` is not supported by this version of ae"),
             );
@@ -172,16 +172,16 @@ impl Manifest {
         }
 
         let name = raw.package.name;
-        if let Err(reason) = check_name(name.get_ref()) {
+        if let Err(reason) = check_name(name.get_ref(), "package") {
             return Err(origin
-                .at(
+                .parse_error_at(
                     name.span(),
                     format!("invalid package name `{}`: {reason}", name.get_ref()),
                 )
                 .into());
         }
         let version = semver::Version::parse(raw.package.version.get_ref()).map_err(|_| {
-            let mut diagnostic = origin.at(
+            let mut diagnostic = origin.parse_error_at(
                 raw.package.version.span(),
                 format!(
                     "`{}` is not a semver version",
@@ -195,8 +195,8 @@ impl Manifest {
         for lib in &raw.native.libs {
             let value = lib.get_ref();
             if value.is_empty() || value.starts_with('-') || value.contains(char::is_whitespace) {
-                let mut diagnostic =
-                    origin.at(lib.span(), format!("invalid native library name `{value}`"));
+                let mut diagnostic = origin
+                    .parse_error_at(lib.span(), format!("invalid native library name `{value}`"));
                 diagnostic.add_help("write the bare library name, e.g. `m` for libm");
                 return Err(diagnostic.into());
             }
@@ -205,7 +205,7 @@ impl Manifest {
         for entry in &raw.native.pkg_config {
             let value = entry.get_ref();
             if value.is_empty() || value.starts_with('-') {
-                let mut diagnostic = origin.at(
+                let mut diagnostic = origin.parse_error_at(
                     entry.span(),
                     format!("invalid pkg-config package name `{value}`"),
                 );
@@ -215,10 +215,9 @@ impl Manifest {
         }
 
         for bin in &raw.bin {
-            if let Err(reason) = check_name(bin.name.get_ref()) {
-                let reason = reason.replace("package name", "target name");
+            if let Err(reason) = check_name(bin.name.get_ref(), "target") {
                 return Err(origin
-                    .at(
+                    .parse_error_at(
                         bin.name.span(),
                         format!("invalid bin name `{}`: {reason}", bin.name.get_ref()),
                     )
@@ -273,7 +272,7 @@ impl Origin {
                 3 => OptimizationLevel::Aggressive,
                 other => {
                     return Err(self
-                        .at(
+                        .parse_error_at(
                             level.span(),
                             format!("opt-level must be 0, 1, 2 or 3, not {other}"),
                         )
@@ -283,7 +282,7 @@ impl Origin {
         }
         if let Some(runtime) = raw.runtime {
             profile.runtime = RuntimeVariant::parse(runtime.get_ref()).ok_or_else(|| {
-                let mut diagnostic = self.at(
+                let mut diagnostic = self.parse_error_at(
                     runtime.span(),
                     format!("unknown runtime `{}`", runtime.get_ref()),
                 );
@@ -294,7 +293,7 @@ impl Origin {
         Ok(())
     }
 
-    pub fn at(&self, range: Range<usize>, label: impl Into<String>) -> Diagnostic {
+    fn parse_error_at(&self, range: Range<usize>, label: impl Into<String>) -> Diagnostic {
         error(self.header.clone()).with_primary_label(
             self.source.clone(),
             self.span(range),
@@ -319,13 +318,13 @@ impl Origin {
         let message = err.message().trim();
         let Some((field, expected)) = unknown_field(message) else {
             let mut lines = message.lines();
-            let mut diagnostic = self.at(range, lines.next().unwrap_or("invalid TOML"));
+            let mut diagnostic = self.parse_error_at(range, lines.next().unwrap_or("invalid TOML"));
             for line in lines {
                 diagnostic.add_note(line.trim());
             }
             return diagnostic.into();
         };
-        let mut diagnostic = self.at(range, format!("unknown field `{field}`"));
+        let mut diagnostic = self.parse_error_at(range, format!("unknown field `{field}`"));
         if let Some(best) = closest(field, expected.iter().copied()) {
             diagnostic.add_help(format!("did you mean `{best}`?"));
         }

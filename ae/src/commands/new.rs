@@ -41,7 +41,7 @@ pub fn run(shell: &Shell, path: &Path, name: Option<String>, vcs: Vcs) -> Result
             })?
             .to_string(),
     };
-    if let Err(reason) = check_name(&name) {
+    if let Err(reason) = check_name(&name, "package") {
         return Err(with_help(
             error(format!("invalid package name `{name}`: {reason}")),
             "pass `--name <name>` to name the package differently from its directory",

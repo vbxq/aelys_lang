@@ -8,16 +8,17 @@ mod shell;
 mod templates;
 mod workspace;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use aelys_common::ColorConfig;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::commands::new::Vcs;
-use crate::compile::Mode;
+use crate::compile::{Mode, compile};
 use crate::error::{Result, io_error};
 use crate::shell::Shell;
+use crate::workspace::Package;
 
 #[derive(Parser)]
 #[command(
@@ -103,26 +104,35 @@ fn main() -> ExitCode {
 }
 
 fn execute(shell: &Shell, command: Command, manifest_path: Option<PathBuf>) -> Result<()> {
-    let (target, mode, run_args) = match command {
-        Command::New { path, name, vcs } => return commands::new::run(shell, &path, name, vcs),
-        Command::Build(target) => (target, Mode::Build, None),
-        Command::Check(target) => (target, Mode::Check, None),
-        Command::Run { target, args } => (target, Mode::Build, Some(args)),
-    };
-    let invoked_from = std::env::current_dir()
+    let cwd = std::env::current_dir()
         .map_err(|err| io_error("cannot read the current directory", err))?;
-    let package = workspace::load(&workspace::locate(manifest_path.as_deref())?)?;
+    match command {
+        Command::New { path, name, vcs } => commands::new::run(shell, &path, name, vcs),
+        Command::Build(target) => {
+            let package = open(&cwd, manifest_path.as_deref())?;
+            let bins = package.select(target.bin.as_deref())?;
+            compile(shell, &package, &bins, target.release, Mode::Build).map(drop)
+        }
+        Command::Check(target) => {
+            let package = open(&cwd, manifest_path.as_deref())?;
+            let bins = package.select(target.bin.as_deref())?;
+            compile(shell, &package, &bins, target.release, Mode::Check).map(drop)
+        }
+        Command::Run { target, args } => {
+            let package = open(&cwd, manifest_path.as_deref())?;
+            let bin = target.bin.as_deref();
+            commands::run::run(shell, &package, bin, target.release, &args, &cwd)
+        }
+    }
+}
+
+fn open(cwd: &Path, manifest_path: Option<&Path>) -> Result<Package> {
+    let package = workspace::load(&workspace::locate(cwd, manifest_path)?)?;
     std::env::set_current_dir(&package.root).map_err(|err| {
         io_error(
             format_args!("cannot enter `{}`", package.root.display()),
             err,
         )
     })?;
-    let bin = target.bin.as_deref();
-    match run_args {
-        Some(args) => {
-            commands::run::run(shell, &package, bin, target.release, &args, &invoked_from)
-        }
-        None => commands::build::run(shell, &package, bin, target.release, mode),
-    }
+    Ok(package)
 }

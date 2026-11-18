@@ -3,7 +3,7 @@ use std::fmt::Display;
 use aelys_common::{ColorConfig, Diagnostic};
 
 pub struct Shell {
-    pub color: ColorConfig,
+    color: ColorConfig,
     quiet: bool,
 }
 

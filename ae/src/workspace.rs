@@ -16,9 +16,7 @@ pub struct Bin {
     pub path: PathBuf,
 }
 
-pub fn locate(explicit: Option<&Path>) -> Result<PathBuf> {
-    let cwd = std::env::current_dir()
-        .map_err(|err| io_error("cannot read the current directory", err))?;
+pub fn locate(cwd: &Path, explicit: Option<&Path>) -> Result<PathBuf> {
     if let Some(path) = explicit {
         let path = cwd.join(path);
         if !path.is_file() {
@@ -124,11 +122,11 @@ fn discover_bins(root: &Path, manifest: &Manifest) -> Result<Vec<Bin>> {
                 .to_string_lossy()
                 .into_owned();
             let relative = Path::new("src/bin").join(path.file_name().unwrap_or_default());
-            if let Err(reason) = check_name(&stem) {
+            if let Err(reason) = check_name(&stem, "target") {
                 return Err(error(format!(
                     "`{}` cannot be a bin target: {}",
                     relative.display(),
-                    reason.replace("package name", "target name")
+                    reason
                 ))
                 .into());
             }
