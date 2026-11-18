@@ -1,0 +1,13 @@
+fn get(x: i64) -> i64 {
+    return 999
+}
+
+fn main() {
+    let mut total = 0
+    for i in 0..3 {
+        let get = fn(x: i64) -> i64 { return x + 10 }
+        total = total + get(i)
+    }
+    println(total)
+    println(get(0))
+}

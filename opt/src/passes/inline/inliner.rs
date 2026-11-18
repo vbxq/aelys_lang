@@ -15,6 +15,7 @@ pub struct FunctionInliner {
     warned_functions: HashSet<String>,
     functions: HashMap<String, TypedFunction>,
     expander: InlineExpander,
+    locals: Vec<String>,
 }
 
 impl FunctionInliner {
@@ -26,6 +27,7 @@ impl FunctionInliner {
             warned_functions: HashSet::new(),
             functions: HashMap::new(),
             expander: InlineExpander::new(),
+            locals: Vec::new(),
         }
     }
 
@@ -50,14 +52,19 @@ impl FunctionInliner {
         match &mut stmt.kind {
             TypedStmtKind::Expression(e) => self.inline_in_expr(e, analysis),
 
-            TypedStmtKind::Let { initializer, .. } => {
+            TypedStmtKind::Let {
+                name, initializer, ..
+            } => {
                 self.inline_in_expr(initializer, analysis);
+                self.locals.push(name.clone());
             }
 
             TypedStmtKind::Block(stmts) => {
+                let mark = self.locals.len();
                 for s in stmts.iter_mut() {
                     self.inline_in_stmt(s, analysis);
                 }
+                self.locals.truncate(mark);
             }
 
             TypedStmtKind::If {
@@ -78,6 +85,7 @@ impl FunctionInliner {
             }
 
             TypedStmtKind::For {
+                iterator,
                 start,
                 end,
                 step,
@@ -89,20 +97,34 @@ impl FunctionInliner {
                 if let Some(s) = &mut **step {
                     self.inline_in_expr(s, analysis);
                 }
+                let mark = self.locals.len();
+                self.locals.push(iterator.clone());
                 self.inline_in_stmt(body, analysis);
+                self.locals.truncate(mark);
             }
 
-            TypedStmtKind::ForEach { iterable, body, .. } => {
+            TypedStmtKind::ForEach {
+                iterator,
+                iterable,
+                body,
+                ..
+            } => {
                 self.inline_in_expr(iterable, analysis);
+                let mark = self.locals.len();
+                self.locals.push(iterator.clone());
                 self.inline_in_stmt(body, analysis);
+                self.locals.truncate(mark);
             }
 
             TypedStmtKind::Return(Some(e)) => self.inline_in_expr(e, analysis),
 
             TypedStmtKind::Function(f) => {
+                let mark = self.locals.len();
+                self.locals.extend(f.params.iter().map(|p| p.name.clone()));
                 for s in f.body.iter_mut() {
                     self.inline_in_stmt(s, analysis);
                 }
+                self.locals.truncate(mark);
             }
 
             _ => {}
@@ -183,26 +205,42 @@ impl FunctionInliner {
                 self.inline_in_expr(object, analysis);
                 self.inline_in_expr(range, analysis);
             }
-            TypedExprKind::LambdaInner { body, .. } => {
+            TypedExprKind::LambdaInner {
+                params,
+                body,
+                captures,
+                ..
+            } => {
+                let mark = self.locals.len();
+                self.locals.extend(params.iter().map(|p| p.name.clone()));
+                self.locals.extend(captures.iter().map(|(name, _)| name.clone()));
                 for s in body.iter_mut() {
                     self.inline_in_stmt(s, analysis);
                 }
+                self.locals.truncate(mark);
             }
             TypedExprKind::Match {
                 scrutinee, arms, ..
             } => {
                 self.inline_in_expr(scrutinee, analysis);
                 for arm in arms.iter_mut() {
+                    let mark = self.locals.len();
+                    let names: Vec<String> =
+                        arm.bindings().iter().map(|(name, _, _)| name.to_string()).collect();
+                    self.locals.extend(names);
                     for e in arm.exprs_mut() {
                         self.inline_in_expr(e, analysis);
                     }
+                    self.locals.truncate(mark);
                 }
             }
             TypedExprKind::Block { stmts, tail } => {
+                let mark = self.locals.len();
                 for s in stmts.iter_mut() {
                     self.inline_in_stmt(s, analysis);
                 }
                 self.inline_in_expr(tail, analysis);
+                self.locals.truncate(mark);
             }
             TypedExprKind::StructLiteral { fields, .. } => {
                 for (_, val) in fields.iter_mut() {
@@ -223,6 +261,7 @@ impl FunctionInliner {
 
         if let TypedExprKind::Call { callee, args } = &expr.kind
             && let TypedExprKind::Identifier(name) = &callee.kind
+            && !self.locals.contains(name)
             && let Some(func) = self.functions.get(name).cloned()
         {
             let aggressive = self.level == OptimizationLevel::Aggressive;
@@ -292,6 +331,7 @@ impl OptimizationPass for FunctionInliner {
         self.warned_functions.clear();
 
         self.collect_functions(program);
+        self.locals.clear();
         let analysis = ProgramAnalysis::analyze(program);
 
         for stmt in program.stmts.iter_mut() {
