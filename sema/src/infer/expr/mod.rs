@@ -44,7 +44,7 @@ impl TypeInference {
             ExprKind::Int(n) => (TypedExprKind::Int(*n), InferType::I64),
             ExprKind::Float(f) => (TypedExprKind::Float(*f), InferType::F64),
             ExprKind::Bool(b) => (TypedExprKind::Bool(*b), InferType::Bool),
-            ExprKind::String(s) => (TypedExprKind::String(s.clone()), InferType::String),
+            ExprKind::String(s) => (TypedExprKind::String(s.clone()), InferType::StrRef),
             ExprKind::Char(cp) => (TypedExprKind::Char(*cp), InferType::Char),
             ExprKind::FmtString(parts) => {
                 let typed_parts = parts
@@ -241,18 +241,22 @@ impl TypeInference {
                         }
                     }
                 }
-                let referent = typed_operand.ty.clone();
-                (
-                    TypedExprKind::Reference {
-                        mutable: *mutable,
-                        operand: Box::new(typed_operand),
-                        receiver_of: None,
-                    },
-                    InferType::Ref {
-                        referent: Box::new(referent),
-                        mutable: *mutable,
-                    },
-                )
+                if !*mutable && typed_operand.ty.is_str() {
+                    (typed_operand.kind, InferType::StrRef)
+                } else {
+                    let referent = typed_operand.ty.clone();
+                    (
+                        TypedExprKind::Reference {
+                            mutable: *mutable,
+                            operand: Box::new(typed_operand),
+                            receiver_of: None,
+                        },
+                        InferType::Ref {
+                            referent: Box::new(referent),
+                            mutable: *mutable,
+                        },
+                    )
+                }
             }
             ExprKind::Deref(operand) => {
                 let typed_operand = self.infer_expr(operand);

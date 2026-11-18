@@ -1015,7 +1015,7 @@ impl<'a> BodyBuilder<'a> {
             },
 
             TypedExprKind::Member { object, member }
-                if member == "bytes" && matches!(object.ty, InferType::String) =>
+                if member == "bytes" && object.ty.is_str() =>
             {
                 if !aelys_sema::bytes_receiver_is_backed(object) {
                     self.build_errors.push(BirDiagnostic::new(

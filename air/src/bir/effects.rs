@@ -150,6 +150,9 @@ fn is_managed_alloc_variant(enum_name: &str, variant: &str) -> bool {
             | ("string", "from_char")
             | ("string", "fmt_pad")
             | ("string", "fmt_precision")
+            | ("string", "push_str")
+            | ("string", "push")
+            | ("string", "with_capacity")
     )
 }
 
@@ -254,7 +257,7 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
         TypedExprKind::Binary { left, op, right } => {
             match op {
                 BinaryOp::Div | BinaryOp::Mod => set.insert(Effect::Panic),
-                BinaryOp::Add if left.ty == InferType::String || right.ty == InferType::String => {
+                BinaryOp::Add if left.ty.is_str() || right.ty.is_str() => {
                     alloc_managed(set);
                     w.record(RANK_LITERAL, expr.span, "string concatenation".to_string());
                 }
@@ -765,6 +768,7 @@ mod tests {
             | InferType::Bool
             | InferType::Char
             | InferType::String
+            | InferType::StrRef
             | InferType::Null
             | InferType::Never
             | InferType::Range

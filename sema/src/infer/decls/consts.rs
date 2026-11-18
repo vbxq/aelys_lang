@@ -39,6 +39,12 @@ struct Fail;
 type R<T> = Result<T, Fail>;
 
 pub(super) fn scalar_type(ann: &TypeAnnotation) -> Option<InferType> {
+    if matches!(ann.reference, Some(aelys_syntax::RefKind::Shared))
+        && ann.name == "str"
+        && !ann.is_slice
+    {
+        return Some(InferType::StrRef);
+    }
     if ann.reference.is_some()
         || ann.is_function_type()
         || ann.type_param.is_some()
@@ -115,7 +121,7 @@ impl<'a> ConstEval<'a> {
             return None;
         };
         let (val, found) = self.eval(name, &src.init, Some(&ty)).ok()?;
-        if found != ty {
+        if found != ty && !(found.is_str() && ty.is_str()) {
             self.errors.push(mismatch(&ty, &found, src.init.span));
             return None;
         }
@@ -169,7 +175,7 @@ impl<'a> ConstEval<'a> {
         Ok(match &e.kind {
             ExprKind::Bool(_) | ExprKind::And { .. } | ExprKind::Or { .. } => Some(InferType::Bool),
             ExprKind::Char(_) => Some(InferType::Char),
-            ExprKind::String(_) => Some(InferType::String),
+            ExprKind::String(_) => Some(InferType::StrRef),
             ExprKind::Identifier(_) | ExprKind::Member { .. } => {
                 Some(self.eval(owner, e, None)?.1)
             }
@@ -240,7 +246,7 @@ impl<'a> ConstEval<'a> {
             },
             ExprKind::Bool(b) => Ok((Val::Bool(*b), InferType::Bool)),
             ExprKind::Char(c) => Ok((Val::Char(*c), InferType::Char)),
-            ExprKind::String(s) => Ok((Val::Str(s.clone()), InferType::String)),
+            ExprKind::String(s) => Ok((Val::Str(s.clone()), InferType::StrRef)),
             ExprKind::Identifier(name) => self.lookup_name(owner, name, e.span),
             ExprKind::Member { object, member } => {
                 let ExprKind::Identifier(ns) = &object.kind else {
@@ -395,7 +401,7 @@ impl<'a> ConstEval<'a> {
         };
         let (l, lt) = self.eval(owner, left, hint.as_ref())?;
         let (r, rt) = self.eval(owner, right, Some(&lt))?;
-        if lt != rt {
+        if lt != rt && !(lt.is_str() && rt.is_str()) {
             self.errors.push(mismatch(&lt, &rt, right.span));
             return Err(Fail);
         }

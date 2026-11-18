@@ -135,7 +135,6 @@ pub enum TypeErrorKind {
         message: String,
         annotation: String,
     },
-    StringSlice,
     ComputedLen {
         ty: InferType,
         assignment: bool,
@@ -449,11 +448,6 @@ impl fmt::Display for TypeError {
             | TypeErrorKind::PatternUnsupported { detail }
             | TypeErrorKind::PatternMalformed { detail } => write!(f, "{detail}"),
             TypeErrorKind::Coded { message, .. } => write!(f, "{message}"),
-            TypeErrorKind::StringSlice => write!(
-                f,
-                "a `string` has no slices, so `s[a..b]` does not exist on one. take a substring \
-                 with `str.substring(s, a, b)` from `needs std.str`"
-            ),
             TypeErrorKind::RcFieldAssignIndirect => write!(
                 f,
                 "[rc-field-assign] the right-hand side of an `Rc` field assignment must be a direct \
@@ -605,17 +599,6 @@ impl TypeError {
             kind: TypeErrorKind::RcCarrierOutOfSurface {
                 detail: detail.into(),
             },
-            span,
-            reason: ConstraintReason::Other(String::new()),
-            secondary_spans: Vec::new(),
-            help: None,
-            suggestion: None,
-        }
-    }
-
-    pub fn string_slice(span: Span) -> Self {
-        TypeError {
-            kind: TypeErrorKind::StringSlice,
             span,
             reason: ConstraintReason::Other(String::new()),
             secondary_spans: Vec::new(),

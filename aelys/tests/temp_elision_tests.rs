@@ -108,7 +108,7 @@ fn main() -> i64 {
 "#;
 
 const ESCAPING_INTERPOLATION: &str = r#"
-let mut k: str = ""
+let mut k: string = ""
 
 fn main() -> i64 {
     let n = 7

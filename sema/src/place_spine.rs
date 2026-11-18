@@ -48,7 +48,11 @@ pub fn is_computed_len(object_ty: &InferType, member: &str) -> bool {
     member == "len"
         && matches!(
             object_ty,
-            InferType::String | InferType::Slice { .. } | InferType::Vec(_) | InferType::Array(..)
+            InferType::String
+                | InferType::StrRef
+                | InferType::Slice { .. }
+                | InferType::Vec(_)
+                | InferType::Array(..)
         )
 }
 
@@ -84,7 +88,7 @@ pub fn denotes_a_place(e: &TypedExpr) -> bool {
         // `.bytes` is a view the compiler forms on demand, so it has no address of its own
         TypedExprKind::Member { object, member } => {
             !is_computed_len(&object.ty, member)
-                && !(member == "bytes" && matches!(object.ty, InferType::String))
+                && !(member == "bytes" && object.ty.is_str())
                 && denotes_a_place(object)
         }
         TypedExprKind::Index { object, .. } => denotes_a_place(object),

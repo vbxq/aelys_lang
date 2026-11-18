@@ -318,3 +318,8 @@ fn track_final_modcyc() {
 fn track_final_dyn() {
     run_track("final_dyn");
 }
+
+#[test]
+fn track_final_str() {
+    run_track("final_str");
+}

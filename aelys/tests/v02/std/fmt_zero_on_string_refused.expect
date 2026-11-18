@@ -1,3 +1,3 @@
 refuse E0391
 pads with zeros
-`string`
+`&str`

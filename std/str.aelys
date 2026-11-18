@@ -351,7 +351,7 @@ pub nogc fn to_digit(c: char) -> Option<i64> {
     return None
 }
 
-impl string {
+impl str {
     pub nogc fn char_count(self) -> i64 { return char_count(self) }
     pub nogc fn is_empty(self) -> bool { return is_empty(self) }
     pub nogc fn is_char_boundary(self, i: i64) -> bool { return is_char_boundary(self, i) }

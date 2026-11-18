@@ -87,6 +87,16 @@ impl Default for TypeInference {
     }
 }
 
+fn is_str_name(ann: &TypeAnnotation) -> bool {
+    matches!(ann.name.as_str(), "str" | "String" | "string")
+        && !ann.is_slice
+        && ann.type_param.is_none()
+        && ann.type_params.is_empty()
+        && ann.tuple_elems.is_none()
+        && ann.array_size.is_none()
+        && !ann.is_function_type()
+}
+
 impl TypeInference {
     pub fn new() -> Self {
         Self::default()
@@ -126,6 +136,20 @@ impl TypeInference {
                     mutable,
                 };
             }
+            if is_str_name(ann) {
+                if !mutable {
+                    return InferType::StrRef;
+                }
+                if ann.name == "str" {
+                    self.errors.push(TypeError::coded(
+                        "E0321",
+                        "`&mut str` is not a type; take `&mut String` to grow a string in place",
+                        "`&mut str`",
+                        ann.span,
+                    ));
+                    return InferType::Dynamic;
+                }
+            }
             let mut base = ann.clone();
             base.reference = None;
             let referent = if base.is_dyn {
@@ -141,6 +165,17 @@ impl TypeInference {
 
         if ann.is_dyn {
             return self.unsized_dyn(ann);
+        }
+
+        if ann.name == "str" && is_str_name(ann) {
+            self.errors.push(TypeError::coded(
+                "E0321",
+                "`str` is only a type behind a reference; write `&str` for a borrowed string or \
+                 `String` for an owned one",
+                "bare `str`",
+                ann.span,
+            ));
+            return InferType::Dynamic;
         }
 
         if let Some(elems) = &ann.tuple_elems {

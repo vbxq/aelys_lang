@@ -889,6 +889,65 @@ AelysString __aelys_str_concat(const char *a_ptr, long long a_len,
     return result;
 }
 
+/* word 12 is free on a NO_TRACE block, the cycle collector only writes it on candidates */
+static uint32_t *aelys_str_cap(const char *ptr) {
+    return (uint32_t *)(ptr - AELYS_RC_HEADER_SIZE + 12);
+}
+
+static char *aelys_str_alloc_cap(long long cap) {
+    if (cap > (long long)UINT32_MAX) {
+        __aelys_panic("String capacity overflow", 24);
+    }
+    char *buf = aelys_str_alloc(cap);
+    *aelys_str_cap(buf) = (uint32_t)cap;
+    return buf;
+}
+
+AelysString __aelys_string_with_capacity(long long cap) {
+    if (cap < 0) {
+        __aelys_panic("String::with_capacity: negative capacity", 40);
+    }
+    AelysString result;
+    result.ptr = aelys_str_alloc_cap(cap);
+    result.len = 0;
+    return result;
+}
+
+/* in place only on a unique block whose capacity was set here; src may point into old, so old goes last */
+void __aelys_string_push(AelysString *dst, const char *src, long long n) {
+    if (n == 0) {
+        return;
+    }
+    long long len = dst->len;
+    if (n > LLONG_MAX - len) {
+        __aelys_panic("String capacity overflow", 24);
+    }
+    long long want = len + n;
+    char *old = (char *)dst->ptr;
+    if (old != NULL && __aelys_rc_refcount(old) == 1 && (long long)*aelys_str_cap(old) >= want) {
+        memmove(old + len, src, (size_t)n);
+        dst->len = want;
+        return;
+    }
+    long long cap = len > want - len ? 2 * len : want;
+    if (cap < 16) {
+        cap = 16;
+    }
+    char *buf = aelys_str_alloc_cap(cap);
+    if (len > 0) {
+        memcpy(buf, old, (size_t)len);
+    }
+    memcpy(buf + len, src, (size_t)n);
+    __aelys_rc_release(old);
+    dst->ptr = buf;
+    dst->len = want;
+}
+
+void __aelys_string_push_char(AelysString *dst, unsigned int cp) {
+    char bytes[AELYS_CHAR_STR_BUF];
+    __aelys_string_push(dst, bytes, aelys_encode_utf8(cp, bytes));
+}
+
 /* the range comes from a string that is already valid utf-8, so only the two ends need a test and validity holds by induction */
 AelysString __aelys_str_substring_bytes(const char *s_ptr, long long s_len,
                                         long long lo, long long hi) {

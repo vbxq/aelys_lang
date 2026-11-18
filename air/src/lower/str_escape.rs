@@ -70,7 +70,9 @@ fn vec_call_kept(kind: &AirStmtKind) -> Option<Vec<Operand>> {
         "__aelys_vec_push" | "__aelys_vec_insert" => Some(args.get(1).cloned().into_iter().collect()),
         "__aelys_vec_pop" | "__aelys_vec_remove" | "__aelys_vec_clear" | "__aelys_vec_init"
         | "__aelys_vec_init_cap" | "__aelys_vec_detach" | "__aelys_vec_retain"
-        | "__aelys_vec_release" => Some(Vec::new()),
+        | "__aelys_vec_release"
+        | "__aelys_string_push"
+        | "__aelys_string_push_char" => Some(Vec::new()),
         _ => None,
     }
 }

@@ -10,6 +10,16 @@ use std::collections::HashMap;
 const PRETYPED: &str = "__pre$";
 const RECV: &str = "__recv$";
 const VEC_ASSOCIATED: &[&str] = &["new", "with_capacity"];
+const STRING_INTRINSICS: &[&str] = &[
+    "is_empty",
+    "as_str",
+    "to_string",
+    "to_owned",
+    "as_bytes",
+    "bytes",
+    "push_str",
+    "push",
+];
 
 enum Form {
     Value,
@@ -55,6 +65,127 @@ impl TypeInference {
     fn vec_receiver_method(member: &str) -> bool {
         super::primary::intrinsic_methods("Vec")
             .is_some_and(|names| names.contains(&member) && !VEC_ASSOCIATED.contains(&member))
+    }
+
+    fn string_method(
+        &mut self,
+        typed_object: TypedExpr,
+        base: &InferType,
+        via_ref: Option<bool>,
+        member: &str,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        let recv_span = typed_object.span;
+        let recv = match via_ref {
+            Some(_) => TypedExpr::new(
+                TypedExprKind::Deref(Box::new(typed_object)),
+                base.clone(),
+                recv_span,
+            ),
+            None => typed_object,
+        };
+        let growing = matches!(member, "push_str" | "push");
+        let arity = usize::from(growing);
+        if args.len() != arity {
+            self.errors.push(TypeError::coded(
+                "E0302",
+                format!(
+                    "`{member}` takes {arity} argument{}, found {}",
+                    if arity == 1 { "" } else { "s" },
+                    args.len()
+                ),
+                "wrong number of arguments",
+                span,
+            ));
+            return self.skip_args(args);
+        }
+        match member {
+            "is_empty" => {
+                let len = TypedExpr::new(
+                    TypedExprKind::Member {
+                        object: Box::new(recv),
+                        member: "len".to_string(),
+                    },
+                    InferType::I64,
+                    recv_span,
+                );
+                let zero = TypedExpr::new(TypedExprKind::Int(0), InferType::I64, span);
+                (
+                    TypedExprKind::Binary {
+                        left: Box::new(len),
+                        op: aelys_syntax::BinaryOp::Eq,
+                        right: Box::new(zero),
+                    },
+                    InferType::Bool,
+                )
+            }
+            "as_str" => (recv.kind, InferType::StrRef),
+            "to_string" | "to_owned" => (recv.kind, InferType::String),
+            "as_bytes" | "bytes" => (
+                TypedExprKind::Member {
+                    object: Box::new(recv),
+                    member: "bytes".to_string(),
+                },
+                InferType::Slice {
+                    elem: Box::new(InferType::U8),
+                    mutable: false,
+                },
+            ),
+            _ => {
+                if *base == InferType::StrRef {
+                    self.errors.push(TypeError::coded(
+                        "E0320",
+                        format!(
+                            "`{member}` grows a `String`, and this receiver is a `&str`, a \
+                             read-only string; make it owned with `String::from(..)` or \
+                             `.to_string()`"
+                        ),
+                        "a `&str` cannot grow",
+                        recv_span,
+                    ));
+                } else {
+                    let writable = {
+                        let env = &self.env;
+                        crate::place_spine::place_is_writable(&recv, &|n: &str| env.is_mutable(n))
+                    };
+                    if !writable {
+                        let message = match &recv.kind {
+                            TypedExprKind::Identifier(name) => format!(
+                                "cannot `{member}` onto the immutable binding `{name}`; declare \
+                                 it `let mut {name}`"
+                            ),
+                            _ => format!("cannot `{member}` here: the string is not a mutable place"),
+                        };
+                        self.errors
+                            .push(TypeError::coded("E0401", message, "not mutable", recv_span));
+                    }
+                }
+                let arg = self.infer_expr(&args[0]);
+                let want = if member == "push" {
+                    InferType::Char
+                } else {
+                    InferType::StrRef
+                };
+                self.constraints.push(crate::constraint::Constraint::flows(
+                    arg.ty.clone(),
+                    want,
+                    arg.span,
+                    crate::constraint::ConstraintReason::Other(format!(
+                        "the argument of `{member}`"
+                    )),
+                ));
+                (
+                    TypedExprKind::EnumVariant {
+                        enum_name: "string".to_string(),
+                        variant: member.to_string(),
+                        tag: 0,
+                        args: vec![recv, arg],
+                    },
+                    InferType::Null,
+                )
+            }
+        }
     }
 
     pub(super) fn infer_method_call(
@@ -105,6 +236,9 @@ impl TypeInference {
                 args,
                 span,
             ));
+        }
+        if base.is_str() && STRING_INTRINSICS.contains(&member) {
+            return Ok(self.string_method(typed_object, &base, via_ref, member, args, span));
         }
         if let Some(key) = crate::infer::impls::builtin_type_key(&base)
             && let Some(entry) = self.builtin_entry(key, member)
@@ -240,6 +374,7 @@ impl TypeInference {
                 Ok(self.infer_enum_variant("Vec", member, &full, span))
             }
             InferType::String
+            | InferType::StrRef
             | InferType::Array(..)
             | InferType::Slice { .. }
             | InferType::Vec(_)
@@ -328,6 +463,7 @@ impl TypeInference {
                 Ok((TypedExprKind::Null, InferType::Dynamic))
             }
             InferType::String
+            | InferType::StrRef
             | InferType::Vec(_)
             | InferType::Slice { .. }
             | InferType::Array(..) => {
@@ -1079,7 +1215,7 @@ fn matches_head(
                     .zip(ta.iter())
                     .all(|(p, t)| matches_head(p, t, tparams, bound))
         }
-        _ => !is_concrete(pat) || !is_concrete(ty) || pat == ty,
+        _ => !is_concrete(pat) || !is_concrete(ty) || pat == ty || (pat.is_str() && ty.is_str()),
     }
 }
 
@@ -1149,7 +1285,7 @@ fn std_method_module(key: &str, member: &str) -> Option<&'static str> {
 
 fn std_function_for(base: &InferType, member: &str) -> Option<&'static str> {
     let candidates: &[(&'static str, &str, &[&str])] = match base {
-        InferType::String => &[("str", STD_STR, &["string"])],
+        InferType::String | InferType::StrRef => &[("str", STD_STR, &["string", "str"])],
         InferType::Vec(_) => &[("vec", STD_VEC, &["Vec<"]), ("slice", STD_SLICE, &["["])],
         InferType::Array(..) | InferType::Slice { .. } => &[("slice", STD_SLICE, &["["])],
         _ => &[],

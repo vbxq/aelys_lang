@@ -22,6 +22,7 @@ pub const STRING_PRODUCER_SYMBOLS: &[&str] = &[
     "__aelys_to_string",
     "__aelys_str_fmt_pad",
     "__aelys_str_fmt_precision",
+    "__aelys_string_with_capacity",
 ];
 
 // each of these copies out of its string arguments and keeps no pointer to them past the call
@@ -31,6 +32,7 @@ pub const STRING_READER_SYMBOLS: &[&str] = &[
     "__aelys_str_char_count",
     "__aelys_str_decode_at",
     "__aelys_str_fmt_pad",
+    "__aelys_string_push",
 ];
 
 pub fn function_symbol_name(function: &AirFunction) -> String {
@@ -261,7 +263,7 @@ pub fn foreign_type_rejection(
             Some("a reference the compiler did not prove; a foreign pointer is a `u64` handle")
         }
         InferType::Null => Some("`void` names c's absence of a value, so it is only a return type"),
-        InferType::String => Some("an aelys string is a managed value, not a c `char *`"),
+        InferType::String | InferType::StrRef => Some("an aelys string is a managed value, not a c `char *`"),
         InferType::Char => {
             Some("a `char` is a validated unicode scalar value, and c's `char` is a byte")
         }

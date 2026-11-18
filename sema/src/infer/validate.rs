@@ -126,6 +126,7 @@ impl TypeInference {
                 | InferType::Bool
                 | InferType::Char
                 | InferType::String
+                | InferType::StrRef
                 | InferType::Rc(_)
                 | InferType::Never
                 | InferType::Var(_)
@@ -212,6 +213,7 @@ impl TypeInference {
             | InferType::Bool
             | InferType::Char
             | InferType::String
+            | InferType::StrRef
             | InferType::Never
             | InferType::Var(_)
             | InferType::Dynamic => true,
@@ -624,7 +626,7 @@ impl TypeInference {
                 let deferred = ProjKind::Field(member.clone());
                 self.check_deferred_read(deferred.clone(), object, None, &expr.ty, expr.span);
                 match &object.ty {
-                    InferType::String => {
+                    InferType::String | InferType::StrRef => {
                         if member != "len" && member != "bytes" {
                             self.errors.push(TypeError::member_access(
                                 format!(
@@ -1288,8 +1290,7 @@ impl TypeInference {
         generic_scope: &HashSet<String>,
         declared_type_params: &HashSet<String>,
     ) {
-        if matches!(object.ty, InferType::String) {
-            self.errors.push(TypeError::string_slice(expr.span));
+        if object.ty.is_str() {
             return;
         }
         if matches!(object.ty, InferType::Var(_))
@@ -1339,7 +1340,7 @@ impl TypeInference {
                     cur = object
                 }
                 TypedExprKind::Member { object, member }
-                    if member == "bytes" && matches!(object.ty, InferType::String) =>
+                    if member == "bytes" && object.ty.is_str() =>
                 {
                     return "the receiver of `.bytes`".to_string();
                 }
@@ -1355,6 +1356,7 @@ impl TypeInference {
                 | InferType::Vec(_)
                 | InferType::Slice { .. }
                 | InferType::String
+                | InferType::StrRef
                 | InferType::Dynamic
                 | InferType::Var(_)
         )
@@ -1378,6 +1380,7 @@ impl TypeInference {
                 | InferType::Slice { .. }
                 | InferType::Vec(_)
                 | InferType::String
+                | InferType::StrRef
                 | InferType::Dynamic
                 | InferType::Var(_)
         )

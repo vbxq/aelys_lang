@@ -261,6 +261,10 @@ impl Parser {
             self.advance();
             return Ok("null".to_string());
         }
+        if matches!(self.peek().kind, TokenKind::From) {
+            self.advance();
+            return Ok("from".to_string());
+        }
         self.consume_identifier(expected)
     }
 

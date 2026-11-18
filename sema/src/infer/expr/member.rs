@@ -141,7 +141,7 @@ impl TypeInference {
 
     pub(super) fn member_result_type(&mut self, object_ty: &InferType, member: &str) -> InferType {
         match object_ty {
-            InferType::String => match member {
+            InferType::String | InferType::StrRef => match member {
                 "len" => InferType::I64,
                 "bytes" => InferType::Slice {
                     elem: Box::new(InferType::U8),

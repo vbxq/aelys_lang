@@ -29,7 +29,7 @@ impl TypeTable {
             | InferType::Char
             | InferType::Null
             | InferType::Never => true,
-            InferType::String => false,
+            InferType::String | InferType::StrRef => false,
             // a reference never owns its referent
             InferType::Ref { .. } | InferType::Slice { .. } => true,
             InferType::Function { nogc, .. } => *nogc,

@@ -281,7 +281,7 @@ impl TypeInference {
             InferType::Array(inner, _) => (**inner).clone(),
             InferType::Vec(inner) => (**inner).clone(),
             InferType::Slice { elem, .. } => (**elem).clone(),
-            InferType::String => {
+            InferType::String | InferType::StrRef => {
                 self.errors
                     .push(TypeError::string_index_removed(false, object.span));
                 InferType::Dynamic
@@ -413,7 +413,7 @@ impl TypeInference {
                     ConstraintReason::ArrayElement,
                 ));
             }
-            InferType::String => {
+            InferType::String | InferType::StrRef => {
                 self.errors
                     .push(TypeError::string_index_removed(true, object.span));
             }
@@ -461,8 +461,8 @@ impl TypeInference {
             let env = &self.env;
             crate::place_spine::place_is_writable(&typed_object, &|n: &str| env.is_mutable(n))
         };
-        let ty = if matches!(typed_object.ty, InferType::String) {
-            InferType::String
+        let ty = if typed_object.ty.is_str() {
+            InferType::StrRef
         } else {
             InferType::Slice {
                 elem: Box::new(elem_ty),

@@ -75,6 +75,9 @@ pub fn unify_dir(
         | (InferType::Bool, InferType::Bool)
         | (InferType::Char, InferType::Char)
         | (InferType::String, InferType::String)
+        | (InferType::StrRef, InferType::StrRef)
+        | (InferType::String, InferType::StrRef)
+        | (InferType::StrRef, InferType::String)
         | (InferType::Null, InferType::Null) => Ok(()),
 
         (InferType::Dyn(a), InferType::Dyn(b)) if a == b => Ok(()),

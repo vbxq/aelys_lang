@@ -13,6 +13,15 @@ impl TypeInference {
         span: Span,
     ) -> InferType {
         match op {
+            BinaryOp::Add if left.ty.is_str() || right.ty.is_str() => {
+                self.constraints.push(Constraint::equal(
+                    right.ty.clone(),
+                    left.ty.clone(),
+                    span,
+                    ConstraintReason::BinaryOp { op: op.to_string() },
+                ));
+                InferType::String
+            }
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
                 // a concrete type here lets downstream narrowing see the real type instead of an opaque var
                 let result_type = if left.ty == right.ty && left.ty.is_concrete() {
@@ -40,6 +49,7 @@ impl TypeInference {
                 if op == BinaryOp::Add {
                     let mut options = InferType::all_numeric_types();
                     options.push(InferType::String);
+                    options.push(InferType::StrRef);
                     self.constraints.push(Constraint::one_of(
                         left.ty.clone(),
                         options,
@@ -199,7 +209,11 @@ impl TypeInference {
                     }
                 }
 
-                if left.ty.is_concrete() && right.ty.is_concrete() && left.ty != right.ty {
+                if left.ty.is_concrete()
+                    && right.ty.is_concrete()
+                    && left.ty != right.ty
+                    && !(left.ty.is_str() && right.ty.is_str())
+                {
                     // incompatible concrete types (e.g., bool == i64) cannot be
                     self.errors.push(TypeError::member_access(
                         format!(

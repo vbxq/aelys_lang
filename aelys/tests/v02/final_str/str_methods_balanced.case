@@ -1,0 +1,26 @@
+fn main() {
+    let s = String::from("héllo")
+    println(s.len())
+    println(s.len)
+    println(s.is_empty())
+    let e = String::new()
+    println(e.is_empty())
+    println(e.len())
+    let v: &str = s.as_str()
+    println(v)
+    let t: String = v.to_string()
+    println(t)
+    let mut n = 0
+    for c in s.chars() {
+        n = n + 1
+    }
+    println(n)
+    let mut sum = 0
+    for b in s.bytes() {
+        sum = sum + (b as i64)
+    }
+    println(sum)
+    println("abc".to_string() == "abc")
+    let w = String::with_capacity(16)
+    println(w.len())
+}

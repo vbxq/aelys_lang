@@ -1,0 +1,19 @@
+fn warm(s: &str) -> String {
+    let mut w = String::with_capacity(32)
+    w.push_str(s)
+    return w
+}
+
+fn add_bang(s: &mut String) {
+    s.push_str("!")
+}
+
+fn main() {
+    let mut m = warm("m1")
+    let mut keep = m
+    add_bang(&mut m)
+    keep.push_str("k")
+    add_bang(&mut m)
+    println(m)
+    println(keep)
+}

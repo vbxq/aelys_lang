@@ -251,6 +251,13 @@ impl TypeInference {
         if enum_name == "string" && variant == "from_char" {
             return self.infer_string_from_char(args, span);
         }
+        if enum_name == "String"
+            && matches!(variant, "new" | "from" | "with_capacity")
+            && !self.type_table.has_struct(enum_name)
+            && !self.type_table.has_enum(enum_name)
+        {
+            return self.infer_string_ctor(variant, args, span);
+        }
         if enum_name == "char" && (variant == "from_i64" || variant == "is_scalar") {
             return self.infer_char_intrinsic(variant, args, span);
         }
@@ -1110,6 +1117,59 @@ impl TypeInference {
         )
     }
 
+    fn infer_string_ctor(
+        &mut self,
+        variant: &str,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        let arity = usize::from(variant != "new");
+        let mut typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+        if typed_args.len() != arity {
+            self.errors.push(TypeError::coded(
+                "E0302",
+                format!(
+                    "`String::{variant}` takes {arity} argument{}, found {}",
+                    if arity == 1 { "" } else { "s" },
+                    typed_args.len()
+                ),
+                "wrong number of arguments",
+                span,
+            ));
+            return (TypedExprKind::Null, InferType::String);
+        }
+        match variant {
+            "new" => (TypedExprKind::String(String::new()), InferType::String),
+            "from" => {
+                let arg = typed_args.remove(0);
+                self.constraints.push(Constraint::flows(
+                    arg.ty.clone(),
+                    InferType::StrRef,
+                    arg.span,
+                    ConstraintReason::Other("`String::from` takes a string".to_string()),
+                ));
+                (arg.kind, InferType::String)
+            }
+            _ => {
+                self.constraints.push(Constraint::equal(
+                    typed_args[0].ty.clone(),
+                    InferType::I64,
+                    typed_args[0].span,
+                    ConstraintReason::Other("`String::with_capacity` takes a byte count".to_string()),
+                ));
+                (
+                    TypedExprKind::EnumVariant {
+                        enum_name: "string".to_string(),
+                        variant: "with_capacity".to_string(),
+                        tag: 0,
+                        args: typed_args,
+                    },
+                    InferType::String,
+                )
+            }
+        }
+    }
+
     fn infer_string_from_char(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
         let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
         if typed_args.len() != 1 {
@@ -1361,6 +1421,7 @@ pub(crate) fn intrinsic_methods(head: &str) -> Option<&'static [&'static str]> {
         ]),
         "Rc" => Some(&["new", "get", "null", "is_null"]),
         "string" => Some(&["substring_bytes", "from_char"]),
+        "String" => Some(&["new", "from", "with_capacity"]),
         "char" => Some(&["from_i64", "is_scalar"]),
         _ => None,
     }

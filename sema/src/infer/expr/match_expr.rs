@@ -243,7 +243,7 @@ impl TypeInference {
             }
             Pattern::Lit(PatLit::Char(_), _) => Some(InferType::Char),
             Pattern::Lit(PatLit::Bool(_), _) => Some(InferType::Bool),
-            Pattern::Lit(PatLit::Str(_), _) => Some(InferType::String),
+            Pattern::Lit(PatLit::Str(_), _) => Some(InferType::StrRef),
             _ => None,
         }
     }
@@ -595,7 +595,7 @@ impl TypeInference {
             (PatLit::Int(_), InferType::Var(_)) => true,
             (PatLit::Char(_), InferType::Char)
             | (PatLit::Bool(_), InferType::Bool)
-            | (PatLit::Str(_), InferType::String) => true,
+            | (PatLit::Str(_), InferType::String | InferType::StrRef) => true,
             _ => false,
         };
         if !ok {

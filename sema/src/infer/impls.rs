@@ -20,7 +20,7 @@ pub(crate) fn builtin_head_key(head: &TypeAnnotation) -> Option<&'static str> {
         return Some(SLICE_KEY);
     }
     match head.name.as_str() {
-        "string" => Some("string"),
+        "string" | "str" | "String" => Some("string"),
         "char" => Some("char"),
         "i64" => Some("i64"),
         "f64" => Some("f64"),
@@ -31,7 +31,7 @@ pub(crate) fn builtin_head_key(head: &TypeAnnotation) -> Option<&'static str> {
 
 pub(crate) fn builtin_type_key(ty: &InferType) -> Option<&'static str> {
     match ty {
-        InferType::String => Some("string"),
+        InferType::String | InferType::StrRef => Some("string"),
         InferType::Char => Some("char"),
         InferType::I64 => Some("i64"),
         InferType::F64 => Some("f64"),
@@ -47,7 +47,7 @@ pub(crate) fn builtin_fn_prefix(key: &str) -> &str {
 
 pub fn builtin_key_of_prefix(prefix: &str) -> Option<&'static str> {
     match prefix {
-        "string" => Some("string"),
+        "string" | "str" | "String" => Some("string"),
         "char" => Some("char"),
         "i64" => Some("i64"),
         "f64" => Some("f64"),
@@ -417,6 +417,7 @@ impl TypeInference {
                 ann.reference = match method.receiver {
                     Receiver::Ref => Some(RefKind::Shared),
                     Receiver::RefMut => Some(RefKind::Mut),
+                    _ if head.name == "str" => Some(RefKind::Shared),
                     _ => None,
                 };
                 params.push(Parameter::new(

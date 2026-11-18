@@ -808,11 +808,6 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             message,
             annotation,
         } => (*code, message.clone(), annotation.clone()),
-        TypeErrorKind::StringSlice => (
-            "E0425",
-            error.to_string(),
-            "a `string` has no slices".to_string(),
-        ),
         TypeErrorKind::RcFieldAssignIndirect => (
             "E0420",
             error.to_string(),

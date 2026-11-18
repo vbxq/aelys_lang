@@ -209,7 +209,7 @@ fn collect_place<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr, Sig))
     match &expr.kind {
         TypedExprKind::Grouping(inner) | TypedExprKind::Deref(inner) => collect(inner, f),
         TypedExprKind::Member { object, member }
-            if member == "bytes" && matches!(object.ty, InferType::String) =>
+            if member == "bytes" && object.ty.is_str() =>
         {
             f(object, Sig::BytesOf);
             collect(object, f);
@@ -359,7 +359,7 @@ impl Pass<'_> {
     fn note_view_roots(&mut self, e: &TypedExpr) {
         if let TypedExprKind::Member { object, member } = &e.kind
             && member == "bytes"
-            && matches!(object.ty, InferType::String)
+            && object.ty.is_str()
         {
             if !frame_held(object, &|n| self.is_local(n)) {
                 self.str_nodes.insert(key(object.as_ref()));

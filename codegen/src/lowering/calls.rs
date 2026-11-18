@@ -21,6 +21,7 @@ pub(crate) const AD_HOC_RUNTIME_SYMBOLS: &[&str] = &[
     "__aelys_rc_release_slot",
     "__aelys_rc_retain_slot",
     "__aelys_len",
+    "__aelys_string_push_char",
     // the range constructor, whose arity follows the written bounds
     "__aelys_range",
 ];
@@ -323,6 +324,34 @@ impl<'a> FunctionCodegen<'a> {
                         arg_values[4].into(),
                     ],
                     "str_fmt_pad",
+                )?));
+            }
+
+            if name == "__aelys_string_push" {
+                if args.len() != 2 || !arg_values[1].is_struct_value() {
+                    return Err(CodegenError::UnsupportedInstruction(
+                        "__aelys_string_push expects a string address and a string".to_string(),
+                    ));
+                }
+                let (s_ptr, s_len) =
+                    self.string_parts_from_value(arg_values[1].into_struct_value())?;
+                let function = self.ensure_string_push_function();
+                self.builder
+                    .build_call(
+                        function,
+                        &[arg_values[0].into(), s_ptr.into(), s_len.into()],
+                        "",
+                    )
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                return Ok(None);
+            }
+
+            if name == "__aelys_string_with_capacity" {
+                let function = self.ensure_string_with_capacity_function();
+                return Ok(Some(self.call_sret_returning_fn(
+                    function,
+                    &[arg_values[0].into()],
+                    "string_with_capacity",
                 )?));
             }
 

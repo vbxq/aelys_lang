@@ -1,0 +1,16 @@
+fn main() {
+    let a: String = "apple"
+    let b: &str = "banana"
+    let c: String = "apple" + ""
+    println(a == c)
+    println(a == "apple")
+    println("apple" == a)
+    println(b == "banana")
+    println(a != b)
+    println(a < b)
+    println(b > a)
+    println(b <= "banana")
+    println(a >= c)
+    println("a" < "b")
+    println(a == b)
+}

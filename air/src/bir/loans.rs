@@ -160,6 +160,7 @@ fn classify_loan_root(body: &BirBody, place: &BirPlace) -> RootClass {
         | InferType::F64
         | InferType::Bool
         | InferType::String
+        | InferType::StrRef
         | InferType::Null
         | InferType::Never
         | InferType::Function { .. }

@@ -359,6 +359,34 @@ untangle. Simplify the involved types or add explicit annotations.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
+        code: "E0320",
+        title: "a `&str` cannot grow",
+        explanation: "\
+A `&str` is a read-only string: a literal, a slice `s[a..b]`, or a
+`String` passed where a `&str` is expected. `push_str`, `push` and `+=`
+grow a `String`, so they need a `String` place:
+
+    let mut s = \"abc\"
+    s.push_str(\"x\")                 // E0320
+    let mut s = String::from(\"abc\")
+    s.push_str(\"x\")                 // ok",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0321",
+        title: "`str` is only a type behind a reference",
+        explanation: "\
+`str` has no size of its own, so it appears only as `&str`. Write `&str`
+for a borrowed string, `String` for an owned one, and `&mut String` to
+grow a string through a reference:
+
+    fn f(s: str)           // E0321
+    fn f(s: &mut str)      // E0321
+    fn f(s: &str)          // ok
+    fn f(s: &mut String)   // ok",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
         code: "E0370",
         title: "a const initializer is not a constant expression",
         explanation: "\
@@ -868,10 +896,10 @@ Copy the global into a local, work on that, and store it back:
     },
     DiagnosticInfo {
         code: "E0425",
-        title: "this slice form is not supported yet, and a `string` has no slices",
+        title: "this slice form is not supported yet",
         explanation: "\
 A slice is built from the address of element zero of its base, plus a
-length. Two forms have neither yet, and a string has no slices at all.
+length. Two forms have neither yet.
 
 A NON-ZERO START BOUND would have to move the base pointer as well as
 the length, and the slice lowering addresses element zero:
@@ -882,13 +910,6 @@ the length, and the slice lowering addresses element zero:
 
 A BASE THAT CARRIES NO LENGTH, a type the checker left open, has no
 header to read the length from.
-
-A STRING has no slices: `t[a..b]` does not exist on one. Take a substring
-with `str.substring` from `needs std.str`:
-
-    let t = \"abcdef\"
-    let s = t[0..2]                    // E0425
-    let s = str.substring(t, 0, 2)     // ok
 
 Arrays, `Vec<T>` and slices all carry a length and can be sliced from
 zero.",

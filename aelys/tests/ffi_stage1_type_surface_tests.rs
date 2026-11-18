@@ -134,11 +134,6 @@ fn a_reference_counted_pointer_is_rejected_where_a_borrow_is_not() {
 }
 
 #[test]
-fn the_str_alias_is_rejected_exactly_like_string() {
-    rejected_e0615("F2-11", "unsafe extern fn probe(x: str)");
-}
-
-#[test]
 fn void_is_rejected_as_a_parameter_and_admitted_as_a_return() {
     rejected_e0615("F2-2", "unsafe extern fn probe(x: void)");
     let source = format!("unsafe extern fn probe(x: i64) -> void{MAIN}");

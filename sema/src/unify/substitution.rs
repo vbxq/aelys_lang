@@ -70,6 +70,7 @@ impl Substitution {
             | InferType::Bool
             | InferType::Char
             | InferType::String
+            | InferType::StrRef
             | InferType::Null
             | InferType::Never
             | InferType::Range

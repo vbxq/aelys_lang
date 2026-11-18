@@ -415,7 +415,7 @@ impl<'a> LoweringContext<'a> {
                     member,
                 } = &super::pin::peel(object).kind
                     && member == "bytes"
-                    && matches!(text.ty, InferType::String)
+                    && text.ty.is_str()
                     && super::pin::may_free(index)
                 {
                     let text_op = self.lower_expr(text);
@@ -472,6 +472,9 @@ impl<'a> LoweringContext<'a> {
                 )
             }
 
+            TypedExprKind::Slice { object, range } if object.ty.is_str() => {
+                self.lower_str_slice(object, range, sp)
+            }
             TypedExprKind::Slice { object, range } => {
                 self.lower_slice_expr(object, range, &expr.ty, sp)
             }
@@ -711,6 +714,20 @@ impl<'a> LoweringContext<'a> {
                         Rvalue::Call {
                             func: Callee::Named(symbol.to_string()),
                             args: lowered,
+                        },
+                        sp,
+                    );
+                }
+                if enum_name == "string" && (variant == "push_str" || variant == "push") {
+                    return self.lower_string_push(variant, args, sp);
+                }
+                if enum_name == "string" && variant == "with_capacity" {
+                    let cap = self.lower_expr(&args[0]);
+                    return self.emit_rvalue_to_temp(
+                        AirType::Str,
+                        Rvalue::Call {
+                            func: Callee::Named("__aelys_string_with_capacity".to_string()),
+                            args: vec![cap],
                         },
                         sp,
                     );
@@ -1889,6 +1906,88 @@ impl<'a> LoweringContext<'a> {
         }
         let _ = elem_ty; // element type is recovered by codegen from the Vec local
         Operand::Copy(vec_local)
+    }
+
+    fn lower_str_slice(
+        &mut self,
+        object: &TypedExpr,
+        range: &TypedExpr,
+        sp: Option<Span>,
+    ) -> Operand {
+        let (start, end, inclusive) = match &range.kind {
+            TypedExprKind::Range {
+                start,
+                end,
+                inclusive,
+            } => (start.as_deref(), end.as_deref(), *inclusive),
+            _ => (None, None, false),
+        };
+        let mut exprs = vec![object];
+        exprs.extend(start);
+        exprs.extend(end);
+        let mut ops = self.lower_pinned_operands(&exprs, sp).into_iter();
+        let text = ops.next().expect("the sliced string is lowered first");
+        let lo = match start {
+            Some(_) => ops.next().expect("one operand per written bound"),
+            None => Operand::Const(AirConst::IntLiteral(0)),
+        };
+        let hi = match end {
+            Some(_) => {
+                let hi = ops.next().expect("one operand per written bound");
+                if inclusive {
+                    self.emit_rvalue_to_temp(
+                        AirType::I64,
+                        Rvalue::BinaryOp(BinOp::Add, hi, Operand::Const(AirConst::IntLiteral(1))),
+                        sp,
+                    )
+                } else {
+                    hi
+                }
+            }
+            None => self.emit_rvalue_to_temp(
+                AirType::I64,
+                Rvalue::FieldAccess {
+                    base: text.clone(),
+                    field: "len".to_string(),
+                },
+                sp,
+            ),
+        };
+        self.emit_rvalue_to_temp(
+            AirType::Str,
+            Rvalue::Call {
+                func: Callee::Named("__aelys_str_substring_bytes".to_string()),
+                args: vec![text, lo, hi],
+            },
+            sp,
+        )
+    }
+
+    // the argument runs before the receiver address exists, so no buffer can move under it
+    fn lower_string_push(&mut self, variant: &str, args: &[TypedExpr], sp: Option<Span>) -> Operand {
+        let value = self.lower_expr(&args[1]);
+        let value = self.hold_operand(value, &args[1], &[&args[0]], false, sp);
+        let func = if variant == "push" {
+            "__aelys_string_push_char"
+        } else {
+            "__aelys_string_push"
+        };
+        let Some(addr) = self.place_addr_mode(&args[0], PlaceMode::Store) else {
+            self.report_ice(
+                "ICE: the receiver of a string push denotes no storage at AIR lowering; sema \
+                 must reject it (E0401)"
+                    .to_string(),
+            );
+            return Operand::Const(AirConst::Null);
+        };
+        self.emit(
+            AirStmtKind::CallVoid {
+                func: Callee::Named(func.to_string()),
+                args: vec![Operand::Copy(addr.ptr), value],
+            },
+            sp,
+        );
+        Operand::Const(AirConst::Null)
     }
 
     fn lower_vec_push(&mut self, args: &[TypedExpr], sp: Option<Span>) -> Operand {
@@ -3329,7 +3428,7 @@ impl<'a> LoweringContext<'a> {
                 }
                 TypedFmtStringPart::Expr(expr) => {
                     let val = lowered.next().expect("one operand per part");
-                    if matches!(expr.ty, InferType::String) {
+                    if expr.ty.is_str() {
                         operands.push(val);
                     } else {
                         let converted = self.emit_rvalue_to_temp(

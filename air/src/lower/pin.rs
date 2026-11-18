@@ -275,6 +275,7 @@ impl<'a> LoweringContext<'a> {
             | InferType::Tuple(_) => !crate::rc_paths::air_type_has_rc_in(&ty, self.defs()),
             // a value mono may still turn into a string is never copied without its share
             InferType::String
+            | InferType::StrRef
             | InferType::Vec(_)
             | InferType::Rc(_)
             | InferType::Null

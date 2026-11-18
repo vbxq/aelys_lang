@@ -1,0 +1,19 @@
+fn warm(s: &str) -> String {
+    let mut w = String::with_capacity(32)
+    w.push_str(s)
+    return w
+}
+
+struct P { name: String, n: i64 }
+
+fn main() {
+    let mut p1 = P { name: warm("p1"), n: 1 }
+    let mut p2 = p1
+    p2.name.push_str("x")
+    p1.name.push_str("w")
+    println(p1.name)
+    println(p2.name)
+    p2.name += "y"
+    println(p2.name)
+    println(p1.n + p2.n)
+}

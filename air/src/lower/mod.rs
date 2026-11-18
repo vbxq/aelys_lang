@@ -551,7 +551,7 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn counted(&self, ty: &InferType) -> bool {
-        if matches!(ty, InferType::String | InferType::Function { .. }) {
+        if matches!(ty, InferType::String | InferType::StrRef | InferType::Function { .. }) {
             return true;
         }
         if let InferType::Array(inner, _) = ty {
@@ -645,7 +645,7 @@ impl<'a> LoweringContext<'a> {
             InferType::F64 => AirType::F64,
             InferType::Bool => AirType::Bool,
             InferType::Char => AirType::Char,
-            InferType::String => AirType::Str,
+            InferType::String | InferType::StrRef => AirType::Str,
             InferType::Null => AirType::Ptr(Box::new(AirType::Void)),
             InferType::Function { params, ret, .. } => AirType::FnPtr {
                 params: params

@@ -102,7 +102,7 @@ impl<'a> LoweringContext<'a> {
             }
 
             TypedExprKind::Member { object, member } => {
-                if member == "bytes" && matches!(object.ty, InferType::String) {
+                if member == "bytes" && object.ty.is_str() {
                     if !aelys_sema::bytes_receiver_is_backed(object) {
                         self.report_ice(
                             "ICE: `.bytes` of a receiver that denotes no storage reached AIR \

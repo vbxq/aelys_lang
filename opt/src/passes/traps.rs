@@ -101,9 +101,7 @@ fn binary_may_trap_or_allocate(
             !matches!(right.kind, TypedExprKind::Int(d) if d != 0 && d != -1)
         }
         BinaryOp::Add => {
-            matches!(ty, InferType::String)
-                || matches!(left.ty, InferType::String)
-                || matches!(right.ty, InferType::String)
+            ty.is_str() || left.ty.is_str() || right.ty.is_str()
         }
         _ => false,
     }
@@ -129,5 +127,6 @@ fn may_be_null(ty: &InferType) -> bool {
             | InferType::Vec(_)
             | InferType::Slice { .. }
             | InferType::String
+            | InferType::StrRef
     )
 }

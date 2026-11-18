@@ -248,7 +248,7 @@ impl TypeInference {
         };
         match kind {
             ProjKind::Field(member) => match object {
-                InferType::String => match member.as_str() {
+                InferType::String | InferType::StrRef => match member.as_str() {
                     "len" => Some(InferType::I64),
                     "bytes" => Some(InferType::Slice {
                         elem: Box::new(InferType::U8),
@@ -264,7 +264,7 @@ impl TypeInference {
             ProjKind::FieldWrite(field) => self.struct_field_type(object, field),
             ProjKind::Index | ProjKind::Slice | ProjKind::IndexWrite => elem,
             ProjKind::Element => match object {
-                InferType::String => Some(InferType::Char),
+                InferType::String | InferType::StrRef => Some(InferType::Char),
                 _ => elem,
             },
             ProjKind::Deref | ProjKind::DerefWrite => match object {
@@ -383,7 +383,7 @@ impl TypeInference {
                 }
             }
             None => match (&kind, &object.ty) {
-                (ProjKind::Index, InferType::String) => {
+                (ProjKind::Index, InferType::String | InferType::StrRef) => {
                     self.errors
                         .push(TypeError::string_index_removed(false, object.span));
                 }
@@ -428,7 +428,7 @@ impl TypeInference {
         }
         let Some(projected) = self.project(&object.ty, &kind) else {
             match &kind {
-                ProjKind::IndexWrite if matches!(object.ty, InferType::String) => {
+                ProjKind::IndexWrite if object.ty.is_str() => {
                     self.errors
                         .push(TypeError::string_index_removed(true, object.span));
                 }

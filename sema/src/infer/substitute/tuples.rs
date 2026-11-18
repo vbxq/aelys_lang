@@ -140,7 +140,7 @@ impl TypeInference {
                 }
                 out.push(TypedFmtStringPart::Literal(")".to_string()));
             }
-            InferType::String => {
+            InferType::String | InferType::StrRef => {
                 out.push(TypedFmtStringPart::Literal("\"".to_string()));
                 out.push(TypedFmtStringPart::Expr(Box::new(value.clone())));
                 out.push(TypedFmtStringPart::Literal("\"".to_string()));

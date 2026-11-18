@@ -25,6 +25,7 @@ pub(super) fn occurs_check(var: TypeVarId, ty: &InferType) -> bool {
         | InferType::F64
         | InferType::Bool
         | InferType::String
+        | InferType::StrRef
         | InferType::Null
         | InferType::Never
         | InferType::Range

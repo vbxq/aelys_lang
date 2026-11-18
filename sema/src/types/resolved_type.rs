@@ -106,7 +106,7 @@ impl ResolvedType {
             InferType::F64 => ResolvedType::F64,
             InferType::Bool => ResolvedType::Bool,
             InferType::Char => ResolvedType::Char,
-            InferType::String => ResolvedType::String,
+            InferType::String | InferType::StrRef => ResolvedType::String,
             InferType::Null => ResolvedType::Null,
             // never represents unreachable code; map to null (void) for codegen.
             InferType::Never => ResolvedType::Null,

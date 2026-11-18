@@ -698,6 +698,24 @@ impl<'a> FunctionCodegen<'a> {
         self.declare_string_returning_fn("__aelys_str_fmt_precision", &[f64_ty, i64_ty])
     }
 
+    pub(crate) fn ensure_string_push_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_string_push") {
+            return function;
+        }
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        let i64_ty = self.context.i64_type().into();
+        let fn_ty = self
+            .context
+            .void_type()
+            .fn_type(&[ptr_ty, ptr_ty, i64_ty], false);
+        self.module.add_function("__aelys_string_push", fn_ty, None)
+    }
+
+    pub(crate) fn ensure_string_with_capacity_function(&self) -> FunctionValue<'static> {
+        let i64_ty = self.context.i64_type().into();
+        self.declare_string_returning_fn("__aelys_string_with_capacity", &[i64_ty])
+    }
+
     pub(crate) fn ensure_str_substring_bytes_function(&self) -> FunctionValue<'static> {
         let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
         let i64_ty = self.context.i64_type().into();

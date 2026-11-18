@@ -1,8 +1,8 @@
 use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason};
-use crate::typed_ast::TypedStmtKind;
+use crate::typed_ast::{TypedExpr, TypedExprKind, TypedStmtKind};
 use crate::types::InferType;
-use aelys_syntax::{Expr, Span, Stmt};
+use aelys_syntax::{Expr, ExprKind, Span, Stmt};
 
 impl TypeInference {
     pub(super) fn infer_if_stmt(
@@ -119,10 +119,50 @@ impl TypeInference {
         body: &Stmt,
         _span: Span,
     ) -> TypedStmtKind {
-        let typed_iterable = self.infer_expr(iterable);
+        let typed_iterable = match &iterable.kind {
+            ExprKind::Call { callee, args } if args.is_empty() => match &callee.kind {
+                ExprKind::Member { object, member } if member == "chars" || member == "bytes" => {
+                    let typed_object = self.infer_expr(object);
+                    if typed_object.ty.is_str() && member == "chars" {
+                        typed_object
+                    } else if typed_object.ty.is_str() {
+                        let span = typed_object.span;
+                        TypedExpr::new(
+                            TypedExprKind::Member {
+                                object: Box::new(typed_object),
+                                member: "bytes".to_string(),
+                            },
+                            InferType::Slice {
+                                elem: Box::new(InferType::U8),
+                                mutable: false,
+                            },
+                            span,
+                        )
+                    } else {
+                        let pretyped = self.stash_pretyped(typed_object);
+                        let call = Expr::new(
+                            ExprKind::Call {
+                                callee: Box::new(Expr::new(
+                                    ExprKind::Member {
+                                        object: Box::new(pretyped),
+                                        member: member.clone(),
+                                    },
+                                    callee.span,
+                                )),
+                                args: Vec::new(),
+                            },
+                            iterable.span,
+                        );
+                        self.infer_expr(&call)
+                    }
+                }
+                _ => self.infer_expr(iterable),
+            },
+            _ => self.infer_expr(iterable),
+        };
 
         let elem_type = match &typed_iterable.ty {
-            InferType::String => InferType::Char,
+            InferType::String | InferType::StrRef => InferType::Char,
             InferType::Vec(inner) => (**inner).clone(),
             InferType::Array(inner, _) => (**inner).clone(),
             InferType::Slice { elem, .. } => (**elem).clone(),

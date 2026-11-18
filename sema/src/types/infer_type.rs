@@ -17,6 +17,7 @@ pub enum InferType {
     // a validated unicode scalar value, 4 bytes wide and never an integer
     Char,
     String,
+    StrRef,
     Null,
 
     /// never is a subtype of every type `unify(never, t)` always succeeds
@@ -113,6 +114,7 @@ impl InferType {
             | InferType::Bool
             | InferType::Char
             | InferType::String
+            | InferType::StrRef
             | InferType::Null
             | InferType::Dyn(_) => true,
             InferType::Enum(_, args) | InferType::Struct(_, args) => {
@@ -122,6 +124,10 @@ impl InferType {
             InferType::Slice { elem, .. } => elem.is_concrete(),
             _ => false,
         }
+    }
+
+    pub fn is_str(&self) -> bool {
+        matches!(self, InferType::String | InferType::StrRef)
     }
 
     pub fn is_rc(&self) -> bool {
@@ -196,6 +202,9 @@ impl InferType {
                     mutable,
                 };
             }
+            if !mutable && matches!(ann.name.as_str(), "str" | "String" | "string") {
+                return InferType::StrRef;
+            }
             let mut base = ann.clone();
             base.reference = None;
             return InferType::Ref {
@@ -233,6 +242,9 @@ impl InferType {
                 .map(|p| Self::from_annotation(p))
                 .unwrap_or(InferType::Dynamic);
             return InferType::Rc(Box::new(inner));
+        }
+        if ann.name == "String" {
+            return InferType::String;
         }
         if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
             return InferType::Struct(ann.name.clone(), Vec::new());
@@ -356,6 +368,7 @@ impl InferType {
         let mut types = Self::all_numeric_types();
         types.push(InferType::Char);
         types.push(InferType::String);
+        types.push(InferType::StrRef);
         types
     }
 
@@ -499,6 +512,7 @@ impl InferType {
             InferType::Bool => write!(f, "bool"),
             InferType::Char => write!(f, "char"),
             InferType::String => write!(f, "string"),
+            InferType::StrRef => write!(f, "&str"),
             InferType::Null => write!(f, "()"),
             InferType::Never => write!(f, "Never"),
             InferType::Function { params, ret, nogc } => {
