@@ -11,7 +11,7 @@ impl TypeInference {
             .iter()
             .enumerate()
             .map(|(i, name)| {
-                let mut set = func.bounds.get(i).copied().unwrap_or_default();
+                let mut set = func.bounds.get(i).cloned().unwrap_or_default();
                 set.nogc |= func.is_nogc;
                 (name.clone(), set)
             })
@@ -32,7 +32,7 @@ impl TypeInference {
             name.clone(),
             self.type_param_bounds
                 .get(name)
-                .copied()
+                .cloned()
                 .unwrap_or_default(),
         ))
     }

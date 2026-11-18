@@ -86,6 +86,11 @@ impl TypeInference {
     ) {
         for operand in [left, right] {
             let ty = &operand.ty;
+            if matches!(ty, InferType::Struct(..) | InferType::Enum(..))
+                && self.impl_for("eq", ty).is_some()
+            {
+                continue;
+            }
             let answers = match ty {
                 InferType::Struct(name, _) => {
                     generic_scope.contains(name) || self.errors.iter().any(|e| e.span == span)
@@ -138,6 +143,27 @@ impl TypeInference {
         declared_type_params: &HashSet<String>,
     ) {
         if value.ty.has_vars() {
+            return;
+        }
+        if matches!(value.ty, InferType::Struct(..) | InferType::Enum(..))
+            && self.impl_for("Display", &value.ty).is_some()
+        {
+            return;
+        }
+        if let InferType::Struct(name, _) = &value.ty
+            && self.type_table.has_struct(name)
+            && !self.is_active_generic_placeholder_type(&value.ty, generic_scope, declared_type_params)
+        {
+            self.errors.push(TypeError::coded(
+                "E0732",
+                format!(
+                    "`{}` does not implement `Display`; write `impl Display for {}` to print it",
+                    crate::infer::unresolved::spelled(&value.ty),
+                    crate::modules::source_type_name(name)
+                ),
+                "not printable",
+                value.span,
+            ));
             return;
         }
         let printable = match &value.ty {
@@ -355,7 +381,7 @@ impl TypeInference {
                 .iter()
                 .enumerate()
                 .map(|(i, name)| {
-                    let mut set = func.bounds.get(i).copied().unwrap_or_default();
+                    let mut set = func.bounds.get(i).cloned().unwrap_or_default();
                     set.nogc |= func.declared_nogc;
                     (name.clone(), set)
                 })
@@ -438,7 +464,7 @@ impl TypeInference {
                 for arg in args {
                     self.validate_expr(arg, generic_scope, declared_type_params);
                 }
-                self.check_bound_call(callee, args);
+                self.check_bound_call(callee, args, &expr.ty);
                 if self.lambda_depth > 0
                     && let Some(TypedExprKind::Reference {
                         receiver_of: Some(m),

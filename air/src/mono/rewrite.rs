@@ -23,12 +23,15 @@ impl MonoContext {
             .collect();
 
         // pre-collect generic function signatures for type inference during rewriting
-        let generic_sigs: HashMap<String, (Vec<AirParam>, Vec<TypeParamId>)> = self
+        let generic_sigs: HashMap<String, (Vec<AirParam>, Vec<TypeParamId>, AirType)> = self
             .generic_functions
             .iter()
             .map(|(name, &idx)| {
                 let f = &program.functions[idx];
-                (name.clone(), (f.params.clone(), f.type_params.clone()))
+                (
+                    name.clone(),
+                    (f.params.clone(), f.type_params.clone(), f.ret_ty.clone()),
+                )
             })
             .collect();
         let generic_names: HashSet<&str> = generic_sigs.keys().map(|s| s.as_str()).collect();
@@ -78,7 +81,7 @@ impl MonoContext {
         stmt: &mut AirStmt,
         caller_params: &[AirParam],
         caller_locals: &[AirLocal],
-        generic_sigs: &HashMap<String, (Vec<AirParam>, Vec<TypeParamId>)>,
+        generic_sigs: &HashMap<String, (Vec<AirParam>, Vec<TypeParamId>, AirType)>,
         generic_names: &HashSet<&str>,
         mono_ret_types: &HashMap<String, AirType>,
         local_type_patches: &mut Vec<(LocalId, AirType)>,
@@ -88,9 +91,11 @@ impl MonoContext {
                 place,
                 rvalue: Rvalue::Call { func: callee, args },
             } => {
+                let dest = dest_of(place, caller_locals);
                 self.rewrite_callee(
                     callee,
                     args,
+                    dest.as_ref(),
                     caller_params,
                     caller_locals,
                     generic_sigs,
@@ -109,6 +114,7 @@ impl MonoContext {
                 self.rewrite_callee(
                     callee,
                     args,
+                    None,
                     caller_params,
                     caller_locals,
                     generic_sigs,
@@ -124,7 +130,7 @@ impl MonoContext {
         term: &mut AirTerminator,
         caller_params: &[AirParam],
         caller_locals: &[AirLocal],
-        generic_sigs: &HashMap<String, (Vec<AirParam>, Vec<TypeParamId>)>,
+        generic_sigs: &HashMap<String, (Vec<AirParam>, Vec<TypeParamId>, AirType)>,
         generic_names: &HashSet<&str>,
         mono_ret_types: &HashMap<String, AirType>,
         local_type_patches: &mut Vec<(LocalId, AirType)>,
@@ -136,9 +142,11 @@ impl MonoContext {
             ..
         } = term
         {
+            let dest = dest_of(ret, caller_locals);
             self.rewrite_callee(
                 callee,
                 args,
+                dest.as_ref(),
                 caller_params,
                 caller_locals,
                 generic_sigs,
@@ -158,18 +166,21 @@ impl MonoContext {
         &self,
         callee: &mut Callee,
         args: &[Operand],
+        dest: Option<&AirType>,
         caller_params: &[AirParam],
         caller_locals: &[AirLocal],
-        generic_sigs: &HashMap<String, (Vec<AirParam>, Vec<TypeParamId>)>,
+        generic_sigs: &HashMap<String, (Vec<AirParam>, Vec<TypeParamId>, AirType)>,
         generic_names: &HashSet<&str>,
     ) {
         if let Callee::Named(name) = callee
             && generic_names.contains(name.as_str())
         {
-            if let Some((gen_params, gen_type_params)) = generic_sigs.get(name.as_str()) {
+            if let Some((gen_params, gen_type_params, gen_ret)) = generic_sigs.get(name.as_str()) {
                 if let Some(type_args) = self.infer_type_args_from_sig(
                     gen_params,
                     gen_type_params,
+                    gen_ret,
+                    dest,
                     args,
                     caller_params,
                     caller_locals,
@@ -187,6 +198,8 @@ impl MonoContext {
         &self,
         generic_params: &[AirParam],
         type_params: &[TypeParamId],
+        ret_ty: &AirType,
+        dest: Option<&AirType>,
         args: &[Operand],
         caller_params: &[AirParam],
         caller_locals: &[AirLocal],
@@ -207,6 +220,19 @@ impl MonoContext {
         if !conflicts.is_empty() {
             return None;
         }
+        if let Some(dest) = dest
+            && !type_params.iter().all(|tp| resolved.contains_key(&tp.0))
+            && super::concrete(dest)
+        {
+            let mut found = HashMap::new();
+            let mut more = Vec::new();
+            self.unify_param(ret_ty, dest, type_params, &mut found, &mut more);
+            if more.is_empty() {
+                for (k, v) in found {
+                    resolved.entry(k).or_insert(v);
+                }
+            }
+        }
 
         let mut type_args = Vec::with_capacity(type_params.len());
         for tp in type_params {
@@ -214,4 +240,11 @@ impl MonoContext {
         }
         Some(type_args)
     }
+}
+
+fn dest_of(place: &Place, locals: &[AirLocal]) -> Option<AirType> {
+    let Place::Local(id) = place else {
+        return None;
+    };
+    locals.iter().find(|l| l.id == *id).map(|l| l.ty.clone())
 }

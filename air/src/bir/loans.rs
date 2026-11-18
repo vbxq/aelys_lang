@@ -48,6 +48,21 @@ pub fn check(bir: &BirProgram, summaries: &Summaries) -> Vec<BirDiagnostic> {
     errors
 }
 
+fn may_hold_ref(ty: &InferType) -> bool {
+    match ty {
+        InferType::Ref { .. }
+        | InferType::Slice { .. }
+        | InferType::Function { .. }
+        | InferType::Var(_)
+        | InferType::Dynamic => true,
+        InferType::Struct(_, a) | InferType::Enum(_, a) | InferType::Tuple(a) => {
+            a.iter().any(may_hold_ref)
+        }
+        InferType::Array(i, _) | InferType::Vec(i) | InferType::Rc(i) => may_hold_ref(i),
+        _ => false,
+    }
+}
+
 fn local_is_ref(body: &BirBody, l: BirLocalId) -> bool {
     body.locals
         .get(l.0 as usize)
@@ -331,6 +346,10 @@ fn compute_holds(body: &BirBody, loans: &[Loan], summaries: &Summaries) -> Vec<H
                         }
                     }
                 }
+                _ if !body
+                    .locals
+                    .get(dest.local.0 as usize)
+                    .is_none_or(|l| may_hold_ref(&l.ty)) => {}
                 _ => {
                     // none / ambiguous / a rejected (escapes_local) callee: over-approximate by
                     for arg in args {

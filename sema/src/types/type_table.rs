@@ -48,6 +48,10 @@ impl TypeTable {
         self.structs.get(name)
     }
 
+    pub fn nominal_names(&self) -> impl Iterator<Item = &String> {
+        self.structs.keys().chain(self.enums.keys())
+    }
+
     pub fn has_struct(&self, name: &str) -> bool {
         self.structs.contains_key(name)
     }

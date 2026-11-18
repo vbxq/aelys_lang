@@ -1,2 +1,2 @@
-refuse E0902
-printing a struct
+refuse E0732
+`P` does not implement `Display`

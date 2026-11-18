@@ -51,6 +51,37 @@ pub struct MethodEntry {
     pub is_pub: bool,
     pub module: String,
     pub value: Option<ModuleValue>,
+    pub head: Option<(Vec<String>, InferType)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TraitMethodSig {
+    pub name: String,
+    pub receiver: aelys_syntax::Receiver,
+    pub has_default: bool,
+    pub stub: String,
+    pub ty: InferType,
+}
+
+#[derive(Debug, Clone)]
+pub struct TraitDef {
+    pub name: String,
+    pub qualified: String,
+    pub module: String,
+    pub is_pub: bool,
+    pub methods: Vec<TraitMethodSig>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImplDef {
+    pub trait_q: String,
+    pub type_params: Vec<String>,
+    pub bounds: Vec<TypeBounds>,
+    pub self_ty: InferType,
+    pub methods: Vec<(String, String)>,
+    pub module: String,
+    pub span: aelys_syntax::Span,
+    pub values: Vec<ModuleValue>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -61,6 +92,8 @@ pub struct ModuleExports {
     pub reachable: HashMap<String, ModuleTypeDef>,
     pub aliases: HashMap<String, AliasDef>,
     pub methods: HashMap<String, Vec<MethodEntry>>,
+    pub traits: HashMap<String, TraitDef>,
+    pub impls: Vec<ImplDef>,
 }
 
 pub enum Lookup<'a, T> {
@@ -95,6 +128,10 @@ pub struct ModuleImports {
     pub types: HashMap<String, ModuleType>,
     pub aliases: HashMap<String, AliasDef>,
     pub methods: HashMap<String, Vec<MethodEntry>>,
+    pub module_path: String,
+    pub traits: HashMap<String, TraitDef>,
+    pub all_traits: HashMap<String, TraitDef>,
+    pub impls: Vec<ImplDef>,
 }
 
 impl ModuleImports {
@@ -111,7 +148,7 @@ use crate::types::{EnumVariant, StructField};
 use std::collections::HashSet;
 
 pub fn qualify_value(path: &str, name: &str) -> String {
-    if path.is_empty() {
+    if path.is_empty() || name.starts_with("__impl$") || name.starts_with("__trait$") {
         return name.to_string();
     }
     if let Some(rest) = name.strip_prefix("__lambda_") {
@@ -321,7 +358,7 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
                     .iter()
                     .enumerate()
                     .map(|(i, _)| {
-                        let mut set = func.bounds.get(i).copied().unwrap_or_default();
+                        let mut set = func.bounds.get(i).cloned().unwrap_or_default();
                         set.nogc |= func.declared_nogc;
                         set
                     })
@@ -357,6 +394,7 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
                             is_pub: func.is_pub,
                             module: path.to_string(),
                             value: Some(value.clone()),
+                            head: None,
                         });
                 }
                 exports.values.insert(func.name.clone(), value);
@@ -485,5 +523,22 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
         exports.aliases.insert(name.clone(), def);
     }
 
+    for def in &program.traits {
+        let mut def = def.clone();
+        for m in def.methods.iter_mut() {
+            m.ty = qualify_infer_type(&m.ty, path, &owned);
+        }
+        exports.traits.insert(def.name.clone(), def);
+    }
+    for imp in &program.impls {
+        let mut imp = imp.clone();
+        imp.self_ty = qualify_infer_type(&imp.self_ty, path, &owned);
+        imp.values = imp
+            .methods
+            .iter()
+            .filter_map(|(_, sym)| exports.values.get(sym).cloned())
+            .collect();
+        exports.impls.push(imp);
+    }
     exports
 }

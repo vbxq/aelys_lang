@@ -357,6 +357,15 @@ impl TypeInference {
                 ));
                 TypedStmtKind::Block(Vec::new())
             }
+            StmtKind::Trait(decl) => {
+                self.errors.push(TypeError::coded(
+                    "E0757",
+                    "a `trait` belongs at the top level of a module".to_string(),
+                    "nested trait",
+                    decl.span,
+                ));
+                TypedStmtKind::Block(Vec::new())
+            }
             StmtKind::Impl(decl) => {
                 self.errors.push(TypeError::coded(
                     "E0340",

@@ -1237,6 +1237,98 @@ satisfy neither.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
+        code: "E0750",
+        title: "trait used as a type",
+        explanation: "\
+A trait names a set of methods, not a type. Traits dispatch statically:
+take a type parameter bounded by the trait instead of a reference to the
+trait, and `dyn` trait objects are not supported:
+
+    fn f(x: &Area) -> i64 { ... }          // E0750
+    fn f<T: Area>(x: &T) -> i64 { ... }    // ok",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0751",
+        title: "`nogc` cannot be implemented",
+        explanation: "\
+`nogc` is a bound the compiler derives from a type's fields; no `impl`
+can grant it, and a trait method cannot declare it, since the effect of a
+trait method is inferred from each impl:
+
+    impl nogc for P {}                     // E0751",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0752",
+        title: "incomplete trait impl",
+        explanation: "\
+An `impl Trait for T` defines every method of the trait that has no
+default body. `impl ord for T` also needs `impl eq for T`:
+
+    trait Shape { fn area(&self) -> i64  fn perimeter(&self) -> i64 }
+    impl Shape for Sq { fn area(&self) -> i64 { ... } }   // E0752",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0753",
+        title: "conflicting trait impl",
+        explanation: "\
+A type implements a trait at most once, the impls of one trait never
+overlap (a generic impl and a concrete one for the same type do), and a
+builtin type that satisfies `eq`, `ord` or `Display` structurally cannot
+implement it again:
+
+    impl Display for i64 { ... }           // E0753",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0754",
+        title: "impl method signature differs from the trait",
+        explanation: "\
+A method in an `impl Trait for T` takes the receiver, the parameters
+and the return type the trait declares, with `Self` read as `T`.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0755",
+        title: "method not in the trait",
+        explanation: "\
+An `impl Trait for T` defines only methods the trait declares; put any
+other method in an inherent `impl T` block.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0756",
+        title: "method outside the bounds",
+        explanation: "\
+Inside a generic function, a value of a type parameter offers only the
+methods of the traits in its bounds:
+
+    fn f<T: Area>(x: &T) -> i64 { return x.name() }   // E0756",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0757",
+        title: "trait impl in the wrong place",
+        explanation: "\
+An `impl Trait for T` lives in the module that declares the trait or the
+one that declares the type. It names a type, never a bare type parameter
+(`impl<T> Tr for T`), and every type parameter it declares appears in that
+type.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0758",
+        title: "undecided implementing type",
+        explanation: "\
+A call to an associated function of a trait says which type implements
+it: call it on a type (`M::zero()`), on a type parameter (`T::zero()`),
+or where the expected type fixes `Self`. An associated function whose
+signature never mentions `Self` cannot be declared.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
         code: "E0759",
         title: "ambiguous method",
         explanation: "\

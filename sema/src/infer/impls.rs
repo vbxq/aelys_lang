@@ -18,8 +18,10 @@ pub(crate) enum MethodLookup {
 impl TypeInference {
     pub(super) fn collect_impls(&mut self, stmts: Vec<Stmt>) -> Vec<Stmt> {
         let mut out = Vec::with_capacity(stmts.len());
+        let mut trait_impls = Vec::new();
         for stmt in stmts {
             match stmt.kind {
+                StmtKind::Impl(decl) if decl.trait_ref.is_some() => trait_impls.push(decl),
                 StmtKind::Impl(decl) => {
                     for func in self.lower_impl(decl) {
                         let span = func.span;
@@ -27,6 +29,14 @@ impl TypeInference {
                     }
                 }
                 kind => out.push(Stmt::new(kind, stmt.span)),
+            }
+        }
+        for decl in trait_impls {
+            let mut funcs = Vec::new();
+            self.lower_trait_impl(decl, &mut funcs);
+            for func in funcs {
+                let span = func.span;
+                out.push(Stmt::new(StmtKind::Function(func), span));
             }
         }
         out
@@ -220,6 +230,7 @@ impl TypeInference {
                 is_pub: func.is_pub,
                 module: String::new(),
                 value: None,
+                head: None,
             });
 
             let mut params = Vec::with_capacity(func.params.len() + 1);
@@ -233,7 +244,7 @@ impl TypeInference {
                 };
                 params.push(Parameter::new(
                     "self".to_string(),
-                    false,
+                    method.mut_self,
                     Some(ann),
                     func.span,
                 ));
@@ -257,7 +268,7 @@ impl TypeInference {
                 .collect();
             for (i, b) in decl.bounds.iter().enumerate() {
                 if let Some(slot) = bounds.get_mut(i) {
-                    *slot = *b;
+                    *slot = b.clone();
                 }
             }
             let own = func.type_params.len();
@@ -287,11 +298,15 @@ impl TypeInference {
             0 => MethodLookup::Missing,
             1 => MethodLookup::Found(hits.pop().expect("one hit")),
             _ => {
-                let names: Vec<String> = hits.iter().map(|e| e.fn_name.clone()).collect();
+                let names: Vec<String> = hits
+                    .iter()
+                    .map(|e| super::traits::provider_shown(&e.fn_name))
+                    .collect();
                 self.errors.push(TypeError::coded(
                     "E0759",
                     format!(
-                        "`{name}` is ambiguous on `{}`: it is provided by {}",
+                        "`{name}` is ambiguous on `{}`: it is provided by both {}; call it by \
+                         its trait path",
                         crate::modules::source_type_name(type_key),
                         names
                             .iter()
@@ -364,7 +379,7 @@ pub(crate) fn annotation_shown(ann: &TypeAnnotation) -> String {
     s
 }
 
-fn subst_ann(ann: &mut TypeAnnotation, head: &TypeAnnotation) {
+pub(crate) fn subst_ann(ann: &mut TypeAnnotation, head: &TypeAnnotation) {
     if ann.name == "Self" && !ann.is_function_type() && !ann.is_slice {
         let reference = ann.reference;
         let span = ann.span;
@@ -395,7 +410,7 @@ fn subst_name(name: &mut String, head: &TypeAnnotation) {
     }
 }
 
-fn subst_stmts(stmts: &mut [Stmt], head: &TypeAnnotation) {
+pub(crate) fn subst_stmts(stmts: &mut [Stmt], head: &TypeAnnotation) {
     for stmt in stmts {
         subst_stmt(stmt, head);
     }
@@ -479,7 +494,8 @@ fn subst_stmt(stmt: &mut Stmt, head: &TypeAnnotation) {
         | StmtKind::Needs(_)
         | StmtKind::StructDecl { .. }
         | StmtKind::EnumDecl { .. }
-        | StmtKind::Impl(_) => {}
+        | StmtKind::Impl(_)
+        | StmtKind::Trait(_) => {}
     }
 }
 

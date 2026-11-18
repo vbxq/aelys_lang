@@ -206,7 +206,10 @@ pub struct ReservedUserName {
 pub fn reserved_user_names(program: &TypedProgram) -> Vec<ReservedUserName> {
     let mut found = Vec::new();
     crate::bir::build::for_each_fn_decl(&program.stmts, &mut |func, _parent| {
-        if func.name.starts_with(RESERVED_PREFIX) {
+        if func.name.starts_with(RESERVED_PREFIX)
+            && !func.name.starts_with("__trait$")
+            && !func.name.starts_with("__impl$")
+        {
             found.push(ReservedUserName {
                 name: func.name.clone(),
                 span: func.span,

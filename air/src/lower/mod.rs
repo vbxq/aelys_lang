@@ -331,6 +331,7 @@ impl<'a> LoweringContext<'a> {
         if !self.lowering_errors.is_empty() {
             return Err(self.lowering_errors);
         }
+        let impls = self.lower_impl_table();
         Ok(AirProgram {
             functions: self.functions,
             structs: self.structs,
@@ -340,6 +341,7 @@ impl<'a> LoweringContext<'a> {
             mono_instances: Vec::new(),
             struct_sizes: std::collections::HashMap::new(),
             rc_type_table: crate::rc_types::RcTypeTable::default(),
+            impls,
         })
     }
 
@@ -561,6 +563,23 @@ impl<'a> LoweringContext<'a> {
         self.carriers().carries_string(&air)
     }
 
+    fn lower_impl_table(&mut self) -> Vec<crate::AirImpl> {
+        let mut out = Vec::new();
+        for imp in &self.program.impls {
+            let saved = std::mem::take(&mut self.type_params_map);
+            let type_params = self.lower_type_params(&imp.type_params);
+            let self_ty = self.lower_type_from_infer(&imp.self_ty);
+            self.type_params_map = saved;
+            out.push(crate::AirImpl {
+                trait_q: imp.trait_q.clone(),
+                type_params,
+                self_ty,
+                methods: imp.methods.clone(),
+            });
+        }
+        out
+    }
+
     pub(super) fn lower_type_params(&mut self, type_params: &[String]) -> Vec<TypeParamId> {
         type_params
             .iter()
@@ -711,6 +730,7 @@ impl<'a> LoweringContext<'a> {
             mono_instances: vec![],
             struct_sizes: std::collections::HashMap::new(),
             rc_type_table: crate::rc_types::RcTypeTable::default(),
+            impls: Vec::new(),
         };
 
         probe = crate::mono::monomorphize(probe)

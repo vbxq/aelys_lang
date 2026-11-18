@@ -2,7 +2,8 @@ use super::Parser;
 use aelys_common::Result;
 use aelys_common::error::CompileErrorKind;
 use aelys_syntax::{
-    Decorator, ForeignConv, ForeignDecl, Function, Receiver, Stmt, StmtKind, TokenKind, TypeBounds,
+    Decorator, ForeignConv, ForeignDecl, Function, Receiver, Stmt, StmtKind, TokenKind, TraitRef,
+    TypeBounds,
 };
 
 impl Parser {
@@ -17,10 +18,65 @@ impl Parser {
                 found: self.peek().kind.to_string(),
             }));
         };
-        if !set.set(&name) {
-            return Err(self.error(CompileErrorKind::UnknownTypeBound { name }));
+        let span = self.peek().span;
+        self.advance();
+        if set.set(&name) {
+            return Ok(());
+        }
+        let mut path = name;
+        while self.check(&TokenKind::Dot)
+            && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
+        {
+            self.advance();
+            path.push('.');
+            path.push_str(&self.consume_identifier("trait name segment")?);
+        }
+        let span = span.merge(self.previous().span);
+        let r = TraitRef { name: path, span };
+        if !set.traits.contains(&r) {
+            set.traits.push(r);
+        }
+        Ok(())
+    }
+
+    pub(super) fn parse_bound_list(&mut self) -> Result<TypeBounds> {
+        let mut set = TypeBounds::default();
+        loop {
+            self.parse_type_bound(&mut set)?;
+            if !self.match_token(&TokenKind::Plus) {
+                break;
+            }
+        }
+        Ok(set)
+    }
+
+    pub(super) fn parse_where_clause(
+        &mut self,
+        type_params: &[String],
+        bounds: &mut Vec<TypeBounds>,
+    ) -> Result<()> {
+        if !matches!(&self.peek().kind, TokenKind::Identifier(n) if n == "where") {
+            return Ok(());
         }
         self.advance();
+        loop {
+            let span = self.peek().span;
+            let name = self.consume_identifier("type parameter")?;
+            self.consume(&TokenKind::Colon, ":")?;
+            let set = self.parse_bound_list()?;
+            let Some(i) = type_params.iter().position(|p| *p == name) else {
+                return Err(self.rule(
+                    106,
+                    &format!("`where` names `{name}`, which is not a type parameter of this item"),
+                    span,
+                ));
+            };
+            bounds.resize(type_params.len(), TypeBounds::default());
+            bounds[i].merge(&set);
+            if !self.match_token(&TokenKind::Comma) || self.check(&TokenKind::LBrace) {
+                break;
+            }
+        }
         Ok(())
     }
 
@@ -67,6 +123,17 @@ impl Parser {
         is_nogc: bool,
         allow_receiver: bool,
     ) -> Result<(Function, Receiver)> {
+        self.function_item_with(decorators, is_pub, is_nogc, allow_receiver, false)
+    }
+
+    pub(super) fn function_item_with(
+        &mut self,
+        decorators: Vec<Decorator>,
+        is_pub: bool,
+        is_nogc: bool,
+        allow_receiver: bool,
+        body_optional: bool,
+    ) -> Result<(Function, Receiver)> {
         let start_span = self.peek().span;
         self.advance();
 
@@ -77,15 +144,11 @@ impl Parser {
             let mut bounds = Vec::new();
             loop {
                 params.push(self.consume_identifier("type parameter")?);
-                let mut set = TypeBounds::default();
-                if self.match_token(&TokenKind::Colon) {
-                    loop {
-                        self.parse_type_bound(&mut set)?;
-                        if !self.match_token(&TokenKind::Plus) {
-                            break;
-                        }
-                    }
-                }
+                let set = if self.match_token(&TokenKind::Colon) {
+                    self.parse_bound_list()?
+                } else {
+                    TypeBounds::default()
+                };
                 bounds.push(set);
                 if !self.match_token(&TokenKind::Comma) {
                     break;
@@ -100,19 +163,14 @@ impl Parser {
         self.consume(&TokenKind::LParen, "(")?;
 
         let mut receiver = Receiver::None;
+        self.mut_self = false;
         if let Some((kind, len)) = self.receiver_ahead() {
             if !allow_receiver {
                 return Err(self.error(CompileErrorKind::MethodSyntax {
                     message: Self::self_param_message(),
                 }));
             }
-            if self.peek_at(0).kind == TokenKind::Mut {
-                return Err(self.error(CompileErrorKind::MethodSyntax {
-                    message: "a `mut self` receiver is not supported; take `self` and write \
-                              `let mut s = self` in the body"
-                        .to_string(),
-                }));
-            }
+            self.mut_self = self.peek_at(0).kind == TokenKind::Mut;
             for _ in 0..len {
                 self.advance();
             }
@@ -150,9 +208,16 @@ impl Parser {
             None
         };
 
-        self.consume(&TokenKind::LBrace, "{")?;
+        let mut bounds = bounds;
+        self.parse_where_clause(&type_params, &mut bounds)?;
 
-        let body = self.block_statements()?;
+        let body = if body_optional && !self.check(&TokenKind::LBrace) {
+            self.bodiless = true;
+            Vec::new()
+        } else {
+            self.consume(&TokenKind::LBrace, "{")?;
+            self.block_statements()?
+        };
         let end_span = self.previous().span;
 
         let function = Function {

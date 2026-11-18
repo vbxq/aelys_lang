@@ -16,6 +16,8 @@ pub struct TypedProgram {
     pub type_table: TypeTable,
     pub literal_globals: std::collections::HashMap<String, LiteralInit>,
     pub decls: ModuleDecls,
+    pub traits: Vec<crate::modules::TraitDef>,
+    pub impls: Vec<crate::modules::ImplDef>,
 }
 
 #[derive(Debug, Clone, Default)]

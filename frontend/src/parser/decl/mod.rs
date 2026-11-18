@@ -68,6 +68,16 @@ impl Parser {
             return self.impl_declaration();
         }
 
+        if self.starts_trait() {
+            if !decorators.is_empty() {
+                return Err(self.error(CompileErrorKind::UnexpectedToken {
+                    expected: "function after decorator".to_string(),
+                    found: self.peek().kind.to_string(),
+                }));
+            }
+            return self.trait_declaration(is_pub);
+        }
+
         if self.check(&TokenKind::Enum) {
             if !decorators.is_empty() {
                 return Err(self.error(CompileErrorKind::UnexpectedToken {

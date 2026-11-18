@@ -156,10 +156,17 @@ fn build_imports(
         is_importable: !unit.dotted.is_empty(),
         ..Default::default()
     };
+    imports.module_path = unit.dotted.clone();
     for module in exports {
         for (ty, entries) in &module.methods {
             imports.methods.insert(ty.clone(), entries.clone());
         }
+        for def in module.traits.values() {
+            imports
+                .all_traits
+                .insert(def.qualified.clone(), def.clone());
+        }
+        imports.impls.extend(module.impls.iter().cloned());
     }
     for import in &unit.imports {
         match import {
@@ -191,6 +198,20 @@ fn build_imports(
                             ));
                         }
                         Lookup::Missing => {}
+                    }
+                    if let Some(def) = module.traits.get(name) {
+                        if !def.is_pub {
+                            return Err(import_error(
+                                unit,
+                                *span,
+                                CompileErrorKind::SymbolNotPublic {
+                                    symbol: name.clone(),
+                                    module: module.path.clone(),
+                                },
+                            ));
+                        }
+                        imports.traits.insert(name.clone(), def.clone());
+                        continue;
                     }
                     if let Some(def) = module.aliases.get(name) {
                         if !def.is_pub {
@@ -548,6 +569,29 @@ fn air_stage(
         mono_errors_to_error(errors, fallback_source_span(src.as_ref()), src.clone())
     })?;
     aelys_air::passes::never_arms::cut_never_arms(&mut air);
+    let effect_errors = {
+        let mut effects = std::collections::HashMap::new();
+        let mut declared = HashSet::new();
+        for (front, typed_program) in fronts.iter().zip(typed.iter()) {
+            for (name, set) in &front.effects {
+                effects.insert(name.clone(), *set);
+            }
+            for stmt in &typed_program.stmts {
+                if let aelys_sema::TypedStmtKind::Function(func) = &stmt.kind
+                    && func.declared_nogc
+                {
+                    declared.insert(aelys_sema::modules::qualify_value(&front.dotted, &func.name));
+                }
+            }
+        }
+        aelys_air::passes::trait_effects::check_instance_effects(&mut air, &effects, &declared)
+    };
+    if !effect_errors.is_empty() {
+        let files: Vec<Arc<Source>> = fronts.iter().map(|f| f.source.clone()).collect();
+        return Err(
+            instance_surface_errors_to_error(effect_errors, &air, &files, src.clone()).into(),
+        );
+    }
     aelys_air::passes::generic_print::format_strings_by_copy(&mut air);
     // mono joins the name and its type arguments with `_`, so `f<a_b>` and `f_a<b>` land on one
     let duplicates = aelys_air::symbols::duplicate_symbols(&air);

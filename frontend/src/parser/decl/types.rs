@@ -117,6 +117,22 @@ impl Parser {
             return Ok(TypeAnnotation::tuple(elems, start_span.merge(end_span)));
         }
 
+        if matches!(&self.peek().kind, TokenKind::Identifier(n) if n == "dyn")
+            && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
+        {
+            self.advance();
+            let trait_name = self.consume_identifier("trait name")?;
+            let end = self.previous().span;
+            return Err(self.rule(
+                750,
+                &format!(
+                    "`dyn {trait_name}` is a trait used as a type, and trait objects are \
+                     not supported; take a type parameter `<T: {trait_name}>` instead"
+                ),
+                start_span.merge(end),
+            ));
+        }
+
         let mut name = self.consume_identifier("type name")?;
 
         // a module-qualified type is one name, and `.` is not an identifier character

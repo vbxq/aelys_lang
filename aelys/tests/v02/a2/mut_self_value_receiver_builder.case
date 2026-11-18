@@ -1,0 +1,20 @@
+struct Cfg { n: i64, k: i64 }
+
+impl Cfg {
+    fn new() -> Cfg { return Cfg { n: 1, k: 2 } }
+    fn with_n(mut self, x: i64) -> Cfg {
+        self.n = x
+        return self
+    }
+    fn with_k(mut self, x: i64) -> Self {
+        self.k = self.k * x
+        return self
+    }
+}
+
+fn main() {
+    let base = Cfg::new()
+    let c = base.with_n(40).with_k(3)
+    println(c.n + c.k)
+    println(base.n * 100 + base.k)
+}

@@ -71,6 +71,12 @@ impl Default for TypeInference {
             method_tparams: HashMap::new(),
             probe_subst: crate::unify::Substitution::new(),
             probe_upto: 0,
+            trait_names: HashMap::new(),
+            trait_defs: HashMap::new(),
+            impl_defs: Vec::new(),
+            local_impls: Vec::new(),
+            local_traits: Vec::new(),
+            used_builtin_stubs: HashSet::new(),
         }
     }
 }
@@ -443,6 +449,20 @@ impl TypeInference {
             return;
         }
 
+        if self.is_trait_name(&ann.name) {
+            self.errors.push(TypeError::coded(
+                "E0750",
+                format!(
+                    "the trait `{}` is used as a type, and trait objects are not supported; take \
+                     a type parameter `<T: {}>` instead",
+                    ann.name, ann.name
+                ),
+                "trait used as a type",
+                ann.span,
+            ));
+            return;
+        }
+
         if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
             if self.type_table.has_struct(&ann.name)
                 || self.type_table.has_enum(&ann.name)
@@ -539,14 +559,18 @@ impl TypeInference {
         inf.collect_enums(&stmts);
         inf.resolve_struct_fields(&stmts);
         inf.check_alias_bodies();
+        let stmts = inf.collect_traits(stmts);
         let stmts = inf.collect_impls(stmts);
         // a nominal holding a vec by value would leak its buffer, since carrier-vec
         inf.reject_nominal_vec_carriers(&stmts);
         inf.reject_multi_variant_rc_enums(&stmts);
         inf.reject_polymorphic_recursion(&stmts);
         inf.collect_signatures(&stmts, "");
+        inf.fill_trait_sigs();
+        inf.check_ord_has_eq();
 
-        let typed_stmts = inf.infer_stmts(&stmts);
+        let mut typed_stmts = inf.infer_stmts(&stmts);
+        typed_stmts.extend(inf.infer_used_builtin_stubs());
 
         let subst = inf.solve_constraints();
         inf.replay_carrier_checks(&subst);
@@ -608,6 +632,16 @@ impl TypeInference {
                 type_table: type_table.clone(),
                 literal_globals: inf.literal_globals,
                 decls: inf.module_decls,
+                traits: inf
+                    .local_traits
+                    .iter()
+                    .filter_map(|q| inf.trait_defs.get(q).cloned())
+                    .collect(),
+                impls: inf
+                    .local_impls
+                    .iter()
+                    .map(|&i| inf.impl_defs[i].clone())
+                    .collect(),
             },
             warnings: inf.warnings,
             deferred_errors,

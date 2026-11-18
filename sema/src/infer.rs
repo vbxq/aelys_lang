@@ -16,6 +16,7 @@ mod signatures;
 mod stmt;
 mod structs;
 mod substitute;
+pub(crate) mod traits;
 pub(crate) mod unresolved;
 mod usefulness;
 mod validate;
@@ -92,4 +93,10 @@ pub struct TypeInference {
     method_tparams: HashMap<String, Vec<String>>,
     probe_subst: crate::unify::Substitution,
     probe_upto: usize,
+    pub(crate) trait_names: HashMap<String, String>,
+    pub(crate) trait_defs: HashMap<String, crate::modules::TraitDef>,
+    pub(crate) impl_defs: Vec<crate::modules::ImplDef>,
+    pub(crate) local_impls: Vec<usize>,
+    pub(crate) local_traits: Vec<String>,
+    pub(crate) used_builtin_stubs: HashSet<String>,
 }

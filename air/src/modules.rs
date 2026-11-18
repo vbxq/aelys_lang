@@ -135,6 +135,9 @@ pub fn qualify(program: &mut AirProgram, path: &str) {
     for function in &mut program.functions {
         qualify_function(function, &q);
     }
+    for imp in &mut program.impls {
+        qualify_type(&mut imp.self_ty, &q);
+    }
 }
 
 fn is_mangle_delimiter(b: u8) -> bool {
@@ -395,6 +398,7 @@ pub fn merge(programs: Vec<AirProgram>) -> AirProgram {
         mono_instances: Vec::new(),
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: Default::default(),
+        impls: Vec::new(),
     };
 
     let mut base = 0u32;
@@ -419,7 +423,15 @@ pub fn merge(programs: Vec<AirProgram>) -> AirProgram {
         }
         merged.enums.extend(program.enums);
         merged.globals.extend(program.globals);
-        merged.functions.extend(program.functions);
+        merged.impls.extend(program.impls);
+        for function in program.functions {
+            if function.name.starts_with("__trait$")
+                && merged.functions.iter().any(|f| f.name == function.name)
+            {
+                continue;
+            }
+            merged.functions.push(function);
+        }
     }
 
     merged

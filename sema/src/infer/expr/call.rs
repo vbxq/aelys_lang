@@ -117,7 +117,7 @@ impl TypeInference {
         }
     }
 
-    pub(super) fn infer_call_expr(
+    pub(crate) fn infer_call_expr(
         &mut self,
         callee: &Expr,
         args: &[Expr],

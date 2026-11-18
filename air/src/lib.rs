@@ -286,6 +286,15 @@ pub struct AirProgram {
     pub mono_instances: Vec<MonoInstance>,
     pub struct_sizes: std::collections::HashMap<String, layout::TypeLayout>,
     pub rc_type_table: rc_types::RcTypeTable,
+    pub impls: Vec<AirImpl>,
+}
+
+#[derive(Clone)]
+pub struct AirImpl {
+    pub trait_q: String,
+    pub type_params: Vec<TypeParamId>,
+    pub self_ty: AirType,
+    pub methods: Vec<(String, String)>,
 }
 
 #[derive(Clone)]
@@ -300,6 +309,7 @@ pub struct AirGlobal {
 #[derive(Clone)]
 pub struct MonoInstance {
     pub original: FunctionId,
+    pub original_name: String,
     pub type_args: Vec<AirType>,
     pub result: FunctionId,
 }

@@ -281,6 +281,19 @@ impl TypeInference {
             }
             return (TypedExprKind::Null, InferType::Dynamic);
         }
+        if !self.type_table.has_struct(enum_name)
+            && !self.type_table.has_enum(enum_name)
+            && !self.import_aliases.contains_key(enum_name)
+        {
+            if let Some((tp, bounds)) =
+                self.bounds_on_type_param(&InferType::Struct(enum_name.to_string(), Vec::new()))
+            {
+                return self.param_path_call(&tp, &bounds, variant, args, span);
+            }
+            if let Some(q) = self.resolve_trait_name(enum_name) {
+                return self.trait_path_call(&q, variant, args, span);
+            }
+        }
         let resolved = self.air_type_name(enum_name, span);
         let enum_name = resolved.as_str();
         if let crate::infer::impls::MethodLookup::Found(entry) =

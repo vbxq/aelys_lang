@@ -75,8 +75,66 @@ impl TypeInference {
             InferType::Ref { referent, mutable } => ((**referent).clone(), Some(*mutable)),
             other => (other.clone(), None),
         };
+        if let Some((tp, bounds)) = self.bounds_on_type_param(&base) {
+            let Some(entry) = self.bound_method(&tp, &bounds, member, span) else {
+                for a in args {
+                    self.infer_expr(a);
+                }
+                return Ok((TypedExprKind::Null, InferType::Dynamic));
+            };
+            self.note_stub_use(&entry.fn_name);
+            return Ok(self.desugar_method_call(
+                typed_object,
+                &base,
+                via_ref,
+                &tp,
+                entry,
+                args,
+                span,
+            ));
+        }
+        if !matches!(
+            base,
+            InferType::Struct(..) | InferType::Enum(..) | InferType::Var(_) | InferType::Dynamic
+        ) && !self.trait_candidates(&base, member).is_empty()
+        {
+            let key = base.to_string();
+            return Ok(match self.lookup_for(&base, member, span) {
+                MethodLookup::Found(entry) => {
+                    self.note_stub_use(&entry.fn_name);
+                    self.desugar_method_call(typed_object, &base, via_ref, &key, entry, args, span)
+                }
+                _ => {
+                    for a in args {
+                        self.infer_expr(a);
+                    }
+                    (TypedExprKind::Null, InferType::Dynamic)
+                }
+            });
+        }
         match &base {
             InferType::Var(_) => {
+                if let TypedExprKind::Call { callee, .. } = &typed_object.kind
+                    && let TypedExprKind::Identifier(f) = &callee.kind
+                    && let Some(rest) = f.strip_prefix(crate::infer::traits::STUB)
+                {
+                    let q = rest.split('$').next().unwrap_or(rest);
+                    let m = rest.rsplit('$').next().unwrap_or(rest);
+                    let t = crate::infer::traits::trait_shown(q);
+                    self.errors.push(TypeError::coded(
+                        "E0758",
+                        format!(
+                            "`{t}::{m}()` does not say which type implements `{t}`; call it on a \
+                             type, as `M::{m}()`, or bind the result with a type annotation"
+                        ),
+                        "undecided Self",
+                        typed_object.span,
+                    ));
+                    for a in args {
+                        self.infer_expr(a);
+                    }
+                    return Ok((TypedExprKind::Null, InferType::Dynamic));
+                }
                 if self.any_table_has(member) {
                     self.receiver_unknown(member, span);
                     for a in args {
@@ -98,7 +156,7 @@ impl TypeInference {
                     return Err(typed_object);
                 }
                 let name = name.clone();
-                match self.lookup_method(&name, member, span) {
+                match self.lookup_for(&base, member, span) {
                     MethodLookup::Found(entry) => Ok(self.desugar_method_call(
                         typed_object,
                         &base,
@@ -382,6 +440,7 @@ impl TypeInference {
         span: Span,
     ) -> (TypedExprKind, InferType) {
         self.check_method_visibility(key, &entry, span);
+        self.note_stub_use(&entry.fn_name);
         let member = entry.name.clone();
         let Some((params, tparams)) = self.method_sig(&entry) else {
             for a in args {
@@ -622,6 +681,7 @@ impl TypeInference {
         span: Span,
     ) -> (TypedExprKind, InferType) {
         self.check_method_visibility(key, &entry, span);
+        self.note_stub_use(&entry.fn_name);
         if let Some((params, _)) = self.method_sig(&entry)
             && params.len() != args.len()
         {
@@ -647,7 +707,27 @@ impl TypeInference {
             return (TypedExprKind::Null, InferType::Dynamic);
         }
         let callee = Expr::new(ExprKind::Identifier(entry.fn_name.clone()), span);
-        self.infer_call_expr(&callee, args, span)
+        let (kind, ty) = self.infer_call_expr(&callee, args, span);
+        if entry.receiver == Receiver::None
+            && entry.fn_name.starts_with(crate::infer::traits::STUB)
+            && let Some(self_ty) = self.nominal_without_args(key)
+        {
+            self.pin_self_result(&entry.fn_name, &ty, self_ty, span);
+        }
+        (kind, ty)
+    }
+
+    fn nominal_without_args(&self, key: &str) -> Option<InferType> {
+        if let Some(d) = self.type_table.get_struct(key) {
+            return d
+                .type_params
+                .is_empty()
+                .then(|| InferType::Struct(key.to_string(), Vec::new()));
+        }
+        let d = self.type_table.get_enum(key)?;
+        d.type_params
+            .is_empty()
+            .then(|| InferType::Enum(key.to_string(), Vec::new()))
     }
 }
 

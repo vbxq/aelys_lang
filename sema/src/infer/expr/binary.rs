@@ -98,6 +98,12 @@ impl TypeInference {
                     span,
                     ConstraintReason::Comparison,
                 ));
+                if [&left.ty, &right.ty].into_iter().any(|t| {
+                    matches!(t, InferType::Struct(..) | InferType::Enum(..))
+                        && self.impl_for("ord", t).is_some()
+                }) {
+                    return InferType::Bool;
+                }
 
                 if let Some((name, bounds)) = self
                     .bounds_on_type_param(&left.ty)
@@ -126,6 +132,18 @@ impl TypeInference {
             }
 
             BinaryOp::Eq | BinaryOp::Ne => {
+                if [&left.ty, &right.ty].into_iter().any(|t| {
+                    matches!(t, InferType::Struct(..) | InferType::Enum(..))
+                        && self.impl_for("eq", t).is_some()
+                }) {
+                    self.constraints.push(Constraint::equal(
+                        right.ty.clone(),
+                        left.ty.clone(),
+                        span,
+                        ConstraintReason::Comparison,
+                    ));
+                    return InferType::Bool;
+                }
                 if let Some((name, bounds)) = self
                     .bounds_on_type_param(&left.ty)
                     .or_else(|| self.bounds_on_type_param(&right.ty))
@@ -169,8 +187,11 @@ impl TypeInference {
                     if let InferType::Struct(name, _) = operand_ty {
                         self.errors.push(TypeError::member_access(
                             format!(
-                                "comparison (`{}`) is not supported for struct `{}`",
-                                op, name
+                                "comparison (`{}`) is not supported for struct `{}`; write \
+                                 `impl eq for {}` to compare it",
+                                op,
+                                name,
+                                crate::modules::source_type_name(name)
                             ),
                             span,
                         ));

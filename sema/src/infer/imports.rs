@@ -39,6 +39,28 @@ impl TypeInference {
             }
             self.methods.insert(ty.clone(), entries.clone());
         }
+        for def in super::traits::builtin_traits() {
+            self.trait_names.insert(def.name.clone(), def.qualified.clone());
+            self.define_trait_stub_values(&def);
+            self.trait_defs.insert(def.qualified.clone(), def);
+        }
+        for def in imports.all_traits.values() {
+            self.define_trait_stub_values(def);
+            self.trait_defs.insert(def.qualified.clone(), def.clone());
+        }
+        for (local, def) in &imports.traits {
+            self.trait_names.insert(local.clone(), def.qualified.clone());
+        }
+        for imp in &imports.impls {
+            for value in &imp.values {
+                self.define_imported_value(value);
+            }
+            for (_, sym) in &imp.methods {
+                self.method_tparams.insert(sym.clone(), imp.type_params.clone());
+            }
+            self.register_impl_entries(imp);
+            self.impl_defs.push(imp.clone());
+        }
         self.module_imports = imports;
     }
 
@@ -93,7 +115,7 @@ impl TypeInference {
         ));
     }
 
-    fn define_imported_value(&mut self, item: &ModuleValue) {
+    pub(crate) fn define_imported_value(&mut self, item: &ModuleValue) {
         match item.kind {
             ItemKind::Function => {
                 self.env

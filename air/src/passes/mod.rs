@@ -6,5 +6,6 @@ pub mod never_arms;
 pub mod rc_elision;
 pub mod safepoints;
 pub mod temp_elision;
+pub mod trait_effects;
 pub mod validate;
 pub mod vec_surface;

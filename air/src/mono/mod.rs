@@ -1,4 +1,5 @@
 mod rewrite;
+mod traits;
 pub(crate) mod substitute;
 
 use crate::passes::vec_surface::SurfaceErrorKind;
@@ -589,12 +590,36 @@ pub(crate) fn substitute_type_params(
     }
 }
 
+fn dest_type(place: &Place, caller: &AirFunction) -> Option<AirType> {
+    let Place::Local(id) = place else {
+        return None;
+    };
+    caller
+        .locals
+        .iter()
+        .find(|l| l.id == *id)
+        .map(|l| l.ty.clone())
+}
+
+fn concrete(ty: &AirType) -> bool {
+    match ty {
+        AirType::Param(_) | AirType::Opaque => false,
+        AirType::Ptr(i) | AirType::Rc(i) | AirType::Array(i, _) | AirType::Slice(i) | AirType::Vec(i) => {
+            concrete(i)
+        }
+        AirType::Struct(r) | AirType::Enum(r) => r.args.iter().all(concrete),
+        AirType::FnPtr { params, ret, .. } => params.iter().all(concrete) && concrete(ret),
+        _ => true,
+    }
+}
+
 pub(super) struct MonoContext {
     pub(super) generic_functions: HashMap<String, usize>,
     pub(super) requests: Vec<MonoRequest>,
     pub(super) instantiated: HashMap<(String, Vec<String>), String>,
     pub(super) next_function_id: u32,
     pub(super) errors: Vec<MonoError>,
+    pub(super) impls: Vec<AirImpl>,
 }
 
 pub(super) struct ParamConflict {
@@ -603,6 +628,7 @@ pub(super) struct ParamConflict {
     pub(super) second: AirType,
 }
 
+#[derive(Clone)]
 pub(super) struct MonoRequest {
     pub(super) function_name: String,
     pub(super) type_args: Vec<AirType>,
@@ -624,6 +650,7 @@ impl MonoContext {
             instantiated: HashMap::new(),
             next_function_id: program.functions.len() as u32,
             errors: Vec::new(),
+            impls: program.impls.clone(),
         }
     }
 
@@ -661,12 +688,13 @@ impl MonoContext {
         match &stmt.kind {
             AirStmtKind::Assign {
                 rvalue: Rvalue::Call { func: callee, args },
-                ..
+                place,
             } => {
-                self.try_collect(callee, args, caller, program, generic_names);
+                let dest = dest_type(place, caller);
+                self.try_collect(callee, args, dest.as_ref(), caller, program, generic_names);
             }
             AirStmtKind::CallVoid { func: callee, args } => {
-                self.try_collect(callee, args, caller, program, generic_names);
+                self.try_collect(callee, args, None, caller, program, generic_names);
             }
             _ => {}
         }
@@ -680,10 +708,14 @@ impl MonoContext {
         generic_names: &HashSet<String>,
     ) {
         if let AirTerminator::Invoke {
-            func: callee, args, ..
+            func: callee,
+            args,
+            ret,
+            ..
         } = term
         {
-            self.try_collect(callee, args, caller, program, generic_names);
+            let dest = dest_type(ret, caller);
+            self.try_collect(callee, args, dest.as_ref(), caller, program, generic_names);
         }
     }
 
@@ -691,6 +723,7 @@ impl MonoContext {
         &mut self,
         callee: &Callee,
         args: &[Operand],
+        dest: Option<&AirType>,
         caller: &AirFunction,
         program: &AirProgram,
         generic_names: &HashSet<String>,
@@ -704,7 +737,7 @@ impl MonoContext {
         let generic_func = &program.functions[func_idx];
 
         let mut conflicts: Vec<ParamConflict> = Vec::new();
-        let inferred = self.infer_type_args(generic_func, args, caller, &mut conflicts);
+        let inferred = self.infer_type_args(generic_func, args, dest, caller, &mut conflicts);
         let name = name.clone();
         for conflict in conflicts {
             self.errors.push(MonoError::mono(
@@ -734,6 +767,7 @@ impl MonoContext {
         &self,
         generic_func: &AirFunction,
         args: &[Operand],
+        dest: Option<&AirType>,
         caller: &AirFunction,
         conflicts: &mut Vec<ParamConflict>,
     ) -> Option<Vec<AirType>> {
@@ -752,6 +786,7 @@ impl MonoContext {
         if !conflicts.is_empty() {
             return None;
         }
+        self.unify_dest(generic_func, dest, &mut resolved);
 
         let mut type_args = Vec::with_capacity(generic_func.type_params.len());
         for tp in &generic_func.type_params {
@@ -847,6 +882,40 @@ impl MonoContext {
         }
     }
 
+    pub(super) fn unify_dest(
+        &self,
+        generic_func: &AirFunction,
+        dest: Option<&AirType>,
+        resolved: &mut HashMap<u32, AirType>,
+    ) {
+        let Some(dest) = dest else {
+            return;
+        };
+        if generic_func
+            .type_params
+            .iter()
+            .all(|tp| resolved.contains_key(&tp.0))
+            || !concrete(dest)
+        {
+            return;
+        }
+        let mut found: HashMap<u32, AirType> = HashMap::new();
+        let mut conflicts = Vec::new();
+        self.unify_param(
+            &generic_func.ret_ty,
+            dest,
+            &generic_func.type_params,
+            &mut found,
+            &mut conflicts,
+        );
+        if !conflicts.is_empty() {
+            return;
+        }
+        for (k, v) in found {
+            resolved.entry(k).or_insert(v);
+        }
+    }
+
     pub(super) fn type_args_key(&self, types: &[AirType]) -> Vec<String> {
         types.iter().map(substitute::type_to_string).collect()
     }
@@ -902,7 +971,11 @@ impl MonoContext {
         let mut mono_instances = Vec::new();
         let mut errors = Vec::new();
 
-        for request in &self.requests {
+        let mut work: Vec<MonoRequest> = self.requests.clone();
+        let mut at = 0;
+        while at < work.len() {
+            let request = work[at].clone();
+            at += 1;
             let key = (
                 request.function_name.clone(),
                 self.type_args_key(&request.type_args),
@@ -910,6 +983,28 @@ impl MonoContext {
 
             if self.instantiated.contains_key(&key) {
                 continue;
+            }
+            if let Some((q, m)) = traits::parse_stub(&request.function_name) {
+                match self.stub_target(q, m, &request.type_args) {
+                    traits::StubTarget::Symbol(sym) => {
+                        self.instantiated.insert(key, sym);
+                        continue;
+                    }
+                    traits::StubTarget::Instance(sym, args) => {
+                        let mangled = self.mangle_name(&sym, &args);
+                        self.instantiated.insert(key, mangled);
+                        work.push(MonoRequest {
+                            function_name: sym,
+                            type_args: args,
+                        });
+                        continue;
+                    }
+                    traits::StubTarget::Missing(message) => {
+                        errors.push(MonoError::mono(Fault::Unsupported, message));
+                        continue;
+                    }
+                    traits::StubTarget::Default => {}
+                }
             }
 
             for ty in &request.type_args {
@@ -957,12 +1052,14 @@ impl MonoContext {
                 &saved_type_params,
                 &request.type_args,
             );
+            self.rewrite_trait_ops(&mut new_func);
 
             new_functions.push(new_func);
             self.instantiated.insert(key, mangled_name);
 
             mono_instances.push(MonoInstance {
                 original: original_id,
+                original_name: request.function_name.clone(),
                 type_args: request.type_args.clone(),
                 result: new_id,
             });

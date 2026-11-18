@@ -1,0 +1,17 @@
+struct P { x: i64 }
+
+impl Display for P {
+    fn to_string(&self) -> string { return "P<{self.x}>" }
+}
+
+fn show<T>(t: T) {
+    println(t)
+}
+
+fn main() -> i64 {
+    let t = (P { x: 3 }, 7)
+    println(t)
+    println("[{t}]")
+    show(P { x: 5 })
+    return 0
+}

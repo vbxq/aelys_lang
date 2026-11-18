@@ -164,6 +164,8 @@ fn nogc_diagnostic(
 }
 
 fn render_path(path: &[&str]) -> String {
+    let shown: Vec<String> = path.iter().map(|n| shown_name(n)).collect();
+    let path: Vec<&str> = shown.iter().map(String::as_str).collect();
     if path.len() <= CHAIN_HEAD + CHAIN_TAIL + 1 {
         return path.join(" -> ");
     }
@@ -184,8 +186,20 @@ fn capped_labels(steps: &[super::effects::Step]) -> Vec<&super::effects::Step> {
         .collect()
 }
 
+fn shown_name(name: &str) -> String {
+    if name.starts_with("__impl$") || name.starts_with("__trait$") {
+        return crate::passes::trait_effects::shown_symbol(name, &std::collections::HashMap::new());
+    }
+    name.to_string()
+}
+
 fn step_label(step: &super::effects::Step) -> String {
     use super::effects::StepKind;
+    let step = &super::effects::Step {
+        name: shown_name(&step.name),
+        span: step.span,
+        kind: step.kind.clone(),
+    };
     match step.kind {
         StepKind::Root => format!("`{}` is declared nogc here", step.name),
         StepKind::Callee => format!("calls `{}` here", step.name),

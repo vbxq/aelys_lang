@@ -95,6 +95,8 @@ pub enum StmtKind {
     },
 
     Impl(ImplDecl),
+
+    Trait(TraitDecl),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,15 +111,45 @@ pub enum Receiver {
 pub struct Method {
     pub func: Function,
     pub receiver: Receiver,
+    pub mut_self: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct ImplDecl {
     pub type_params: Vec<String>,
     pub bounds: Vec<TypeBounds>,
+    pub trait_ref: Option<TraitRef>,
     pub self_ty: TypeAnnotation,
     pub methods: Vec<Method>,
     pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct TraitMethod {
+    pub func: Function,
+    pub receiver: Receiver,
+    pub has_default: bool,
+    pub mut_self: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct TraitDecl {
+    pub name: String,
+    pub is_pub: bool,
+    pub methods: Vec<TraitMethod>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Eq)]
+pub struct TraitRef {
+    pub name: String,
+    pub span: Span,
+}
+
+impl PartialEq for TraitRef {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -167,11 +199,12 @@ pub struct ForeignDecl {
     pub span: Span,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TypeBounds {
     pub nogc: bool,
     pub eq: bool,
     pub ord: bool,
+    pub traits: Vec<TraitRef>,
 }
 
 impl TypeBounds {
@@ -188,7 +221,18 @@ impl TypeBounds {
     }
 
     pub fn is_empty(&self) -> bool {
-        !self.nogc && !self.eq && !self.ord
+        !self.nogc && !self.eq && !self.ord && self.traits.is_empty()
+    }
+
+    pub fn merge(&mut self, other: &TypeBounds) {
+        self.nogc |= other.nogc;
+        self.eq |= other.eq;
+        self.ord |= other.ord;
+        for t in &other.traits {
+            if !self.traits.contains(t) {
+                self.traits.push(t.clone());
+            }
+        }
     }
 
     pub fn needs_eq(&self) -> bool {
@@ -209,6 +253,9 @@ impl TypeBounds {
         }
         if self.ord {
             parts.push("ord");
+        }
+        for t in &self.traits {
+            parts.push(&t.name);
         }
         parts.join(" + ")
     }

@@ -7,5 +7,6 @@ pub use expr::{
 };
 pub use stmt::{
     Decorator, EnumVariantDecl, ForeignConv, ForeignDecl, Function, ImplDecl, ImportKind, Method,
-    NeedsStmt, NeedsTarget, Receiver, Stmt, StmtKind, StructFieldDecl, TypeBounds,
+    NeedsStmt, NeedsTarget, Receiver, Stmt, StmtKind, StructFieldDecl, TraitDecl, TraitMethod,
+    TraitRef, TypeBounds,
 };

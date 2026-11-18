@@ -5,11 +5,12 @@ use crate::types::InferType;
 use aelys_syntax::{Function, Span, TypeAnnotation, TypeBounds};
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Bound {
     Nogc,
     Eq,
     Ord,
+    Trait(String),
 }
 
 impl Bound {
@@ -23,21 +24,25 @@ impl Bound {
         } else if set.needs_eq() {
             wanted.push(Bound::Eq);
         }
+        for t in &set.traits {
+            wanted.push(Bound::Trait(t.name.clone()));
+        }
         wanted
     }
 
-    fn article(self) -> &'static str {
+    fn article(&self) -> &'static str {
         match self {
-            Bound::Nogc => "a",
+            Bound::Nogc | Bound::Trait(_) => "a",
             Bound::Eq | Bound::Ord => "an",
         }
     }
 
-    fn spelling(self) -> &'static str {
+    fn spelling(&self) -> &str {
         match self {
             Bound::Nogc => "nogc",
             Bound::Eq => "eq",
             Bound::Ord => "ord",
+            Bound::Trait(q) => crate::infer::traits::trait_shown(q),
         }
     }
 }
@@ -97,7 +102,7 @@ impl TypeInference {
         }
         let bound: Vec<TypeBounds> = (0..func.type_params.len())
             .map(|i| {
-                let mut set = func.bounds.get(i).copied().unwrap_or_default();
+                let mut set = func.bounds.get(i).cloned().unwrap_or_default();
                 set.nogc |= func.is_nogc;
                 set
             })
@@ -171,23 +176,30 @@ impl TypeInference {
     }
 
     /// without this a bounded generic could not hand its own parameter to another one
-    fn binding_satisfies(&self, ty: &InferType, want: Bound) -> bool {
+    fn binding_satisfies(&self, ty: &InferType, want: &Bound) -> bool {
         if let Some((_, carried)) = self.bounds_on_type_param(ty) {
             return match want {
                 Bound::Nogc => carried.nogc,
-                Bound::Eq => carried.needs_eq(),
-                Bound::Ord => carried.needs_ord(),
+                Bound::Eq => carried.needs_eq() || carried.traits.iter().any(|t| t.name == "eq"),
+                Bound::Ord => carried.needs_ord() || carried.traits.iter().any(|t| t.name == "ord"),
+                Bound::Trait(q) => carried.traits.iter().any(|t| t.name == *q),
             };
         }
         match want {
             Bound::Nogc => self.type_table.is_nogc_value(ty),
-            Bound::Eq => ty.satisfies_eq(),
-            Bound::Ord => ty.satisfies_ord(),
+            Bound::Eq => ty.satisfies_eq() || self.impl_for("eq", ty).is_some(),
+            Bound::Ord => ty.satisfies_ord() || self.impl_for("ord", ty).is_some(),
+            Bound::Trait(q) => self.satisfies_trait(q, ty),
         }
     }
 
     /// concrete value satisfying it. fail-closed: a binding the matcher cannot recover is a reject.
-    pub(super) fn check_bound_call(&mut self, callee: &TypedExpr, args: &[TypedExpr]) {
+    pub(super) fn check_bound_call(
+        &mut self,
+        callee: &TypedExpr,
+        args: &[TypedExpr],
+        result: &InferType,
+    ) {
         // any other callee form reaches the name through a value use, already rejected as one
         let TypedExprKind::Identifier(name) = &callee.kind else {
             return;
@@ -205,10 +217,11 @@ impl TypeInference {
                 )
             })
             .collect();
-        let InferType::Function { params, .. } = &callee.ty else {
+        let InferType::Function { params, ret, .. } = &callee.ty else {
             return;
         };
         let sig_params = params.clone();
+        let sig_ret = (**ret).clone();
 
         let mut reported: HashSet<String> = HashSet::new();
         for (type_params, bound, slots) in candidates {
@@ -216,9 +229,16 @@ impl TypeInference {
             for (param_ty, arg) in sig_params.iter().zip(args.iter()) {
                 self.bind_type_params(param_ty, &arg.ty, arg.span, &type_params, &mut bindings);
             }
+            if result.is_concrete() {
+                self.bind_type_params(&sig_ret, result, callee.span, &type_params, &mut bindings);
+            }
 
             for (i, type_param) in type_params.iter().enumerate() {
-                let set = bound[i];
+                let set = bound[i].clone();
+                if name.starts_with(crate::infer::traits::STUB) && !bindings.contains_key(type_param)
+                {
+                    continue;
+                }
                 if set.is_empty() || reported.contains(type_param) {
                     continue;
                 }
@@ -226,7 +246,7 @@ impl TypeInference {
                 let mut err = None;
                 for want in Bound::required_by(&set) {
                     if let Some((ty, _)) = bindings.get(type_param)
-                        && self.binding_satisfies(ty, want)
+                        && self.binding_satisfies(ty, &want)
                     {
                         continue;
                     }
@@ -266,6 +286,22 @@ impl TypeInference {
                 want.spelling()
             )
         };
+        if let Bound::Trait(q) = &want {
+            let t = crate::infer::traits::trait_shown(q);
+            return match binding {
+                Some((ty, arg_span)) => TypeError::coded(
+                    "E0732",
+                    format!(
+                        "`{}` does not implement `{t}`, which `{type_param}` of `{name}` requires",
+                        crate::infer::unresolved::spelled(ty)
+                    ),
+                    "bound not satisfied",
+                    *arg_span,
+                )
+                .with_secondary(callee_span, carries()),
+                None => TypeError::bound_unresolved(name, type_param, t, callee_span),
+            };
+        }
         if want != Bound::Nogc {
             return match binding {
                 Some((ty, arg_span)) => {

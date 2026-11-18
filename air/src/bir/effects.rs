@@ -51,6 +51,8 @@ impl EffectSet {
     }
 }
 
+// a trait method call is resolved per instance after mono, where its effect is checked
+const TRAIT_STUB: &str = "__trait$";
 const RANK_INTRINSIC: u8 = 1;
 const RANK_LITERAL: u8 = 2;
 const RANK_TYPE: u8 = 3;
@@ -544,6 +546,9 @@ pub fn effect_summaries_with_imports(
                     new = new.union(TOP);
                 }
                 for callee in direct {
+                    if callee.starts_with(TRAIT_STUB) {
+                        continue;
+                    }
                     new = new.union(eff.get(callee).copied().unwrap_or(TOP));
                 }
             }
@@ -707,7 +712,7 @@ fn next_managed_call<'a>(
             };
             let hop = match callee {
                 Some(n) => {
-                    if visited.contains(n) {
+                    if visited.contains(n) || n.starts_with(TRAIT_STUB) {
                         continue;
                     }
                     if !eff.get(n).copied().unwrap_or(TOP).contains(Effect::Managed) {

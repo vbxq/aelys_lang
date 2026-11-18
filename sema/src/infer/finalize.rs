@@ -137,6 +137,11 @@ impl TypeInference {
     }
 
     fn finalize_expr(&self, expr: TypedExpr) -> TypedExpr {
+        let done = self.finalize_expr_inner(expr);
+        self.desugar_trait_ops(done)
+    }
+
+    fn finalize_expr_inner(&self, expr: TypedExpr) -> TypedExpr {
         let kind = match expr.kind {
             TypedExprKind::Int(n) => TypedExprKind::Int(n),
             TypedExprKind::Float(f) => TypedExprKind::Float(f),

@@ -19,6 +19,8 @@ pub struct Parser {
     pub(crate) block_depth: usize,
     errors: Vec<Diagnostic>,
     pattern_in_let: bool,
+    pub(crate) bodiless: bool,
+    pub(crate) mut_self: bool,
 }
 
 impl Parser {
@@ -31,6 +33,8 @@ impl Parser {
             block_depth: 0,
             errors: Vec::new(),
             pattern_in_let: false,
+            bodiless: false,
+            mut_self: false,
         }
     }
 
