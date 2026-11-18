@@ -186,8 +186,15 @@ impl Parser {
             next,
             TokenKind::ColonColon | TokenKind::Dot | TokenKind::LParen | TokenKind::LBrace
         );
-        if lower && !is_path_tail {
-            self.refuse_reserved_value_name(&first, span);
+        if (lower || self.pattern_in_let) && !is_path_tail {
+            if !self.refuse_reserved_value_name(&first, span) && !lower {
+                self.refuse_in_place(
+                    CompileErrorKind::UppercaseBinding {
+                        name: first.clone(),
+                    },
+                    span,
+                );
+            }
             return Ok(Pattern::Binding {
                 name: first,
                 mutable: false,
