@@ -317,10 +317,14 @@ where
                 decls_in_expr(arg, parent, f);
             }
         }
-        TypedExprKind::Match { scrutinee, arms } => {
+        TypedExprKind::Match {
+            scrutinee, arms, ..
+        } => {
             decls_in_expr(scrutinee, parent, f);
             for arm in arms {
-                decls_in_expr(&arm.body, parent, f);
+                for e in arm.exprs() {
+                    decls_in_expr(e, parent, f);
+                }
             }
         }
         TypedExprKind::ResultAssert {
@@ -1274,9 +1278,9 @@ impl<'a> BodyBuilder<'a> {
                 then_branch,
                 else_branch,
             } => self.build_if_expr(condition, then_branch, Some(else_branch), expr),
-            TypedExprKind::Match { scrutinee, arms } => {
-                self.build_match_expr(scrutinee, arms, expr)
-            }
+            TypedExprKind::Match {
+                scrutinee, arms, ..
+            } => self.build_match_expr(scrutinee, arms, expr),
             TypedExprKind::Block { stmts, tail } => self.build_block_expr(stmts, tail),
 
             TypedExprKind::ResultAssert { scrutinee, .. } => {
@@ -1380,6 +1384,29 @@ impl<'a> BodyBuilder<'a> {
         arms: &[TypedMatchArm],
         expr: &TypedExpr,
     ) -> BirOperand {
+        let guarded = arms.iter().any(|a| a.guard().is_some());
+        let held = if guarded && !self.cat(&scrutinee.ty).is_affine() {
+            self.place_of(scrutinee).and_then(|place| {
+                let ty = InferType::Ref {
+                    referent: Box::new(scrutinee.ty.clone()),
+                    mutable: false,
+                };
+                let held = self.emit_to_temp(
+                    BirRvalue::Ref {
+                        place,
+                        mutable: false,
+                    },
+                    ty.clone(),
+                    scrutinee.span,
+                );
+                match held {
+                    BirOperand::Copy(p) | BirOperand::Move(p) => Some((p.local, ty)),
+                    BirOperand::Const => None,
+                }
+            })
+        } else {
+            None
+        };
         let discr = self.build_operand(scrutinee);
         let out = self.new_temp(expr.ty.clone(), expr.span);
         let merge_id = self.new_block_id();
@@ -1389,17 +1416,39 @@ impl<'a> BodyBuilder<'a> {
             targets.push(merge_id);
         }
         self.seal(BirTerminator::Branch { discr, targets }, scrutinee.span);
-        for (arm, id) in arms.iter().zip(arm_ids.iter()) {
+        for (i, (arm, id)) in arms.iter().zip(arm_ids.iter()).enumerate() {
             self.start(*id);
-            self.open_scope(arm.body.span);
-            self.bind_arm_pattern(&arm.pattern, arm.body.span);
-            let taken = self.build_operand(&arm.body);
+            self.open_scope(arm.body().span);
+            self.bind_arm_pattern(&arm.pattern, arm.body().span);
+            if let Some(guard) = arm.guard() {
+                let cond = self.build_operand(guard);
+                if let Some((local, ty)) = &held {
+                    let place = BirPlace {
+                        local: *local,
+                        proj: Vec::new(),
+                    };
+                    self.observe(BirOperand::Copy(place), ty.clone(), guard.span);
+                }
+                if self.cur_open {
+                    let body_id = self.new_block_id();
+                    let next = arm_ids.get(i + 1).copied().unwrap_or(merge_id);
+                    self.seal(
+                        BirTerminator::Branch {
+                            discr: cond,
+                            targets: vec![body_id, next],
+                        },
+                        guard.span,
+                    );
+                    self.start(body_id);
+                }
+            }
+            let taken = self.build_operand(arm.body());
             if self.cur_open {
-                self.assign_temp(out, taken, arm.body.span);
+                self.assign_temp(out, taken, arm.body().span);
             }
             self.close_scope();
             if self.cur_open {
-                self.seal(BirTerminator::Goto(merge_id), arm.body.span);
+                self.seal(BirTerminator::Goto(merge_id), arm.body().span);
             }
         }
         self.start(merge_id);
@@ -1410,11 +1459,8 @@ impl<'a> BodyBuilder<'a> {
     }
 
     fn bind_arm_pattern(&mut self, pattern: &TypedPattern, body_span: Span) {
-        let TypedPattern::Variant { bindings, span, .. } = pattern else {
-            return;
-        };
-        for (name, ty) in bindings {
-            let local = self.new_named(name, ty.clone(), *span, false);
+        for (name, ty, span) in pattern.bindings() {
+            let local = self.new_named(name, ty.clone(), span, false);
             self.push(BirStmtKind::StorageLive(local), body_span);
         }
     }
@@ -1621,7 +1667,9 @@ impl<'a> BodyBuilder<'a> {
             } => {
                 let _ = self.build_if_expr(condition, then_branch, Some(else_branch), expr);
             }
-            TypedExprKind::Match { scrutinee, arms } => {
+            TypedExprKind::Match {
+                scrutinee, arms, ..
+            } => {
                 let _ = self.build_match_expr(scrutinee, arms, expr);
             }
             TypedExprKind::Block { stmts, tail } => {

@@ -18,6 +18,7 @@ pub struct Parser {
     recursion_depth: usize,
     pub(crate) block_depth: usize,
     errors: Vec<Diagnostic>,
+    pattern_in_let: bool,
 }
 
 impl Parser {
@@ -29,6 +30,7 @@ impl Parser {
             recursion_depth: 0,
             block_depth: 0,
             errors: Vec::new(),
+            pattern_in_let: false,
         }
     }
 

@@ -768,6 +768,20 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             error.to_string(),
             "reserved builtin type name".to_string(),
         ),
+        TypeErrorKind::PatternUnreachable { detail } => {
+            ("E0310", detail.clone(), "unreachable pattern".to_string())
+        }
+        TypeErrorKind::PatternAltMismatch { detail } => (
+            "E0311",
+            detail.clone(),
+            "alternatives bind differently".to_string(),
+        ),
+        TypeErrorKind::PatternUnsupported { detail } => {
+            ("E0312", detail.clone(), "unsupported pattern".to_string())
+        }
+        TypeErrorKind::PatternMalformed { detail } => {
+            ("E0313", detail.clone(), "malformed pattern".to_string())
+        }
         TypeErrorKind::NotSupportedYet { detail } => {
             ("E0902", detail.clone(), "not supported yet".to_string())
         }

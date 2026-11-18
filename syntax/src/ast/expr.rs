@@ -370,6 +370,7 @@ pub enum ExprKind {
     Match {
         scrutinee: Box<Expr>,
         arms: Vec<MatchArm>,
+        origin: MatchOrigin,
     },
 
     Block {
@@ -397,32 +398,96 @@ pub enum CatchHandler {
     Arms(Vec<MatchArm>),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatchOrigin {
+    Match,
+    IfLet,
+    WhileLet,
+    Catch,
+}
+
 #[derive(Debug, Clone)]
 pub struct MatchArm {
     pub pattern: Pattern,
+    pub guard: Option<Box<Expr>>,
     pub body: Box<Expr>,
     pub span: Span,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum PatLit {
+    Int(i128),
+    Char(u32),
+    Bool(bool),
+    Str(String),
+}
+
 #[derive(Debug, Clone)]
 pub enum Pattern {
+    Wildcard(Span),
+    Binding {
+        name: String,
+        mutable: bool,
+        sub: Option<Box<Pattern>>,
+        span: Span,
+    },
+    Lit(PatLit, Span),
+    Range {
+        lo: PatLit,
+        hi: PatLit,
+        span: Span,
+    },
     Variant {
         enum_name: String,
         variant: String,
-        bindings: Vec<String>,
+        fields: Vec<Pattern>,
         span: Span,
         unqualified: bool,
     },
-    Wildcard(Span),
+    Struct {
+        name: String,
+        fields: Vec<(String, Pattern, Span)>,
+        rest: bool,
+        span: Span,
+    },
     Tuple {
         elems: Vec<Pattern>,
         span: Span,
     },
-    Binding {
-        name: String,
-        mutable: bool,
-        span: Span,
-    },
+    Or(Vec<Pattern>, Span),
+}
+
+impl Pattern {
+    pub fn span(&self) -> Span {
+        match self {
+            Pattern::Wildcard(span)
+            | Pattern::Binding { span, .. }
+            | Pattern::Lit(_, span)
+            | Pattern::Range { span, .. }
+            | Pattern::Variant { span, .. }
+            | Pattern::Struct { span, .. }
+            | Pattern::Tuple { span, .. }
+            | Pattern::Or(_, span) => *span,
+        }
+    }
+
+    pub fn flat_variant(enum_name: &str, variant: &str, bindings: Vec<String>, span: Span) -> Self {
+        Pattern::Variant {
+            enum_name: enum_name.to_string(),
+            variant: variant.to_string(),
+            fields: bindings
+                .into_iter()
+                .map(|name| Pattern::Binding {
+                    name,
+                    mutable: false,
+                    sub: None,
+                    span,
+                })
+                .collect(),
+            span,
+            unqualified: false,
+        }
+    }
 }
 
 pub fn prelude_variant_enum(name: &str) -> Option<&'static str> {

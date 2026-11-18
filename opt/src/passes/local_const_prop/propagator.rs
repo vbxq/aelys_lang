@@ -1,7 +1,7 @@
 use super::scope::ScopeStack;
 use crate::passes::{ConstantFolder, OptimizationPass, OptimizationStats};
 use aelys_sema::{
-    TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedPattern, TypedProgram,
+    TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedProgram,
     TypedStmt, TypedStmtKind,
 };
 
@@ -300,10 +300,14 @@ impl LocalConstantPropagator {
                 }
                 Self::collect_assigned_vars_expr(tail, out);
             }
-            TypedExprKind::Match { scrutinee, arms } => {
+            TypedExprKind::Match {
+                scrutinee, arms, ..
+            } => {
                 Self::collect_assigned_vars_expr(scrutinee, out);
                 for arm in arms {
-                    Self::collect_assigned_vars_expr(&arm.body, out);
+                    for e in arm.exprs() {
+                        Self::collect_assigned_vars_expr(e, out);
+                    }
                 }
             }
             TypedExprKind::ResultAssert { scrutinee, .. } => {
@@ -491,16 +495,20 @@ impl LocalConstantPropagator {
                 self.propagate_expr(tail);
                 self.scopes.pop();
             }
-            TypedExprKind::Match { scrutinee, arms } => {
+            TypedExprKind::Match {
+                scrutinee, arms, ..
+            } => {
                 self.propagate_expr(scrutinee);
                 for arm in arms {
                     self.scopes.push();
-                    if let TypedPattern::Variant { bindings, .. } = &arm.pattern {
-                        for (name, _) in bindings {
-                            self.scopes.block(name);
-                        }
+                    let names: Vec<String> =
+                        arm.bindings().iter().map(|(n, _, _)| n.to_string()).collect();
+                    for name in &names {
+                        self.scopes.block(name);
                     }
-                    self.propagate_expr(&mut arm.body);
+                    for e in arm.exprs_mut() {
+                        self.propagate_expr(e);
+                    }
                     self.scopes.pop();
                 }
             }

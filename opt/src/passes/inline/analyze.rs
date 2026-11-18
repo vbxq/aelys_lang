@@ -308,10 +308,14 @@ fn collect_calls_in_expr(expr: &TypedExpr, calls: &mut HashSet<String>) {
             collect_calls_in_expr(object, calls);
             collect_calls_in_expr(range, calls);
         }
-        TypedExprKind::Match { scrutinee, arms } => {
+        TypedExprKind::Match {
+            scrutinee, arms, ..
+        } => {
             collect_calls_in_expr(scrutinee, calls);
             for arm in arms {
-                collect_calls_in_expr(&arm.body, calls);
+                for e in arm.exprs() {
+                    collect_calls_in_expr(e, calls);
+                }
             }
         }
         TypedExprKind::Block { stmts, tail } => {
@@ -470,10 +474,14 @@ fn count_calls_in_expr(expr: &TypedExpr, counts: &mut HashMap<String, usize>) {
             count_calls_in_expr(object, counts);
             count_calls_in_expr(range, counts);
         }
-        TypedExprKind::Match { scrutinee, arms } => {
+        TypedExprKind::Match {
+            scrutinee, arms, ..
+        } => {
             count_calls_in_expr(scrutinee, counts);
             for arm in arms {
-                count_calls_in_expr(&arm.body, counts);
+                for e in arm.exprs() {
+                    count_calls_in_expr(e, counts);
+                }
             }
         }
         TypedExprKind::Block { stmts, tail } => {

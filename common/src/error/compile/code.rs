@@ -23,6 +23,8 @@ impl CompileErrorKind {
             Self::UnknownTypeBound { .. } => 106,
             Self::NotAVariantInScope { .. } => 101,
             Self::NestedPattern => 101,
+            Self::PatternUnsupported { .. } => 312,
+            Self::PatternFormNotSupported { .. } => 101,
             Self::UppercaseBinding { .. } => 101,
 
             Self::UndefinedVariable(_) => 201,

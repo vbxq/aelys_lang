@@ -1,5 +1,5 @@
 use aelys_sema::{
-    InferType, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedParam, TypedPattern, TypedStmt,
+    InferType, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedParam, TypedStmt,
     TypedStmtKind,
 };
 use std::collections::{HashMap, HashSet};
@@ -241,7 +241,7 @@ fn collect_place<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr, Sig))
         }
         TypedExprKind::Match { arms, .. } => {
             for arm in arms {
-                collect(&arm.body, f);
+                collect(arm.body(), f);
             }
         }
         TypedExprKind::Call { args, .. } if is_view(&expr.ty) => {
@@ -596,16 +596,18 @@ impl Pass<'_> {
                 self.expr(then_branch);
                 self.expr(else_branch);
             }
-            TypedExprKind::Match { scrutinee, arms } => {
+            TypedExprKind::Match {
+                scrutinee, arms, ..
+            } => {
                 self.expr(scrutinee);
                 for arm in arms {
                     self.scopes.push(HashMap::new());
-                    if let TypedPattern::Variant { bindings, .. } = &arm.pattern {
-                        for (name, _) in bindings {
-                            self.scopes.last_mut().unwrap().insert(name.clone(), None);
-                        }
+                    for (name, _, _) in arm.bindings() {
+                        self.scopes.last_mut().unwrap().insert(name.to_string(), None);
                     }
-                    self.expr(&arm.body);
+                    for e in arm.exprs() {
+                        self.expr(e);
+                    }
                     self.scopes.pop();
                 }
             }

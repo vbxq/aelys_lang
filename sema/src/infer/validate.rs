@@ -984,10 +984,19 @@ impl TypeInference {
                 }
                 self.validate_expr(tail, generic_scope, declared_type_params);
             }
-            TypedExprKind::Match { scrutinee, arms } => {
+            TypedExprKind::Match {
+                scrutinee,
+                arms,
+                origin,
+            } => {
                 self.validate_expr(scrutinee, generic_scope, declared_type_params);
                 for arm in arms {
-                    self.validate_expr(&arm.body, generic_scope, declared_type_params);
+                    for e in arm.exprs() {
+                        self.validate_expr(e, generic_scope, declared_type_params);
+                    }
+                }
+                if !self.match_was_refused(expr.span) {
+                    self.check_match_usefulness(scrutinee, arms, *origin, expr.span);
                 }
             }
             // no member node reaches here, so cannot fire on the intercepted call

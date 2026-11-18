@@ -100,9 +100,9 @@ pub(super) fn may_write_local(expr: &TypedExpr, name: &str) -> bool {
             then_branch,
             else_branch,
         } => w(condition) || w(then_branch) || w(else_branch),
-        TypedExprKind::Match { scrutinee, arms } => {
-            w(scrutinee) || arms.iter().any(|arm| w(&arm.body))
-        }
+        TypedExprKind::Match {
+            scrutinee, arms, ..
+        } => w(scrutinee) || arms.iter().any(|arm| arm.exprs().any(w)),
         TypedExprKind::ResultAssert { scrutinee, .. } => w(scrutinee),
         TypedExprKind::Block { stmts, tail } => {
             stmts.iter().any(|s| stmt_may_write_local(s, name)) || w(tail)

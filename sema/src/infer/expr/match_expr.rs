@@ -1,21 +1,21 @@
 use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
 use crate::modules::source_type_name;
-use crate::typed_ast::{TypedExpr, TypedExprKind, TypedMatchArm, TypedPattern};
+use crate::typed_ast::{TypedExpr, TypedExprKind, TypedMatchArm, TypedPattern, TypedPatternKind};
 use crate::types::InferType;
-use aelys_syntax::{Expr, MatchArm, Pattern, Span};
-use std::collections::{HashMap, HashSet};
+use aelys_syntax::{Expr, MatchArm, MatchOrigin, PatLit, Pattern, Span};
+use std::collections::HashMap;
 
 impl TypeInference {
     pub(super) fn infer_match_expr(
         &mut self,
         scrutinee: &Expr,
         arms: &[MatchArm],
+        origin: MatchOrigin,
         span: Span,
     ) -> (TypedExprKind, InferType) {
-        let is_catch = std::mem::take(&mut self.catch_match_pending);
         let typed_scrutinee = self.infer_expr(scrutinee);
-        self.infer_match_typed(typed_scrutinee, scrutinee.span, arms, span, is_catch)
+        self.infer_match_typed(typed_scrutinee, scrutinee.span, arms, span, origin)
     }
 
     pub(super) fn infer_match_typed(
@@ -24,376 +24,78 @@ impl TypeInference {
         scrutinee_span: Span,
         arms: &[MatchArm],
         span: Span,
-        is_catch: bool,
+        origin: MatchOrigin,
     ) -> (TypedExprKind, InferType) {
-        let (enum_name, scrutinee_type_args) = match &typed_scrutinee.ty {
-            InferType::Enum(name, args) => (name.clone(), args.clone()),
-            InferType::Var(_) => {
-                let mut first_enum = None;
-                for arm in arms {
-                    if let Pattern::Variant {
-                        enum_name,
-                        span: pat_span,
-                        ..
-                    } = &arm.pattern
-                        && !enum_name.is_empty()
-                    {
-                        first_enum = Some(self.air_type_name(enum_name, *pat_span));
-                        break;
-                    }
-                }
-                match first_enum {
-                    Some(name) => {
-                        self.constraints.push(Constraint::equal(
-                            typed_scrutinee.ty.clone(),
-                            InferType::Enum(name.clone(), Vec::new()),
-                            scrutinee_span,
-                            ConstraintReason::Other(
-                                "match scrutinee inferred as enum from patterns".to_string(),
-                            ),
-                        ));
-                        (name, Vec::new())
-                    }
-                    None => {
-                        self.errors.push(TypeError {
-                            kind: TypeErrorKind::Mismatch {
-                                expected: InferType::Dynamic,
-                                found: typed_scrutinee.ty.clone(),
-                            },
-                            span: scrutinee_span,
-                            reason: ConstraintReason::Other(
-                                "match scrutinee type is ambiguous and no variant patterns to infer from".to_string(),
-                            ),
-                            secondary_spans: Vec::new(),
-                            help: None,
-                            suggestion: None,
-                        });
-                        return (TypedExprKind::Null, InferType::Dynamic);
-                    }
-                }
-            }
-            InferType::Dynamic => {
-                let typed_arms = self.infer_match_arms_dynamic(arms);
-                let result_type = if typed_arms.is_empty() {
-                    InferType::Dynamic
-                } else {
-                    typed_arms[0].body.ty.clone()
-                };
-                return (
-                    TypedExprKind::Match {
-                        scrutinee: Box::new(typed_scrutinee),
-                        arms: typed_arms,
-                    },
-                    result_type,
-                );
-            }
-            other => {
-                self.errors.push(TypeError {
-                    kind: TypeErrorKind::Mismatch {
-                        expected: InferType::Dynamic,
-                        found: other.clone(),
-                    },
-                    span: scrutinee_span,
-                    reason: ConstraintReason::Other(format!(
-                        "match scrutinee must be an enum type, got {}",
-                        other
-                    )),
-                    secondary_spans: Vec::new(),
-                    help: None,
-                    suggestion: None,
-                });
-                return (TypedExprKind::Null, InferType::Dynamic);
-            }
+        let mut expected = match &typed_scrutinee.ty {
+            InferType::Ref { referent, .. } => (**referent).clone(),
+            other => other.clone(),
         };
-
-        let enum_def = self.type_table.get_enum(&enum_name).cloned();
-        let enum_def = match enum_def {
-            Some(def) => def,
-            None => {
-                self.errors.push(TypeError {
-                    kind: TypeErrorKind::Mismatch {
-                        expected: InferType::Dynamic,
-                        found: InferType::Dynamic,
-                    },
-                    span,
-                    reason: ConstraintReason::UnknownType {
-                        name: enum_name.clone(),
-                    },
-                    secondary_spans: Vec::new(),
-                    help: None,
-                    suggestion: None,
-                });
-                return (TypedExprKind::Null, InferType::Dynamic);
-            }
-        };
-
-        let mut typed_arms = Vec::new();
-        let mut covered_variants: HashSet<String> = HashSet::new();
-        let mut has_wildcard = false;
-        let mut arm_refused = false;
-
-        let mut result_type = self.type_gen.fresh();
-
-        let is_generic = !enum_def.type_params.is_empty();
-        let mut type_param_mapping: HashMap<String, InferType> = HashMap::new();
-
-        if is_generic && scrutinee_type_args.len() == enum_def.type_params.len() {
-            for (param_name, arg_ty) in enum_def.type_params.iter().zip(scrutinee_type_args.iter())
-            {
-                type_param_mapping.insert(param_name.clone(), arg_ty.clone());
-            }
+        if let InferType::Var(_) = expected
+            && let Some(fixed) = self.scrutinee_type_from_patterns(arms)
+        {
+            self.constraints.push(Constraint::equal(
+                expected.clone(),
+                fixed.clone(),
+                scrutinee_span,
+                ConstraintReason::Other("match scrutinee inferred from patterns".to_string()),
+            ));
+            expected = fixed;
+        }
+        if let InferType::Dynamic = expected {
+            let typed_arms = self.infer_match_arms_dynamic(arms);
+            let result_type = typed_arms
+                .first()
+                .map_or(InferType::Dynamic, |a| a.body().ty.clone());
+            return (
+                TypedExprKind::Match {
+                    scrutinee: Box::new(typed_scrutinee),
+                    arms: typed_arms,
+                    origin,
+                },
+                result_type,
+            );
         }
 
-        for (arm_index, arm) in arms.iter().enumerate() {
-            self.reject_repeated_bindings(&arm.pattern);
-            match &arm.pattern {
-                Pattern::Variant {
-                    enum_name: pat_enum,
-                    variant,
-                    bindings,
-                    span: pat_span,
-                    unqualified,
-                } => {
-                    if *unqualified && pat_enum.is_empty() {
-                        let written = enum_def
-                            .variants
-                            .iter()
-                            .any(|v| v.name == *variant)
-                            .then(|| self.spelled_enum(&enum_name).ok())
-                            .flatten();
-                        let owner = match written {
-                            Some(_) => None,
-                            None => self.enum_owning_variant(variant, &enum_name),
-                        };
-                        let scrutinee = self.spelled_enum(&enum_name).unwrap_or_else(|_| {
-                            crate::modules::source_type_name(&enum_name).to_string()
-                        });
-                        self.errors.push(TypeError {
-                            kind: TypeErrorKind::NotAVariantInScope {
-                                name: variant.clone(),
-                                written,
-                                scrutinee,
-                                variants: enum_def
-                                    .variants
-                                    .iter()
-                                    .map(|v| v.name.clone())
-                                    .collect(),
-                                owner,
-                            },
-                            span: *pat_span,
-                            reason: ConstraintReason::Other(String::new()),
-                            secondary_spans: Vec::new(),
-                            help: None,
-                            suggestion: None,
-                        });
-                        arm_refused = true;
-                        continue;
-                    }
-                    if *unqualified
-                        && let Some(refusal) =
-                            self.unqualified_variant_refusal(pat_enum, variant, *pat_span)
-                    {
-                        self.errors.push(refusal);
-                        arm_refused = true;
-                        continue;
-                    }
-                    let written_enum = pat_enum;
-                    let pat_enum = &self.air_type_name(pat_enum, *pat_span);
-                    if *unqualified && *pat_enum != enum_name {
-                        let scrutinee = self.spelled_enum(&enum_name);
-                        self.errors.push(TypeError::unqualified_pattern_mismatch(
-                            pat_enum, scrutinee, variant, *pat_span,
-                        ));
-                        arm_refused = true;
-                        continue;
-                    }
-                    if *pat_enum != enum_name {
-                        arm_refused = true;
-                        let reason = match self.spelled_enum(&enum_name) {
-                            Ok(path) => format!(
-                                "pattern enum '{written_enum}' does not match scrutinee enum '{path}'"
-                            ),
-                            Err((module, name)) => {
-                                let alias = module.rsplit('.').next().unwrap_or(&module);
-                                format!(
-                                    "pattern enum '{written_enum}' does not match the scrutinee's \
-                                     enum, the `{name}` of `{module}`, which no name in scope \
-                                     reaches; add `needs {module}` and write \
-                                     `{alias}.{name}::{variant}`"
-                                )
-                            }
-                        };
-                        self.errors.push(TypeError {
-                            kind: TypeErrorKind::Mismatch {
-                                expected: InferType::Dynamic,
-                                found: InferType::Enum(pat_enum.clone(), Vec::new()),
-                            },
-                            span: *pat_span,
-                            reason: ConstraintReason::Other(reason),
-                            secondary_spans: Vec::new(),
-                            help: None,
-                            suggestion: None,
-                        });
-                        continue;
-                    }
+        let mut typed_arms: Vec<TypedMatchArm> = Vec::new();
+        let mut arm_refused = false;
+        let mut result_type = self.type_gen.fresh();
 
-                    let variant_def = enum_def.variants.iter().find(|v| v.name == *variant);
-                    let variant_def = match variant_def {
-                        Some(v) => v,
-                        None => {
-                            arm_refused = true;
-                            let variant_names: Vec<_> =
-                                enum_def.variants.iter().map(|v| v.name.as_str()).collect();
-                            self.errors.push(TypeError {
-                                kind: TypeErrorKind::Mismatch {
-                                    expected: InferType::Dynamic,
-                                    found: InferType::Dynamic,
-                                },
-                                span: *pat_span,
-                                reason: ConstraintReason::Other(format!(
-                                    "unknown variant '{}' on enum '{}'; known variants: {}",
-                                    variant,
-                                    source_type_name(&enum_name),
-                                    variant_names.join(", ")
-                                )),
-                                secondary_spans: Vec::new(),
-                                help: None,
-                                suggestion: None,
-                            });
-                            continue;
-                        }
-                    };
-
-                    if covered_variants.contains(variant) {
-                        self.errors.push(TypeError {
-                            kind: TypeErrorKind::Mismatch {
-                                expected: InferType::Dynamic,
-                                found: InferType::Dynamic,
-                            },
-                            span: *pat_span,
-                            reason: ConstraintReason::Other(format!(
-                                "duplicate pattern for variant '{}::{}'",
-                                source_type_name(&enum_name),
-                                variant
-                            )),
-                            secondary_spans: Vec::new(),
-                            help: None,
-                            suggestion: None,
-                        });
-                    }
-                    covered_variants.insert(variant.clone());
-
-                    let expected_bindings = variant_def.data.len();
-                    let actual_bindings = bindings.len();
-                    if expected_bindings != actual_bindings {
-                        self.errors.push(TypeError {
-                            kind: TypeErrorKind::ArityMismatch {
-                                expected: expected_bindings,
-                                found: actual_bindings,
-                            },
-                            span: *pat_span,
-                            reason: ConstraintReason::Other(format!(
-                                "variant '{}::{}' has {} data field{}, but pattern has {} binding{}",
-                                source_type_name(&enum_name),
-                                variant,
-                                expected_bindings,
-                                if expected_bindings == 1 { "" } else { "s" },
-                                actual_bindings,
-                                if actual_bindings == 1 { "" } else { "s" },
-                            )),
-                            secondary_spans: Vec::new(),
-                            help: None,
-                            suggestion: None,
-                        });
-                    }
-
-                    let mut typed_bindings: Vec<(String, InferType)> =
-                        Vec::with_capacity(bindings.len());
-                    for (i, name) in bindings.iter().enumerate() {
-                        let ty = if i < variant_def.data.len() {
-                            if is_generic {
-                                self.instantiate_enum_type_param(
-                                    &variant_def.data[i],
-                                    &enum_def.type_params,
-                                    &mut type_param_mapping,
-                                )
-                            } else {
-                                variant_def.data[i].clone()
-                            }
-                        } else {
-                            InferType::Dynamic
-                        };
-                        typed_bindings.push((name.clone(), ty));
-                    }
-
-                    self.env.push_scope();
-                    for (name, ty) in &typed_bindings {
-                        self.env.define_local(name.clone(), ty.clone());
-                    }
-
-                    let typed_body = self.infer_expr(&arm.body);
-
-                    self.env.pop_scope();
-
-                    typed_arms.push(TypedMatchArm {
-                        pattern: TypedPattern::Variant {
-                            enum_name: pat_enum.clone(),
-                            variant: variant.clone(),
-                            tag: variant_def.tag,
-                            bindings: typed_bindings,
-                            span: *pat_span,
-                        },
-                        body: Box::new(typed_body),
-                    });
-                }
-                Pattern::Tuple { span, .. } | Pattern::Binding { span, .. } => {
-                    self.errors.push(TypeError::not_supported_yet(
-                        "this pattern is not supported in a match arm yet",
-                        *span,
-                    ));
-                    arm_refused = true;
-                    continue;
-                }
-                Pattern::Wildcard(pat_span) => {
-                    if has_wildcard {
-                        self.errors.push(TypeError {
-                            kind: TypeErrorKind::Mismatch {
-                                expected: InferType::Dynamic,
-                                found: InferType::Dynamic,
-                            },
-                            span: *pat_span,
-                            reason: ConstraintReason::Other(
-                                "duplicate wildcard pattern".to_string(),
-                            ),
-                            secondary_spans: Vec::new(),
-                            help: None,
-                            suggestion: None,
-                        });
-                    }
-                    if arm_index + 1 != arms.len() {
-                        self.errors.push(TypeError::member_access(
-                            "wildcard pattern must be the last match arm".to_string(),
-                            *pat_span,
-                        ));
-                    }
-                    has_wildcard = true;
-
-                    let typed_body = self.infer_expr(&arm.body);
-
-                    typed_arms.push(TypedMatchArm {
-                        pattern: TypedPattern::Wildcard,
-                        body: Box::new(typed_body),
-                    });
-                }
+        for arm in arms {
+            let before = self.errors.len();
+            let mut seen = Vec::new();
+            let pattern = self.check_pattern(&arm.pattern, &expected, &mut seen);
+            let Some(pattern) = pattern.filter(|_| self.errors.len() == before) else {
+                arm_refused = true;
+                continue;
+            };
+            self.env.push_scope();
+            for (name, ty, _) in pattern.bindings() {
+                self.env.define_local(name.to_string(), ty.clone());
             }
+            let guard = arm.guard.as_ref().map(|g| {
+                let typed = self.infer_expr(g);
+                self.constraints.push(Constraint::equal(
+                    typed.ty.clone(),
+                    InferType::Bool,
+                    g.span,
+                    ConstraintReason::IfCondition,
+                ));
+                typed
+            });
+            let typed_body = self.infer_expr(&arm.body);
+            self.env.pop_scope();
+            typed_arms.push(TypedMatchArm::new(pattern, guard, typed_body));
+        }
+        if arm_refused {
+            self.refused_matches.insert((span.start, span.end));
         }
 
         // have i64 literals, narrow the literals to match. this avoids stale
         if typed_arms.len() > 1 {
             let fixed: Vec<InferType> = typed_arms
                 .iter()
-                .filter(|a| !self.is_literal_like(&a.body))
-                .map(|a| a.body.ty.clone())
+                .filter(|a| !self.is_literal_like(a.body()))
+                .map(|a| a.body().ty.clone())
                 .filter(|t| t.is_integer() || t.is_float())
                 .collect();
             let join = fixed
@@ -406,27 +108,27 @@ impl TypeInference {
                 .cloned();
             if let Some(ref target) = join {
                 for arm in &mut typed_arms {
-                    let literal_arm = self.is_literal_like(&arm.body);
+                    let literal_arm = self.is_literal_like(arm.body());
                     if literal_arm
-                        && (arm.body.ty == InferType::I64 || arm.body.ty == InferType::F64)
+                        && (arm.body().ty == InferType::I64 || arm.body().ty == InferType::F64)
                     {
-                        self.try_narrow_literal(&mut arm.body, target);
+                        self.try_narrow_literal(arm.body_mut(), target);
                     }
                 }
             }
 
             let concrete_enum = typed_arms.iter()
-                .map(|a| &a.body.ty)
+                .map(|a| &a.body().ty)
                 .find(|t| matches!(t, InferType::Enum(_, args) if args.iter().all(|a| a.is_concrete())))
                 .cloned();
             if let Some(ref target) = concrete_enum {
                 if let InferType::Enum(target_name, _) = target {
                     for arm in &mut typed_arms {
-                        if let InferType::Enum(arm_name, arm_args) = &arm.body.ty {
+                        if let InferType::Enum(arm_name, arm_args) = &arm.body().ty {
                             if arm_name == target_name
                                 && arm_args.iter().any(|a| matches!(a, InferType::Var(_)))
                             {
-                                self.try_narrow_literal(&mut arm.body, target);
+                                self.try_narrow_literal(arm.body_mut(), target);
                             }
                         }
                     }
@@ -437,29 +139,29 @@ impl TypeInference {
         if typed_arms.len() > 1 {
             let widest = typed_arms
                 .iter()
-                .map(|a| &a.body.ty)
+                .map(|a| &a.body().ty)
                 .find(|t| {
                     (t.is_integer() || t.is_float())
                         && typed_arms.iter().all(|other| {
-                            other.body.ty == **t
-                                || other.body.ty.can_implicit_widen_to(t)
-                                || !other.body.ty.is_integer() && !other.body.ty.is_float()
+                            other.body().ty == **t
+                                || other.body().ty.can_implicit_widen_to(t)
+                                || !other.body().ty.is_integer() && !other.body().ty.is_float()
                         })
                 })
                 .cloned();
             if let Some(ref target) = widest {
                 for arm in &mut typed_arms {
-                    if arm.body.ty != *target && arm.body.ty.can_implicit_widen_to(target) {
-                        let vspan = arm.body.span;
+                    if arm.body().ty != *target && arm.body().ty.can_implicit_widen_to(target) {
+                        let vspan = arm.body().span;
                         let old_body = std::mem::replace(
-                            &mut arm.body,
+                            arm.body_box_mut(),
                             Box::new(TypedExpr {
                                 kind: TypedExprKind::Null,
                                 ty: InferType::Null,
                                 span: vspan,
                             }),
                         );
-                        arm.body = Box::new(TypedExpr {
+                        *arm.body_box_mut() = Box::new(TypedExpr {
                             kind: TypedExprKind::Cast {
                                 expr: old_body,
                                 target: target.clone(),
@@ -473,9 +175,9 @@ impl TypeInference {
         }
 
         if !typed_arms.is_empty() {
-            let first_ty = &typed_arms[0].body.ty;
+            let first_ty = &typed_arms[0].body().ty;
             let all_same_concrete =
-                first_ty.is_concrete() && typed_arms.iter().all(|a| a.body.ty == *first_ty);
+                first_ty.is_concrete() && typed_arms.iter().all(|a| a.body().ty == *first_ty);
             if all_same_concrete {
                 result_type = first_ty.clone();
             }
@@ -483,95 +185,729 @@ impl TypeInference {
 
         for arm in &typed_arms {
             self.constraints.push(Constraint::flows(
-                arm.body.ty.clone(),
+                arm.body().ty.clone(),
                 result_type.clone(),
-                arm.body.span,
+                arm.body().span,
                 ConstraintReason::Other("match arm body".to_string()),
             ));
-        }
-
-        if !has_wildcard && !arm_refused {
-            let missing: Vec<String> = enum_def
-                .variants
-                .iter()
-                .filter(|v| !covered_variants.contains(&v.name))
-                .map(|v| v.name.clone())
-                .collect();
-            if !missing.is_empty() {
-                self.errors.push(TypeError {
-                    kind: TypeErrorKind::Mismatch {
-                        expected: InferType::Dynamic,
-                        found: InferType::Dynamic,
-                    },
-                    span,
-                    reason: ConstraintReason::Other(format!(
-                        "non-exhaustive {}: missing variant{} {}",
-                        if is_catch { "catch" } else { "match" },
-                        if missing.len() == 1 { "" } else { "s" },
-                        missing
-                            .iter()
-                            .map(|v| format!("'{}::{}'", source_type_name(&enum_name), v))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )),
-                    secondary_spans: Vec::new(),
-                    help: None,
-                    suggestion: None,
-                });
-            }
         }
 
         (
             TypedExprKind::Match {
                 scrutinee: Box::new(typed_scrutinee),
                 arms: typed_arms,
+                origin,
             },
             result_type,
         )
     }
 
-    fn infer_match_arms_dynamic(&mut self, arms: &[MatchArm]) -> Vec<TypedMatchArm> {
-        arms.iter()
-            .map(|arm| {
-                let pattern = match &arm.pattern {
-                    Pattern::Variant {
-                        enum_name,
-                        variant,
-                        bindings,
+    pub(crate) fn match_was_refused(&self, span: Span) -> bool {
+        self.refused_matches.contains(&(span.start, span.end))
+    }
+
+    fn scrutinee_type_from_patterns(&mut self, arms: &[MatchArm]) -> Option<InferType> {
+        fn first_informative(p: &Pattern) -> Option<&Pattern> {
+            match p {
+                Pattern::Wildcard(_) => None,
+                Pattern::Binding { sub, .. } => sub.as_deref().and_then(first_informative),
+                Pattern::Or(alts, _) => alts.iter().find_map(first_informative),
+                Pattern::Lit(PatLit::Int(_), _) | Pattern::Range { .. } => None,
+                other => Some(other),
+            }
+        }
+        let pat = arms.iter().find_map(|a| first_informative(&a.pattern))?;
+        match pat {
+            Pattern::Variant {
+                enum_name, span, ..
+            } if !enum_name.is_empty() => Some(InferType::Enum(
+                self.air_type_name(enum_name, *span),
+                Vec::new(),
+            )),
+            Pattern::Struct { name, span, .. } => {
+                let name = self.air_type_name(name, *span);
+                let params = self
+                    .type_table
+                    .get_struct(&name)
+                    .map_or(0, |d| d.type_params.len());
+                let args = (0..params).map(|_| self.type_gen.fresh()).collect();
+                Some(InferType::Struct(name, args))
+            }
+            Pattern::Lit(PatLit::Char(_), _) => Some(InferType::Char),
+            Pattern::Lit(PatLit::Bool(_), _) => Some(InferType::Bool),
+            Pattern::Lit(PatLit::Str(_), _) => Some(InferType::String),
+            _ => None,
+        }
+    }
+
+    fn const_pattern_literal(&self, name: &str) -> Option<PatLit> {
+        use crate::typed_ast::ConstScalar;
+        match &self.consts.get(name)?.value {
+            ConstScalar::Int(v) => Some(PatLit::Int(*v as i128)),
+            ConstScalar::Bool(b) => Some(PatLit::Bool(*b)),
+            ConstScalar::Char(c) => Some(PatLit::Char(*c)),
+            ConstScalar::Str(s) => Some(PatLit::Str(s.clone())),
+            ConstScalar::Float(_) => None,
+        }
+    }
+
+    fn pattern_error(&mut self, kind: TypeErrorKind, span: Span) {
+        self.errors.push(TypeError::pattern(kind, span));
+    }
+
+    fn pattern_mismatch(&mut self, reason: String, span: Span) {
+        self.errors.push(TypeError {
+            kind: TypeErrorKind::Mismatch {
+                expected: InferType::Dynamic,
+                found: InferType::Dynamic,
+            },
+            span,
+            reason: ConstraintReason::Other(reason),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        });
+    }
+
+    fn check_pattern(
+        &mut self,
+        pat: &Pattern,
+        expected: &InferType,
+        seen: &mut Vec<String>,
+    ) -> Option<TypedPattern> {
+        let span = pat.span();
+        match pat {
+            Pattern::Wildcard(_) => Some(TypedPattern::new(
+                TypedPatternKind::Wildcard,
+                expected.clone(),
+                span,
+            )),
+            Pattern::Binding {
+                name, sub, mutable, ..
+            } => {
+                if *mutable {
+                    self.pattern_error(
+                        TypeErrorKind::PatternUnsupported {
+                            detail: "a `mut` binding is not supported in a match pattern; bind \
+                                     the value, then write `let mut` in the arm"
+                                .to_string(),
+                        },
                         span,
-                        ..
-                    } => TypedPattern::Variant {
-                        enum_name: enum_name.clone(),
-                        variant: variant.clone(),
-                        tag: 0,
-                        bindings: bindings
-                            .iter()
-                            .map(|name| (name.clone(), InferType::Dynamic))
-                            .collect(),
-                        span: *span,
-                    },
-                    Pattern::Wildcard(_) => TypedPattern::Wildcard,
-                    Pattern::Tuple { span, .. } | Pattern::Binding { span, .. } => {
-                        self.errors.push(TypeError::not_supported_yet(
-                            "this pattern is not supported in a match arm yet",
-                            *span,
-                        ));
-                        TypedPattern::Wildcard
-                    }
+                    );
+                    return None;
+                }
+                if seen.contains(name) {
+                    self.errors.push(TypeError::coded(
+                        "E0204",
+                        format!("`{name}` is bound more than once in the same pattern"),
+                        "bound again here",
+                        span,
+                    ));
+                    return None;
+                }
+                seen.push(name.clone());
+                let sub = match sub {
+                    Some(sub) => Some(Box::new(self.check_pattern(sub, expected, seen)?)),
+                    None => None,
                 };
-                self.env.push_scope();
-                if let TypedPattern::Variant { bindings, .. } = &pattern {
-                    for (name, ty) in bindings {
-                        self.env.define_local(name.clone(), ty.clone());
-                    }
+                Some(TypedPattern::new(
+                    TypedPatternKind::Binding {
+                        name: name.clone(),
+                        sub,
+                    },
+                    expected.clone(),
+                    span,
+                ))
+            }
+            Pattern::Lit(lit, _) => {
+                self.check_pattern_literal(lit, expected, span)?;
+                Some(TypedPattern::new(
+                    TypedPatternKind::Lit(lit.clone()),
+                    expected.clone(),
+                    span,
+                ))
+            }
+            Pattern::Range { lo, hi, .. } => {
+                let same_kind = matches!(
+                    (lo, hi),
+                    (PatLit::Int(_), PatLit::Int(_)) | (PatLit::Char(_), PatLit::Char(_))
+                );
+                if !same_kind {
+                    self.pattern_error(
+                        TypeErrorKind::PatternUnsupported {
+                            detail: "a range pattern takes two integer bounds or two `char` \
+                                     bounds"
+                                .to_string(),
+                        },
+                        span,
+                    );
+                    return None;
                 }
-                let typed_body = self.infer_expr(&arm.body);
-                self.env.pop_scope();
-                TypedMatchArm {
-                    pattern,
-                    body: Box::new(typed_body),
+                self.check_pattern_literal(lo, expected, span)?;
+                self.check_pattern_literal(hi, expected, span)?;
+                Some(TypedPattern::new(
+                    TypedPatternKind::Range {
+                        lo: lo.clone(),
+                        hi: hi.clone(),
+                    },
+                    expected.clone(),
+                    span,
+                ))
+            }
+            Pattern::Variant {
+                enum_name,
+                variant,
+                fields,
+                unqualified,
+                ..
+            } => self.check_variant_pattern(
+                enum_name,
+                variant,
+                fields,
+                *unqualified,
+                expected,
+                span,
+                seen,
+            ),
+            Pattern::Struct {
+                name, fields, rest, ..
+            } => self.check_struct_pattern(name, fields, *rest, expected, span, seen),
+            Pattern::Tuple { elems, .. } => {
+                let InferType::Tuple(tys) = expected else {
+                    self.pattern_mismatch(
+                        format!(
+                            "a tuple pattern cannot match a value of type `{}`",
+                            source_type_name(&expected.to_string())
+                        ),
+                        span,
+                    );
+                    return None;
+                };
+                if tys.len() != elems.len() {
+                    self.pattern_mismatch(
+                        format!(
+                            "this tuple pattern has {} elements but the value is a tuple of {}",
+                            elems.len(),
+                            tys.len()
+                        ),
+                        span,
+                    );
+                    return None;
                 }
-            })
-            .collect()
+                let tys = tys.clone();
+                let mut typed = Vec::with_capacity(elems.len());
+                for (e, t) in elems.iter().zip(tys.iter()) {
+                    typed.push(self.check_pattern(e, t, seen)?);
+                }
+                Some(TypedPattern::new(
+                    TypedPatternKind::Tuple(typed),
+                    expected.clone(),
+                    span,
+                ))
+            }
+            Pattern::Or(alts, _) => self.check_or_pattern(alts, expected, span, seen),
+        }
+    }
+
+    fn check_or_pattern(
+        &mut self,
+        alts: &[Pattern],
+        expected: &InferType,
+        span: Span,
+        seen: &mut Vec<String>,
+    ) -> Option<TypedPattern> {
+        let mut typed = Vec::with_capacity(alts.len());
+        for alt in alts {
+            let mut alt_seen = seen.clone();
+            typed.push(self.check_pattern(alt, expected, &mut alt_seen)?);
+        }
+        let first: Vec<(String, InferType, Span)> = typed[0]
+            .bindings()
+            .into_iter()
+            .map(|(n, t, s)| (n.to_string(), t.clone(), s))
+            .collect();
+        for alt in typed.iter().skip(1) {
+            let other: Vec<(String, InferType, Span)> = alt
+                .bindings()
+                .into_iter()
+                .map(|(n, t, s)| (n.to_string(), t.clone(), s))
+                .collect();
+            let mut differ: Vec<(String, Span)> = first
+                .iter()
+                .filter(|(n, _, _)| !other.iter().any(|(m, _, _)| m == n))
+                .chain(
+                    other
+                        .iter()
+                        .filter(|(n, _, _)| !first.iter().any(|(m, _, _)| m == n)),
+                )
+                .map(|(n, _, s)| (n.clone(), *s))
+                .collect();
+            if !differ.is_empty() {
+                let at = differ[0].1;
+                let names: Vec<String> = differ.drain(..).map(|(n, _)| format!("`{n}`")).collect();
+                self.pattern_error(
+                    TypeErrorKind::PatternAltMismatch {
+                        detail: format!(
+                            "the alternatives of this pattern bind different names: {} {} not \
+                             bound in every alternative; every alternative must bind the same \
+                             names",
+                            names.join(" and "),
+                            if names.len() == 1 { "is" } else { "are" }
+                        ),
+                    },
+                    at,
+                );
+                return None;
+            }
+            for (name, ty, at) in &other {
+                let (_, first_ty, _) = first.iter().find(|(n, _, _)| n == name)?;
+                if first_ty == ty {
+                    continue;
+                }
+                let open = |t: &InferType| matches!(t, InferType::Var(_)) || !t.is_concrete();
+                if (open(first_ty) || open(ty))
+                    && !matches!(first_ty, InferType::Never)
+                    && !matches!(ty, InferType::Never)
+                {
+                    self.constraints.push(Constraint::equal(
+                        first_ty.clone(),
+                        ty.clone(),
+                        *at,
+                        ConstraintReason::Other("binding of a pattern alternative".to_string()),
+                    ));
+                    continue;
+                }
+                self.pattern_error(
+                    TypeErrorKind::PatternAltMismatch {
+                        detail: format!(
+                            "`{name}` has type `{}` in one alternative of this pattern and `{}` \
+                             in another; every alternative must bind it with the same type",
+                            source_type_name(&first_ty.to_string()),
+                            source_type_name(&ty.to_string())
+                        ),
+                    },
+                    *at,
+                );
+                return None;
+            }
+        }
+        seen.extend(first.into_iter().map(|(n, _, _)| n));
+        Some(TypedPattern::new(
+            TypedPatternKind::Or(typed),
+            expected.clone(),
+            span,
+        ))
+    }
+
+    fn check_pattern_literal(
+        &mut self,
+        lit: &PatLit,
+        expected: &InferType,
+        span: Span,
+    ) -> Option<()> {
+        let ok = match (lit, expected) {
+            (PatLit::Int(v), t) if t.is_integer() => {
+                let (lo, hi) = int_bounds(t);
+                if *v < lo || *v > hi {
+                    self.pattern_mismatch(
+                        format!(
+                            "pattern `{v}` does not fit `{t}`, whose values are {lo}..={hi}"
+                        ),
+                        span,
+                    );
+                    return None;
+                }
+                true
+            }
+            (PatLit::Int(_), InferType::Var(_)) => true,
+            (PatLit::Char(_), InferType::Char)
+            | (PatLit::Bool(_), InferType::Bool)
+            | (PatLit::Str(_), InferType::String) => true,
+            _ => false,
+        };
+        if !ok {
+            let lit_ty = match lit {
+                PatLit::Int(_) => "an integer",
+                PatLit::Char(_) => "`char`",
+                PatLit::Bool(_) => "`bool`",
+                PatLit::Str(_) => "`string`",
+            };
+            self.pattern_mismatch(
+                format!(
+                    "this literal pattern is {lit_ty}, but the matched value has type `{}`",
+                    source_type_name(&expected.to_string())
+                ),
+                span,
+            );
+            return None;
+        }
+        Some(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn check_variant_pattern(
+        &mut self,
+        written_enum: &str,
+        variant: &str,
+        fields: &[Pattern],
+        unqualified: bool,
+        expected: &InferType,
+        span: Span,
+        seen: &mut Vec<String>,
+    ) -> Option<TypedPattern> {
+        if unqualified && written_enum.is_empty() {
+            if fields.is_empty()
+                && let Some(lit) = self.const_pattern_literal(variant)
+            {
+                self.check_pattern_literal(&lit, expected, span)?;
+                return Some(TypedPattern::new(
+                    TypedPatternKind::Lit(lit),
+                    expected.clone(),
+                    span,
+                ));
+            }
+            let InferType::Enum(enum_name, _) = expected else {
+                self.errors.push(TypeError::coded(
+                    "E0101",
+                    format!(
+                        "`{variant}` is not a variant in scope; read as a binding, the binding \
+                         `{variant}` starts with an uppercase letter; a capitalized name in a \
+                         pattern names a variant, never a binding"
+                    ),
+                    "not a variant in scope",
+                    span,
+                ));
+                return None;
+            };
+            let variants: Vec<String> = self
+                .type_table
+                .get_enum(enum_name)
+                .map(|def| def.variants.iter().map(|v| v.name.clone()).collect())
+                .unwrap_or_default();
+            let written = variants
+                .iter()
+                .any(|v| v == variant)
+                .then(|| self.spelled_enum(enum_name).ok())
+                .flatten();
+            let owner = match written {
+                Some(_) => None,
+                None => self.enum_owning_variant(variant, enum_name),
+            };
+            let scrutinee = self
+                .spelled_enum(enum_name)
+                .unwrap_or_else(|_| source_type_name(enum_name).to_string());
+            self.errors.push(TypeError {
+                kind: TypeErrorKind::NotAVariantInScope {
+                    name: variant.to_string(),
+                    written,
+                    scrutinee,
+                    variants,
+                    owner,
+                },
+                span,
+                reason: ConstraintReason::Other(String::new()),
+                secondary_spans: Vec::new(),
+                help: None,
+                suggestion: None,
+            });
+            return None;
+        }
+        if unqualified
+            && let Some(refusal) = self.unqualified_variant_refusal(written_enum, variant, span)
+        {
+            self.errors.push(refusal);
+            return None;
+        }
+        let pat_enum = self.air_type_name(written_enum, span);
+        let (enum_name, scrutinee_args) = match expected {
+            InferType::Enum(name, args) => (name.clone(), args.clone()),
+            other => {
+                self.pattern_mismatch(
+                    format!(
+                        "pattern `{variant}` is a variant of `{}`, but the matched value has type \
+                         `{}`",
+                        source_type_name(&pat_enum),
+                        source_type_name(&other.to_string())
+                    ),
+                    span,
+                );
+                return None;
+            }
+        };
+        if unqualified && pat_enum != enum_name {
+            let scrutinee = self.spelled_enum(&enum_name);
+            self.errors.push(TypeError::unqualified_pattern_mismatch(
+                &pat_enum, scrutinee, variant, span,
+            ));
+            return None;
+        }
+        if pat_enum != enum_name {
+            let reason = match self.spelled_enum(&enum_name) {
+                Ok(path) => format!(
+                    "pattern enum '{written_enum}' does not match scrutinee enum '{path}'"
+                ),
+                Err((module, name)) => {
+                    let alias = module.rsplit('.').next().unwrap_or(&module);
+                    format!(
+                        "pattern enum '{written_enum}' does not match the scrutinee's \
+                         enum, the `{name}` of `{module}`, which no name in scope \
+                         reaches; add `needs {module}` and write \
+                         `{alias}.{name}::{variant}`"
+                    )
+                }
+            };
+            self.errors.push(TypeError {
+                kind: TypeErrorKind::Mismatch {
+                    expected: InferType::Dynamic,
+                    found: InferType::Enum(pat_enum.clone(), Vec::new()),
+                },
+                span,
+                reason: ConstraintReason::Other(reason),
+                secondary_spans: Vec::new(),
+                help: None,
+                suggestion: None,
+            });
+            return None;
+        }
+        let Some(enum_def) = self.type_table.get_enum(&enum_name).cloned() else {
+            self.errors.push(TypeError {
+                kind: TypeErrorKind::Mismatch {
+                    expected: InferType::Dynamic,
+                    found: InferType::Dynamic,
+                },
+                span,
+                reason: ConstraintReason::UnknownType {
+                    name: enum_name.clone(),
+                },
+                secondary_spans: Vec::new(),
+                help: None,
+                suggestion: None,
+            });
+            return None;
+        };
+        let Some(variant_def) = enum_def.variants.iter().find(|v| v.name == variant) else {
+            let variant_names: Vec<_> =
+                enum_def.variants.iter().map(|v| v.name.as_str()).collect();
+            self.pattern_mismatch(
+                format!(
+                    "unknown variant '{}' on enum '{}'; known variants: {}",
+                    variant,
+                    source_type_name(&enum_name),
+                    variant_names.join(", ")
+                ),
+                span,
+            );
+            return None;
+        };
+        let expected_fields = variant_def.data.len();
+        if expected_fields != fields.len() {
+            self.errors.push(TypeError {
+                kind: TypeErrorKind::ArityMismatch {
+                    expected: expected_fields,
+                    found: fields.len(),
+                },
+                span,
+                reason: ConstraintReason::Other(format!(
+                    "variant '{}::{}' has {} data field{}, but pattern has {} binding{}",
+                    source_type_name(&enum_name),
+                    variant,
+                    expected_fields,
+                    if expected_fields == 1 { "" } else { "s" },
+                    fields.len(),
+                    if fields.len() == 1 { "" } else { "s" },
+                )),
+                secondary_spans: Vec::new(),
+                help: None,
+                suggestion: None,
+            });
+            return None;
+        }
+        let is_generic = !enum_def.type_params.is_empty();
+        let mut mapping: HashMap<String, InferType> = HashMap::new();
+        if is_generic && scrutinee_args.len() == enum_def.type_params.len() {
+            for (param, arg) in enum_def.type_params.iter().zip(scrutinee_args.iter()) {
+                mapping.insert(param.clone(), arg.clone());
+            }
+        }
+        let mut typed_fields = Vec::with_capacity(fields.len());
+        for (field, data_ty) in fields.iter().zip(variant_def.data.iter()) {
+            let field_ty = if is_generic {
+                self.instantiate_enum_type_param(data_ty, &enum_def.type_params, &mut mapping)
+            } else {
+                data_ty.clone()
+            };
+            typed_fields.push(self.check_pattern(field, &field_ty, seen)?);
+        }
+        Some(TypedPattern::new(
+            TypedPatternKind::Variant {
+                enum_name: pat_enum,
+                variant: variant.to_string(),
+                tag: variant_def.tag,
+                fields: typed_fields,
+            },
+            expected.clone(),
+            span,
+        ))
+    }
+
+    fn check_struct_pattern(
+        &mut self,
+        written: &str,
+        fields: &[(String, Pattern, Span)],
+        rest: bool,
+        expected: &InferType,
+        span: Span,
+        seen: &mut Vec<String>,
+    ) -> Option<TypedPattern> {
+        let name = self.air_type_name(written, span);
+        let def_fields = match expected {
+            InferType::Struct(s, args) if *s == name => self.type_table.struct_fields(&name, args),
+            _ => None,
+        };
+        let Some(def_fields) = def_fields else {
+            self.pattern_mismatch(
+                format!(
+                    "pattern `{written} {{ .. }}` matches a `{written}`, but the matched value has \
+                     type `{}`",
+                    source_type_name(&expected.to_string())
+                ),
+                span,
+            );
+            return None;
+        };
+        let mut given: Vec<(&str, &Pattern, Span)> = Vec::new();
+        for (field, pat, at) in fields {
+            if !def_fields.iter().any(|f| f.name == *field) {
+                self.pattern_error(
+                    TypeErrorKind::PatternMalformed {
+                        detail: format!("struct `{written}` has no field `{field}`"),
+                    },
+                    *at,
+                );
+                return None;
+            }
+            if given.iter().any(|(g, _, _)| g == field) {
+                self.pattern_error(
+                    TypeErrorKind::PatternMalformed {
+                        detail: format!("field `{field}` is named twice in this pattern"),
+                    },
+                    *at,
+                );
+                return None;
+            }
+            given.push((field.as_str(), pat, *at));
+        }
+        if !rest
+            && let Some(missing) = def_fields
+                .iter()
+                .find(|f| !given.iter().any(|(g, _, _)| *g == f.name))
+        {
+            self.pattern_error(
+                TypeErrorKind::PatternMalformed {
+                    detail: format!(
+                        "this pattern does not mention field `{}` of `{written}`; name it, or \
+                         write `..` to skip the fields left out",
+                        missing.name
+                    ),
+                },
+                span,
+            );
+            return None;
+        }
+        let mut typed = Vec::with_capacity(def_fields.len());
+        for f in &def_fields {
+            let pat = match given.iter().find(|(g, _, _)| *g == f.name) {
+                Some((_, pat, _)) => self.check_pattern(pat, &f.ty, seen)?,
+                None => TypedPattern::new(TypedPatternKind::Wildcard, f.ty.clone(), span),
+            };
+            typed.push((f.name.clone(), pat));
+        }
+        Some(TypedPattern::new(
+            TypedPatternKind::Struct {
+                name,
+                fields: typed,
+            },
+            expected.clone(),
+            span,
+        ))
+    }
+
+    fn infer_match_arms_dynamic(&mut self, arms: &[MatchArm]) -> Vec<TypedMatchArm> {
+        let mut out = Vec::new();
+        for arm in arms {
+            let pattern = match &arm.pattern {
+                Pattern::Variant {
+                    enum_name,
+                    variant,
+                    fields,
+                    span,
+                    ..
+                } if arm.guard.is_none()
+                    && fields.iter().all(|f| {
+                        matches!(f, Pattern::Wildcard(_) | Pattern::Binding { sub: None, .. })
+                    }) =>
+                {
+                    let fields = fields
+                        .iter()
+                        .map(|f| match f {
+                            Pattern::Binding { name, span, .. } => TypedPattern::new(
+                                TypedPatternKind::Binding {
+                                    name: name.clone(),
+                                    sub: None,
+                                },
+                                InferType::Dynamic,
+                                *span,
+                            ),
+                            other => TypedPattern::new(
+                                TypedPatternKind::Wildcard,
+                                InferType::Dynamic,
+                                other.span(),
+                            ),
+                        })
+                        .collect();
+                    TypedPattern::new(
+                        TypedPatternKind::Variant {
+                            enum_name: enum_name.clone(),
+                            variant: variant.clone(),
+                            tag: 0,
+                            fields,
+                        },
+                        InferType::Dynamic,
+                        *span,
+                    )
+                }
+                Pattern::Wildcard(span) if arm.guard.is_none() => {
+                    TypedPattern::new(TypedPatternKind::Wildcard, InferType::Dynamic, *span)
+                }
+                other => {
+                    self.pattern_mismatch(
+                        "the scrutinee's type is not known, and this pattern needs it".to_string(),
+                        other.span(),
+                    );
+                    continue;
+                }
+            };
+            self.env.push_scope();
+            for (name, ty, _) in pattern.bindings() {
+                self.env.define_local(name.to_string(), ty.clone());
+            }
+            let typed_body = self.infer_expr(&arm.body);
+            self.env.pop_scope();
+            out.push(TypedMatchArm::new(pattern, None, typed_body));
+        }
+        out
+    }
+}
+
+pub(crate) fn int_bounds(t: &InferType) -> (i128, i128) {
+    match t {
+        InferType::I8 => (i8::MIN as i128, i8::MAX as i128),
+        InferType::I16 => (i16::MIN as i128, i16::MAX as i128),
+        InferType::I32 => (i32::MIN as i128, i32::MAX as i128),
+        InferType::U8 => (0, u8::MAX as i128),
+        InferType::U16 => (0, u16::MAX as i128),
+        InferType::U32 => (0, u32::MAX as i128),
+        InferType::U64 => (0, u64::MAX as i128),
+        _ => (i64::MIN as i128, i64::MAX as i128),
     }
 }

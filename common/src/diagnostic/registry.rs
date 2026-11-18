@@ -218,6 +218,9 @@ global, or a function and an enum, collide as readily as two functions.
 extern` declaration that names a symbol the program also defines is this
 error, not E0613.
 
+One pattern that binds the same name twice is the same error, in a `let`
+as in a match arm: `let (a, a) = t`, `Pair::Two(x, x)`, `Point { x, y: x }`.
+
 The check runs before type inference, so the second definition is never
 checked against the first one's shape: E0204 is the whole answer and no
 consequence error follows it.
@@ -368,6 +371,52 @@ declared width or a division by zero is refused.
     const M: i64 = f()             // E0370, not a constant expression
     const A: i64 = A + 1           // E0370, refers to itself
     const B: u8 = 200 + 100        // E0370, overflows `u8`",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0310",
+        title: "unreachable pattern",
+        explanation: "\
+A match arm, or one alternative of an arm, can never be taken: every
+value it matches is already matched by an arm written before it. A guard
+does not cover anything, so an arm with a guard never makes a later arm
+unreachable. An `if let` whose pattern always matches has an unreachable
+`else` and is refused; write a `match` or a `let`.
+
+    match o { Some(_) => 1, Some(3) => 2, None => 0 }   // E0310 on Some(3)",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0311",
+        title: "pattern alternatives bind different names",
+        explanation: "\
+Every alternative of a `|` pattern must bind the same names, each with
+the same type, because the arm body cannot know which alternative
+matched.
+
+    match e { Ev::Key(n) | Ev::Click(m) => 0, _ => 1 }   // E0311, `m`",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0312",
+        title: "unsupported pattern form",
+        explanation: "\
+The pattern is well formed but its form is not supported: exclusive or
+half-open ranges (`1..5`, `1..`), empty ranges (`5..=1`), float literals,
+`if let` chains, or a match too large to check. Write an inclusive range
+`1..=4`, test a float with a guard, and nest the `if`.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0313",
+        title: "malformed struct pattern",
+        explanation: "\
+A struct pattern names a field the struct does not have, names a field
+twice, or leaves a field out without `..`. A pattern that binds the same
+name twice is E0204.
+
+    match p { Point { x } => x }          // E0313, `y` missing; write `Point { x, .. }`
+    match p { Point { z, .. } => z }      // E0313, `Point` has no field `z`",
         severity: Severity::Error,
     },
     // mutability (e04xx)

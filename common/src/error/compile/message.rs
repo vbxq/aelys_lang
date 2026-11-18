@@ -25,10 +25,13 @@ impl CompileErrorKind {
                 "`{name}` is not a bound; the bounds are `nogc`, `eq` and `ord`, combined with `+`"
             ),
             Self::NotAVariantInScope { name } => format!(
-                "`{name}` is not a variant in scope; write `Enum::Variant`; binding patterns are \
-                 not supported yet"
+                "`{name}` is not a variant in scope; write `Enum::Variant`"
             ),
-            Self::NestedPattern => "nested patterns are not supported yet".to_string(),
+            Self::NestedPattern => "nested patterns are not supported in 0.1".to_string(),
+            Self::PatternUnsupported { detail } => detail.clone(),
+            Self::PatternFormNotSupported { what } => {
+                format!("{what} patterns are not supported in 0.2")
+            }
             Self::UppercaseBinding { name } => format!(
                 "the binding `{name}` starts with an uppercase letter; a capitalized name in a \
                  pattern names a variant, never a binding"

@@ -144,8 +144,10 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
                 }
             }) || has_side_effects(tail)
         }
-        TypedExprKind::Match { scrutinee, arms } => {
-            has_side_effects(scrutinee) || arms.iter().any(|arm| has_side_effects(&arm.body))
+        TypedExprKind::Match {
+            scrutinee, arms, ..
+        } => {
+            has_side_effects(scrutinee) || arms.iter().any(|arm| arm.exprs().any(has_side_effects))
         }
         TypedExprKind::ResultAssert { .. } => true,
         TypedExprKind::EnumVariant { args, .. } => args.iter().any(|a| has_side_effects(a)),

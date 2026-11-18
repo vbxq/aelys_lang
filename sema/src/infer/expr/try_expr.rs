@@ -136,6 +136,7 @@ impl TypeInference {
 
         let v_name = self.next_try_binding('v');
         let ok_arm = MatchArm {
+            guard: None,
             pattern: variant_pattern(&enum_name, ok_variant, vec![v_name.clone()], span),
             body: Box::new(ident_expr(&v_name, span)),
             span,
@@ -145,6 +146,7 @@ impl TypeInference {
             Carrier::Result { .. } => {
                 let e_name = self.next_try_binding('e');
                 MatchArm {
+                    guard: None,
                     pattern: variant_pattern(&enum_name, "Err", vec![e_name.clone()], span),
                     body: Box::new(return_variant_block(
                         &enum_name,
@@ -156,6 +158,7 @@ impl TypeInference {
                 }
             }
             Carrier::Option { .. } => MatchArm {
+                guard: None,
                 pattern: variant_pattern(&enum_name, "None", vec![], span),
                 body: Box::new(return_variant_block(&enum_name, "None", vec![], span)),
                 span,
@@ -163,7 +166,7 @@ impl TypeInference {
         };
 
         let arms = vec![ok_arm, prop_arm];
-        self.infer_match_typed(typed_inner, inner.span, &arms, span, false)
+        self.infer_match_typed(typed_inner, inner.span, &arms, span, aelys_syntax::MatchOrigin::Match)
     }
 
     // $ is rejected by the identifier scanner, so these names never collide with user code
@@ -198,13 +201,7 @@ fn classify_carrier(ty: &InferType) -> Result<Carrier, &'static str> {
 }
 
 fn variant_pattern(enum_name: &str, variant: &str, bindings: Vec<String>, span: Span) -> Pattern {
-    Pattern::Variant {
-        enum_name: enum_name.to_string(),
-        variant: variant.to_string(),
-        bindings,
-        span,
-        unqualified: false,
-    }
+    Pattern::flat_variant(enum_name, variant, bindings, span)
 }
 
 fn ident_expr(name: &str, span: Span) -> Expr {

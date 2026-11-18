@@ -430,10 +430,14 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             }
         }
 
-        TypedExprKind::Match { scrutinee, arms } => {
+        TypedExprKind::Match {
+            scrutinee, arms, ..
+        } => {
             walk_expr(scrutinee, tt, set, w, Pos::Value);
             for arm in arms {
-                walk_expr(&arm.body, tt, set, w, Pos::Value);
+                for e in arm.exprs() {
+                    walk_expr(e, tt, set, w, Pos::Value);
+                }
             }
         }
 

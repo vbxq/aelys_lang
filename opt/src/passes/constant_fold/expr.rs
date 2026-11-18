@@ -138,10 +138,14 @@ impl ConstantFolder {
                 }
                 self.optimize_expr(tail);
             }
-            TypedExprKind::Match { scrutinee, arms } => {
+            TypedExprKind::Match {
+                scrutinee, arms, ..
+            } => {
                 self.optimize_expr(scrutinee);
                 for arm in arms {
-                    self.optimize_expr(&mut arm.body);
+                    for e in arm.exprs_mut() {
+                        self.optimize_expr(e);
+                    }
                 }
             }
             TypedExprKind::ResultAssert { scrutinee, .. } => {

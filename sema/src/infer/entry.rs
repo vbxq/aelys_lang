@@ -35,7 +35,7 @@ impl Default for TypeInference {
             keep_binding_use: false,
             try_counter: 0,
             unsafe_depth: 0,
-            catch_match_pending: false,
+            refused_matches: std::collections::HashSet::new(),
             nogc_fn_params: HashSet::new(),
             bound_generic_sigs: HashMap::new(),
             foreign_sigs: HashSet::new(),

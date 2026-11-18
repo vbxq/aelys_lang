@@ -10,6 +10,8 @@ mod member;
 mod primary;
 mod try_expr;
 
+pub(crate) use match_expr::int_bounds;
+
 use super::{LiteralInit, TypeInference};
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart, TypedStmtKind};
@@ -329,17 +331,22 @@ impl TypeInference {
                     self.infer_enum_variant(enum_name, variant, args, expr.span)
                 }
             }
-            ExprKind::Match { scrutinee, arms } => {
-                self.infer_match_expr(scrutinee, arms, expr.span)
-            }
+            ExprKind::Match {
+                scrutinee,
+                arms,
+                origin,
+            } => self.infer_match_expr(scrutinee, arms, *origin, expr.span),
             ExprKind::Block { stmts, tail } => {
                 self.env.push_scope();
                 let typed_stmts = self.infer_stmts(stmts);
                 let typed_tail = self.infer_expr(tail);
                 self.env.pop_scope();
-                let ty = if typed_stmts
-                    .iter()
-                    .any(|s| matches!(s.kind, TypedStmtKind::Return(_)))
+                let ty = if typed_stmts.iter().any(|s| {
+                    matches!(
+                        s.kind,
+                        TypedStmtKind::Return(_) | TypedStmtKind::Break | TypedStmtKind::Continue
+                    )
+                })
                 {
                     InferType::Never
                 } else {
@@ -411,7 +418,7 @@ impl TypeInference {
                 ..
             } => self.is_literal_like(then_branch) && self.is_literal_like(else_branch),
             TypedExprKind::Match { arms, .. } => {
-                !arms.is_empty() && arms.iter().all(|arm| self.is_literal_like(&arm.body))
+                !arms.is_empty() && arms.iter().all(|arm| self.is_literal_like(arm.body()))
             }
             TypedExprKind::Block { tail, .. } => {
                 !matches!(expr.ty, InferType::Never) && self.is_literal_like(tail)
@@ -881,11 +888,11 @@ impl TypeInference {
                 let mut all_ok = true;
                 let mut all_narrowed = true;
                 for arm in arms.iter_mut() {
-                    let ok = self.try_narrow_literal(&mut arm.body, target_ty);
+                    let ok = self.try_narrow_literal(arm.body_mut(), target_ty);
                     if !ok {
                         all_ok = false;
                     }
-                    if arm.body.ty != *target_ty {
+                    if arm.body().ty != *target_ty {
                         all_narrowed = false;
                     }
                 }
@@ -1109,7 +1116,7 @@ impl TypeInference {
             }
             TypedExprKind::Match { arms, .. } => {
                 for arm in arms.iter_mut() {
-                    Self::demote_slice_view(&mut arm.body);
+                    Self::demote_slice_view(arm.body_mut());
                 }
             }
             TypedExprKind::Block { tail, .. } => Self::demote_slice_view(tail),

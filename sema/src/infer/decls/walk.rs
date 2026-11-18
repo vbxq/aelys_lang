@@ -232,9 +232,14 @@ fn expr(e: &mut Expr, f: &mut dyn FnMut(&mut TypeAnnotation)) {
             expr(inner, f);
             f(target);
         }
-        ExprKind::Match { scrutinee, arms } => {
+        ExprKind::Match {
+            scrutinee, arms, ..
+        } => {
             expr(scrutinee, f);
             for arm in arms {
+                if let Some(guard) = &mut arm.guard {
+                    expr(guard, f);
+                }
                 expr(&mut arm.body, f);
             }
         }
@@ -248,6 +253,9 @@ fn expr(e: &mut Expr, f: &mut dyn FnMut(&mut TypeAnnotation)) {
                 CatchHandler::Binding { body, .. } => expr(body, f),
                 CatchHandler::Arms(arms) => {
                     for arm in arms {
+                        if let Some(guard) = &mut arm.guard {
+                            expr(guard, f);
+                        }
                         expr(&mut arm.body, f);
                     }
                 }

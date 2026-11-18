@@ -3,7 +3,7 @@ use super::{LoweringContext, infer_to_int_size, lower_binop, lower_unop};
 use crate::*;
 use aelys_sema::{
     InferType, ResultAssertOnErr, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedMatchArm,
-    TypedParam, TypedPattern, TypedStmt,
+    TypedParam, TypedPattern, TypedPatternKind, TypedStmt,
 };
 
 impl<'a> LoweringContext<'a> {
@@ -767,9 +767,9 @@ impl<'a> LoweringContext<'a> {
                 self.locals_by_name.truncate(scope_depth);
                 result
             }
-            TypedExprKind::Match { scrutinee, arms } => {
-                self.lower_match_expr(scrutinee, arms, expr)
-            }
+            TypedExprKind::Match {
+                scrutinee, arms, ..
+            } => self.lower_match_expr(scrutinee, arms, expr),
             TypedExprKind::ResultAssert {
                 scrutinee,
                 ok_tag,
@@ -2107,8 +2107,44 @@ impl<'a> LoweringContext<'a> {
             return Operand::Const(AirConst::Null);
         }
         self.pose_fresh_temp(&scrutinee_op);
+        let (scrut_ty, scrutinee_op) = match &scrutinee.ty {
+            InferType::Ref { referent, .. } => {
+                let air = self.lower_type_from_infer(referent);
+                let op = self.emit_rvalue_to_temp(air, Rvalue::Deref(scrutinee_op), sp);
+                ((**referent).clone(), op)
+            }
+            other => (other.clone(), scrutinee_op),
+        };
+        let scrut_ty = &scrut_ty;
 
-        let enum_ref = match self.lower_type_from_infer(&scrutinee.ty) {
+        let flat = arms.iter().all(|arm| {
+            arm.guard().is_none()
+                && match &arm.pattern.kind {
+                    TypedPatternKind::Wildcard => true,
+                    TypedPatternKind::Variant { fields, .. } => fields.iter().all(|f| {
+                        matches!(
+                            f.kind,
+                            TypedPatternKind::Wildcard
+                                | TypedPatternKind::Binding { sub: None, .. }
+                        )
+                    }),
+                    _ => false,
+                }
+        });
+        if !flat || !matches!(self.lower_type_from_infer(scrut_ty), AirType::Enum(_)) {
+            return self.lower_cascade_match(
+                scrutinee,
+                scrutinee_op,
+                scrut_ty,
+                arms,
+                parent,
+                result,
+                str_result,
+                rc_result,
+            );
+        }
+
+        let enum_ref = match self.lower_type_from_infer(scrut_ty) {
             AirType::Enum(r) => r,
             AirType::I8
             | AirType::I16
@@ -2135,7 +2171,7 @@ impl<'a> LoweringContext<'a> {
             | AirType::Void => {
                 self.report_ice(format!(
                     "match scrutinee is not an enum type: {:?}",
-                    scrutinee.ty
+                    scrut_ty
                 ));
                 return Operand::Const(AirConst::Null);
             }
@@ -2157,13 +2193,13 @@ impl<'a> LoweringContext<'a> {
         let mut arm_blocks: Vec<(BlockId, &TypedMatchArm)> = Vec::new();
 
         for arm in arms {
-            match &arm.pattern {
-                TypedPattern::Variant { tag, .. } => {
+            match &arm.pattern.kind {
+                TypedPatternKind::Variant { tag, .. } => {
                     let block_id = self.alloc_block_id();
                     switch_targets.push((AirConst::Int(*tag as i64, AirIntSize::I32), block_id));
                     arm_blocks.push((block_id, arm));
                 }
-                TypedPattern::Wildcard => {
+                _ => {
                     wildcard_arm = Some(arm);
                 }
             }
@@ -2184,9 +2220,12 @@ impl<'a> LoweringContext<'a> {
             let arm_scope_depth = self.locals_by_name.len();
             let before = self.str_temp_ids();
 
-            if let TypedPattern::Variant { tag, bindings, .. } = &arm.pattern {
-                for (field_index, (name, ty)) in bindings.iter().enumerate() {
-                    let field_ty = self.lower_type_from_infer(ty);
+            if let TypedPatternKind::Variant { tag, fields, .. } = &arm.pattern.kind {
+                for (field_index, field) in fields.iter().enumerate() {
+                    let TypedPatternKind::Binding { name, sub: None } = &field.kind else {
+                        continue;
+                    };
+                    let field_ty = self.lower_type_from_infer(&field.ty);
                     let field_local = self.alloc_named_local(name, field_ty.clone(), false, sp);
                     self.emit(
                         AirStmtKind::Assign {
@@ -2209,17 +2248,17 @@ impl<'a> LoweringContext<'a> {
             }
 
             if let Some(result) = result {
-                let arm_val = self.lower_expr(&arm.body);
+                let arm_val = self.lower_expr(arm.body());
                 self.store_arm_value(
                     result,
                     arm_val,
                     str_result,
                     rc_result.as_ref(),
-                    &arm.body,
+                    arm.body(),
                     &parent.ty,
                 );
             } else {
-                self.lower_expr_discard(&arm.body);
+                self.lower_expr_discard(arm.body());
             }
             self.release_arm_str_temps(&before);
             if !self.last_block_is_terminated() {
@@ -2242,17 +2281,17 @@ impl<'a> LoweringContext<'a> {
         if let Some(wildcard) = wildcard_arm {
             let before = self.str_temp_ids();
             if let Some(result) = result {
-                let wc_val = self.lower_expr(&wildcard.body);
+                let wc_val = self.lower_expr(wildcard.body());
                 self.store_arm_value(
                     result,
                     wc_val,
                     str_result,
                     rc_result.as_ref(),
-                    &wildcard.body,
+                    wildcard.body(),
                     &parent.ty,
                 );
             } else {
-                self.lower_expr_discard(&wildcard.body);
+                self.lower_expr_discard(wildcard.body());
             }
             self.release_arm_str_temps(&before);
             self.seal_block(AirTerminator::Goto(merge_id));
@@ -2264,6 +2303,313 @@ impl<'a> LoweringContext<'a> {
         self.restamp_str_temps(&dominated);
         self.pose_owned_str_result(result, str_result || rc_result.is_some());
         result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn lower_cascade_match(
+        &mut self,
+        scrutinee: &TypedExpr,
+        scrutinee_op: Operand,
+        scrut_ty: &InferType,
+        arms: &[TypedMatchArm],
+        parent: &TypedExpr,
+        result: Option<LocalId>,
+        str_result: bool,
+        rc_result: Option<super::RcShape>,
+    ) -> Operand {
+        let sp = Some(self.span(&parent.span));
+        let outer_depth = self.locals_by_name.len();
+        let guarded = arms.iter().any(|a| a.guard().is_some());
+        let scrut_air = self.lower_type_from_infer(scrut_ty);
+        let exclusive_local = matches!(&scrutinee.kind, TypedExprKind::Identifier(name)
+            if self.lookup_local(name).is_some())
+            && !matches!(scrutinee.ty, InferType::Ref { .. });
+        let posed = matches!(&scrutinee_op, Operand::Copy(id) | Operand::Move(id)
+            if self.stmt_str_temps.iter().any(|(l, _)| l == id));
+        // a guard runs user code between tests, so a place it can reach is tested through a held copy
+        let scrut = if guarded
+            && !exclusive_local
+            && !posed
+            && !matches!(scrutinee_op, Operand::Const(_))
+            && self.counted_air(&scrut_air)
+        {
+            let held = self.alloc_named_local("__match_scrutinee", scrut_air.clone(), false, sp);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(held),
+                    rvalue: Rvalue::Use(scrutinee_op.clone()),
+                },
+                sp,
+            );
+            self.emit_str_retain(held, sp);
+            self.str_locals.push((held, self.locals_by_name.len()));
+            Some(held)
+        } else {
+            None
+        };
+        let scrut_val = scrut.map_or(scrutinee_op, Operand::Copy);
+
+        let merge_id = self.alloc_block_id();
+        let test_ids: Vec<BlockId> = arms.iter().map(|_| self.alloc_block_id()).collect();
+        let unreachable_id = self.alloc_block_id();
+        let dominated = self.str_temps_posed_here();
+        self.seal_block(AirTerminator::Goto(
+            test_ids.first().copied().unwrap_or(unreachable_id),
+        ));
+
+        for (i, arm) in arms.iter().enumerate() {
+            self.fixup_block_id_noop(test_ids[i]);
+            let fail = test_ids.get(i + 1).copied().unwrap_or(unreachable_id);
+            let arm_scope_depth = self.locals_by_name.len();
+            let binds: Vec<(String, LocalId, AirType)> = arm
+                .bindings()
+                .into_iter()
+                .map(|(name, ty, _)| {
+                    let air = self.lower_type_from_infer(ty);
+                    let local = self.alloc_named_local(name, air.clone(), false, sp);
+                    (name.to_string(), local, air)
+                })
+                .collect();
+            self.lower_pattern_test(&arm.pattern, scrut_val.clone(), fail, &binds, sp);
+            let counted: Vec<LocalId> = binds
+                .iter()
+                .filter(|(_, _, ty)| self.counted_air(ty))
+                .map(|(_, l, _)| *l)
+                .collect();
+            for local in &counted {
+                self.emit_str_retain(*local, sp);
+                self.str_locals.push((*local, self.locals_by_name.len()));
+            }
+            if let Some(guard) = arm.guard() {
+                let before = self.str_temp_ids();
+                let cond = self.lower_expr(guard);
+                if !self.position_is_dead() {
+                    self.release_arm_str_temps(&before);
+                    let body_id = self.alloc_block_id();
+                    let guard_fail = self.alloc_block_id();
+                    self.seal_block(AirTerminator::Branch {
+                        cond,
+                        then_block: body_id,
+                        else_block: guard_fail,
+                    });
+                    self.fixup_block_id_noop(guard_fail);
+                    for local in &counted {
+                        self.emit_str_release(*local, sp);
+                    }
+                    self.seal_block(AirTerminator::Goto(fail));
+                    self.fixup_block_id_noop(body_id);
+                }
+            }
+            let before = self.str_temp_ids();
+            if let Some(result) = result {
+                let arm_val = self.lower_expr(arm.body());
+                self.store_arm_value(
+                    result,
+                    arm_val,
+                    str_result,
+                    rc_result.as_ref(),
+                    arm.body(),
+                    &parent.ty,
+                );
+            } else {
+                self.lower_expr_discard(arm.body());
+            }
+            self.release_arm_str_temps(&before);
+            if !self.last_block_is_terminated() {
+                let binders: Vec<LocalId> = self
+                    .str_locals
+                    .iter()
+                    .filter(|(_, d)| *d > arm_scope_depth)
+                    .map(|(l, _)| *l)
+                    .collect();
+                for id in binders {
+                    self.emit_str_release(id, None);
+                }
+            }
+            self.str_locals.retain(|(_, d)| *d <= arm_scope_depth);
+            self.locals_by_name.truncate(arm_scope_depth);
+            self.seal_block(AirTerminator::Goto(merge_id));
+        }
+
+        self.fixup_block_id_noop(unreachable_id);
+        self.seal_block(AirTerminator::Unreachable);
+        self.fixup_block_id_noop(merge_id);
+        if let Some(held) = scrut {
+            self.emit_str_release(held, sp);
+        }
+        self.str_locals.retain(|(_, d)| *d <= outer_depth);
+        self.locals_by_name.truncate(outer_depth);
+        self.restamp_str_temps(&dominated);
+        self.pose_owned_str_result(result, str_result || rc_result.is_some());
+        result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
+    }
+
+    fn branch_or_fail(&mut self, cond: Operand, fail: BlockId, negate: bool) {
+        let ok = self.alloc_block_id();
+        let (then_block, else_block) = if negate { (fail, ok) } else { (ok, fail) };
+        self.seal_block(AirTerminator::Branch {
+            cond,
+            then_block,
+            else_block,
+        });
+        self.fixup_block_id_noop(ok);
+    }
+
+    fn pattern_const(&self, lit: &aelys_sema::PatLit, ty: &InferType) -> AirConst {
+        match lit {
+            aelys_sema::PatLit::Int(v) => {
+                AirConst::Int(*v as i64, super::infer_to_int_size(ty))
+            }
+            aelys_sema::PatLit::Char(c) => AirConst::Char(*c),
+            aelys_sema::PatLit::Bool(b) => AirConst::Bool(*b),
+            aelys_sema::PatLit::Str(s) => AirConst::Str(s.clone()),
+        }
+    }
+
+    fn compare_to_fail(
+        &mut self,
+        op: BinOp,
+        val: &Operand,
+        lit: &aelys_sema::PatLit,
+        ty: &InferType,
+        fail: BlockId,
+        sp: Option<Span>,
+    ) {
+        let k = self.pattern_const(lit, ty);
+        let cond = self.emit_rvalue_to_temp(
+            AirType::Bool,
+            Rvalue::BinaryOp(op, val.clone(), Operand::Const(k)),
+            sp,
+        );
+        self.branch_or_fail(cond, fail, false);
+    }
+
+    fn lower_pattern_test(
+        &mut self,
+        pat: &TypedPattern,
+        val: Operand,
+        fail: BlockId,
+        binds: &[(String, LocalId, AirType)],
+        sp: Option<Span>,
+    ) {
+        match &pat.kind {
+            TypedPatternKind::Wildcard => {}
+            TypedPatternKind::Binding { name, sub } => {
+                if let Some(sub) = sub {
+                    self.lower_pattern_test(sub, val.clone(), fail, binds, sp);
+                }
+                if let Some((_, local, _)) = binds.iter().find(|(n, _, _)| n == name) {
+                    self.emit(
+                        AirStmtKind::Assign {
+                            place: Place::Local(*local),
+                            rvalue: Rvalue::Use(val),
+                        },
+                        sp,
+                    );
+                }
+            }
+            TypedPatternKind::Lit(aelys_sema::PatLit::Bool(b)) => {
+                self.branch_or_fail(val, fail, !*b);
+            }
+            TypedPatternKind::Lit(lit) => {
+                self.compare_to_fail(BinOp::Eq, &val, lit, &pat.ty, fail, sp);
+            }
+            TypedPatternKind::Range { lo, hi } => {
+                self.compare_to_fail(BinOp::Ge, &val, lo, &pat.ty, fail, sp);
+                self.compare_to_fail(BinOp::Le, &val, hi, &pat.ty, fail, sp);
+            }
+            TypedPatternKind::Variant { tag, fields, .. } => {
+                let AirType::Enum(enum_ref) = self.lower_type_from_infer(&pat.ty) else {
+                    self.report_ice(format!(
+                        "ICE: a variant pattern tests a value of type `{}`",
+                        pat.ty
+                    ));
+                    return;
+                };
+                let tag_op = self.emit_rvalue_to_temp(
+                    AirType::I32,
+                    Rvalue::EnumTag {
+                        enum_ref: enum_ref.clone(),
+                        operand: val.clone(),
+                    },
+                    sp,
+                );
+                let cond = self.emit_rvalue_to_temp(
+                    AirType::Bool,
+                    Rvalue::BinaryOp(
+                        BinOp::Eq,
+                        tag_op,
+                        Operand::Const(AirConst::Int(*tag as i64, AirIntSize::I32)),
+                    ),
+                    sp,
+                );
+                self.branch_or_fail(cond, fail, false);
+                for (i, field) in fields.iter().enumerate() {
+                    if matches!(field.kind, TypedPatternKind::Wildcard) {
+                        continue;
+                    }
+                    let field_air = self.lower_type_from_infer(&field.ty);
+                    let payload = self.emit_rvalue_to_temp(
+                        field_air,
+                        Rvalue::EnumPayload {
+                            enum_ref: enum_ref.clone(),
+                            tag: *tag,
+                            operand: val.clone(),
+                            field_index: i as u32,
+                        },
+                        sp,
+                    );
+                    self.lower_pattern_test(field, payload, fail, binds, sp);
+                }
+            }
+            TypedPatternKind::Struct { fields, .. } => {
+                for (name, field) in fields {
+                    if matches!(field.kind, TypedPatternKind::Wildcard) {
+                        continue;
+                    }
+                    let field_air = self.lower_type_from_infer(&field.ty);
+                    let value = self.emit_rvalue_to_temp(
+                        field_air,
+                        Rvalue::FieldAccess {
+                            base: val.clone(),
+                            field: name.clone(),
+                        },
+                        sp,
+                    );
+                    self.lower_pattern_test(field, value, fail, binds, sp);
+                }
+            }
+            TypedPatternKind::Tuple(elems) => {
+                for (i, elem) in elems.iter().enumerate() {
+                    if matches!(elem.kind, TypedPatternKind::Wildcard) {
+                        continue;
+                    }
+                    let elem_air = self.lower_type_from_infer(&elem.ty);
+                    let value = self.emit_rvalue_to_temp(
+                        elem_air,
+                        Rvalue::FieldAccess {
+                            base: val.clone(),
+                            field: i.to_string(),
+                        },
+                        sp,
+                    );
+                    self.lower_pattern_test(elem, value, fail, binds, sp);
+                }
+            }
+            TypedPatternKind::Or(alts) => {
+                let succ = self.alloc_block_id();
+                for (k, alt) in alts.iter().enumerate() {
+                    let last = k + 1 == alts.len();
+                    let next = if last { fail } else { self.alloc_block_id() };
+                    self.lower_pattern_test(alt, val.clone(), next, binds, sp);
+                    self.seal_block(AirTerminator::Goto(succ));
+                    if !last {
+                        self.fixup_block_id_noop(next);
+                    }
+                }
+                self.fixup_block_id_noop(succ);
+            }
+        }
     }
 
     fn lower_result_assert(

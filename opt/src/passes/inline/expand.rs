@@ -401,15 +401,24 @@ impl InlineExpander {
                     .collect(),
                 tail: Box::new(self.substitute_expr(tail, params, span)),
             },
-            TypedExprKind::Match { scrutinee, arms } => TypedExprKind::Match {
+            TypedExprKind::Match {
+                scrutinee,
+                arms,
+                origin,
+            } => TypedExprKind::Match {
                 scrutinee: Box::new(self.substitute_expr(scrutinee, params, span)),
                 arms: arms
                     .iter()
-                    .map(|arm| aelys_sema::TypedMatchArm {
-                        pattern: arm.pattern.clone(),
-                        body: Box::new(self.substitute_expr(&arm.body, params, span)),
+                    .map(|arm| {
+                        let mut inner = params.clone();
+                        for (name, _, _) in arm.bindings() {
+                            inner.remove(name);
+                        }
+                        arm.clone()
+                            .map_exprs(|e| self.substitute_expr(&e, &inner, span))
                     })
                     .collect(),
+                origin: *origin,
             },
             TypedExprKind::ResultAssert {
                 scrutinee,

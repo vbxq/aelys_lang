@@ -1,6 +1,6 @@
 use super::Parser;
 use aelys_common::Result;
-use aelys_syntax::{Pattern, Stmt, StmtKind, TokenKind};
+use aelys_syntax::{Stmt, StmtKind, TokenKind};
 
 impl Parser {
     pub(super) fn let_declaration(&mut self, is_pub: bool) -> Result<Stmt> {
@@ -46,7 +46,7 @@ impl Parser {
                 start_span,
             ));
         }
-        let pattern = self.let_pattern_part()?;
+        let pattern = self.parse_let_pattern()?;
         let type_annotation = if self.match_token(&TokenKind::Colon) {
             Some(self.parse_type_annotation()?)
         } else {
@@ -64,50 +64,5 @@ impl Parser {
             },
             start_span.merge(end_span),
         ))
-    }
-
-    fn let_pattern_part(&mut self) -> Result<Pattern> {
-        let span = self.peek().span;
-        if self.match_token(&TokenKind::LParen) {
-            let mut elems = vec![self.let_pattern_part()?];
-            while self.match_token(&TokenKind::Comma) {
-                if self.check(&TokenKind::RParen) {
-                    break;
-                }
-                elems.push(self.let_pattern_part()?);
-            }
-            self.consume(&TokenKind::RParen, ")")?;
-            let end_span = self.previous().span;
-            if elems.len() == 1 {
-                return Err(self.rule(
-                    902,
-                    "a one-element tuple pattern is not supported; bind the value itself",
-                    span.merge(end_span),
-                ));
-            }
-            return Ok(Pattern::Tuple {
-                elems,
-                span: span.merge(end_span),
-            });
-        }
-        if matches!(&self.peek().kind, TokenKind::Identifier(n) if n == "_") {
-            self.advance();
-            return Ok(Pattern::Wildcard(span));
-        }
-        let mutable = self.match_token(&TokenKind::Mut);
-        if !matches!(self.peek().kind, TokenKind::Identifier(_)) && self.peek().kind.keyword_spelling().is_none() {
-            return Err(self.rule(
-                101,
-                "a let pattern cannot fail; use match",
-                self.peek().span,
-            ));
-        }
-        let name = self.consume_binding_name("binding name")?;
-        let end_span = self.previous().span;
-        Ok(Pattern::Binding {
-            name,
-            mutable,
-            span: span.merge(end_span),
-        })
     }
 }

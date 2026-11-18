@@ -3,7 +3,7 @@ use crate::lexer::Lexer;
 use aelys_common::Result;
 use aelys_common::error::{CompileError, CompileErrorKind};
 use aelys_syntax::{
-    Expr, ExprKind, FmtPart, FmtStringPart, MatchArm, Pattern, Source, Stmt, StmtKind,
+    Expr, ExprKind, FmtPart, FmtStringPart, MatchArm, MatchOrigin, Pattern, Source, Stmt, StmtKind,
     StructFieldInit, TokenKind, TypeAnnotation,
 };
 use std::sync::Arc;
@@ -53,6 +53,22 @@ impl Parser {
     }
 
     pub(super) fn if_expression(&mut self, start_span: aelys_syntax::Span) -> Result<Expr> {
+        if self.match_token(&TokenKind::Let) {
+            let (pattern, scrutinee) = self.let_pattern_head()?;
+            self.consume(&TokenKind::LBrace, "{")?;
+            let then_branch = self.block_expression()?;
+            self.consume(&TokenKind::Else, "else")?;
+            let else_branch = if self.check(&TokenKind::If) {
+                let if_span = self.peek().span;
+                self.advance();
+                self.if_expression(if_span)?
+            } else {
+                self.consume(&TokenKind::LBrace, "{")?;
+                self.block_expression()?
+            };
+            let span = start_span.merge(self.previous().span);
+            return Ok(Self::if_let_match(pattern, scrutinee, then_branch, else_branch, span));
+        }
         let condition = self.expression()?;
         self.consume(&TokenKind::LBrace, "{")?;
 
@@ -80,6 +96,51 @@ impl Parser {
         ))
     }
 
+    pub(crate) fn let_pattern_head(&mut self) -> Result<(Pattern, Expr)> {
+        let pattern = self.parse_pattern()?;
+        self.consume(&TokenKind::Eq, "=")?;
+        let scrutinee = self.expression()?;
+        if matches!(scrutinee.kind, ExprKind::And { .. } | ExprKind::Or { .. }) {
+            self.refuse_pattern(
+                "`if let` chains are not supported; nest the `if` inside the `if let`",
+                scrutinee.span,
+            );
+        }
+        Ok((pattern, scrutinee))
+    }
+
+    pub(crate) fn if_let_match(
+        pattern: Pattern,
+        scrutinee: Expr,
+        then_branch: Expr,
+        else_branch: Expr,
+        span: aelys_syntax::Span,
+    ) -> Expr {
+        let then_span = then_branch.span;
+        let else_span = else_branch.span;
+        Expr::new(
+            ExprKind::Match {
+                scrutinee: Box::new(scrutinee),
+                arms: vec![
+                    MatchArm {
+                        pattern,
+                        guard: None,
+                        body: Box::new(then_branch),
+                        span: then_span,
+                    },
+                    MatchArm {
+                        pattern: Pattern::Wildcard(else_span),
+                        guard: None,
+                        body: Box::new(else_branch),
+                        span: else_span,
+                    },
+                ],
+                origin: MatchOrigin::IfLet,
+            },
+            span,
+        )
+    }
+
     pub(super) fn match_expression(&mut self, start_span: aelys_syntax::Span) -> Result<Expr> {
         let scrutinee = self.expression()?;
         self.consume(&TokenKind::LBrace, "{")?;
@@ -90,6 +151,7 @@ impl Parser {
             ExprKind::Match {
                 scrutinee: Box::new(scrutinee),
                 arms,
+                origin: MatchOrigin::Match,
             },
             start_span.merge(end_span),
         ))
@@ -103,15 +165,23 @@ impl Parser {
             }
             let arm_start = self.peek().span;
             let pattern = self.parse_pattern()?;
+            let guard = if self.match_token(&TokenKind::If) {
+                Some(Box::new(self.expression()?))
+            } else {
+                None
+            };
             self.consume(&TokenKind::FatArrow, "=>")?;
             let body = if self.check(&TokenKind::Return) {
                 self.match_arm_return()?
+            } else if self.check(&TokenKind::Break) || self.check(&TokenKind::Continue) {
+                self.match_arm_jump()
             } else {
                 self.expression()?
             };
             let arm_end = self.previous().span;
             arms.push(MatchArm {
                 pattern,
+                guard,
                 body: Box::new(body),
                 span: arm_start.merge(arm_end),
             });
@@ -121,6 +191,23 @@ impl Parser {
         }
         self.consume(&TokenKind::RBrace, "}")?;
         Ok(arms)
+    }
+
+    fn match_arm_jump(&mut self) -> Expr {
+        let span = self.peek().span;
+        let kind = if self.match_token(&TokenKind::Break) {
+            StmtKind::Break
+        } else {
+            self.advance();
+            StmtKind::Continue
+        };
+        Expr::new(
+            ExprKind::Block {
+                stmts: vec![Stmt::new(kind, span)],
+                tail: Box::new(Expr::new(ExprKind::Null, span)),
+            },
+            span,
+        )
     }
 
     fn match_arm_return(&mut self) -> Result<Expr> {
@@ -145,115 +232,6 @@ impl Parser {
             },
             ret_span.merge(end_span),
         ))
-    }
-
-    fn parse_pattern(&mut self) -> Result<Pattern> {
-        let span = self.peek().span;
-
-        if let TokenKind::Identifier(name) = &self.peek().kind {
-            if name == "_" {
-                self.advance();
-                return Ok(Pattern::Wildcard(span));
-            }
-        }
-
-        let mut enum_name = self.consume_identifier("enum name or _")?;
-        let unqualified = !self.check(&TokenKind::ColonColon) && !self.check(&TokenKind::Dot);
-        if unqualified {
-            let prelude_enum = match aelys_syntax::prelude_variant_enum(&enum_name) {
-                Some(prelude_enum) => prelude_enum,
-                None if enum_name.starts_with(char::is_uppercase) => "",
-                None => {
-                    self.refuse_in_place(
-                        CompileErrorKind::NotAVariantInScope { name: enum_name },
-                        span,
-                    );
-                    self.pattern_bindings()?;
-                    return Ok(Pattern::Wildcard(span));
-                }
-            };
-            let variant = std::mem::replace(&mut enum_name, prelude_enum.to_string());
-            let variant_end_span = self.previous().span;
-            let bindings = self.pattern_bindings()?;
-            let end_span = self.previous().span;
-            return Ok(Pattern::Variant {
-                enum_name,
-                variant,
-                bindings,
-                span: span.merge(end_span.merge(variant_end_span)),
-                unqualified: true,
-            });
-        }
-        while self.check(&TokenKind::Dot)
-            && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
-        {
-            self.advance();
-            let segment = self.consume_identifier("enum path segment")?;
-            enum_name.push('.');
-            enum_name.push_str(&segment);
-        }
-        self.consume(&TokenKind::ColonColon, "::")?;
-        let variant = self.consume_identifier("variant name")?;
-        let variant_end_span = self.previous().span;
-        let bindings = self.pattern_bindings()?;
-        let end_span = self.previous().span;
-
-        Ok(Pattern::Variant {
-            enum_name,
-            variant,
-            bindings,
-            span: span.merge(end_span.merge(variant_end_span)),
-            unqualified: false,
-        })
-    }
-
-    fn pattern_bindings(&mut self) -> Result<Vec<String>> {
-        let mut bindings = Vec::new();
-        if self.match_token(&TokenKind::LParen) {
-            if !self.check(&TokenKind::RParen) {
-                loop {
-                    if self.starts_a_nested_pattern() {
-                        let span = self.peek().span;
-                        self.refuse_in_place(CompileErrorKind::NestedPattern, span);
-                        self.skip_to_pattern_close();
-                        return Ok(bindings);
-                    }
-                    bindings.push(self.consume_binding_name("binding name")?);
-                    if !self.match_token(&TokenKind::Comma) {
-                        break;
-                    }
-                }
-            }
-            self.consume(&TokenKind::RParen, ")")?;
-        }
-        Ok(bindings)
-    }
-
-    fn starts_a_nested_pattern(&self) -> bool {
-        let TokenKind::Identifier(name) = &self.peek().kind else {
-            return false;
-        };
-        aelys_syntax::prelude_variant_enum(name).is_some()
-            || matches!(
-                self.peek_at(1).kind,
-                TokenKind::ColonColon | TokenKind::Dot | TokenKind::LParen
-            )
-    }
-
-    fn skip_to_pattern_close(&mut self) {
-        let mut depth = 1usize;
-        while !self.is_at_end() {
-            match self.advance().kind {
-                TokenKind::LParen => depth += 1,
-                TokenKind::RParen => {
-                    depth -= 1;
-                    if depth == 0 {
-                        return;
-                    }
-                }
-                _ => {}
-            }
-        }
     }
 
     pub(super) fn block_expression(&mut self) -> Result<Expr> {
@@ -824,10 +802,15 @@ fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
         ExprKind::Cast { expr, .. } => {
             remap_expr_spans(expr, span);
         }
-        ExprKind::Match { scrutinee, arms } => {
+        ExprKind::Match {
+            scrutinee, arms, ..
+        } => {
             remap_expr_spans(scrutinee, span);
             for arm in arms {
                 arm.span = span;
+                if let Some(guard) = &mut arm.guard {
+                    remap_expr_spans(guard, span);
+                }
                 remap_expr_spans(&mut arm.body, span);
             }
         }

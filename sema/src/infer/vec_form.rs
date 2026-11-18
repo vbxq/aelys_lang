@@ -170,10 +170,14 @@ impl TypeInference {
                     self.vec_form_expr(arg);
                 }
             }
-            TypedExprKind::Match { scrutinee, arms } => {
+            TypedExprKind::Match {
+                scrutinee, arms, ..
+            } => {
                 self.vec_form_expr(scrutinee);
                 for arm in arms {
-                    self.vec_form_expr(&arm.body);
+                    for e in arm.exprs() {
+                        self.vec_form_expr(e);
+                    }
                 }
             }
             TypedExprKind::ResultAssert { scrutinee, .. } => self.vec_form_expr(scrutinee),

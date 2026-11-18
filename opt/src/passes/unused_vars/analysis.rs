@@ -201,10 +201,14 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
             }
             collect_uses_in_expr(tail, used);
         }
-        TypedExprKind::Match { scrutinee, arms } => {
+        TypedExprKind::Match {
+            scrutinee, arms, ..
+        } => {
             collect_uses_in_expr(scrutinee, used);
             for arm in arms {
-                collect_uses_in_expr(&arm.body, used);
+                for e in arm.exprs() {
+                    collect_uses_in_expr(e, used);
+                }
             }
         }
         TypedExprKind::ResultAssert { scrutinee, .. } => {

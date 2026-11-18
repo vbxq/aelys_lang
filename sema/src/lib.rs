@@ -20,8 +20,9 @@ pub use place_spine::{
     target_ptr_is_shared,
 };
 pub use typed_ast::{
-    LiteralInit, ResultAssertOnErr, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction,
-    TypedMatchArm, TypedParam, TypedPattern, TypedProgram, TypedStmt, TypedStmtKind,
+    LiteralInit, MatchOrigin, PatLit, ResultAssertOnErr, TypedExpr, TypedExprKind,
+    TypedFmtStringPart, TypedFunction, TypedMatchArm, TypedParam, TypedPattern, TypedPatternKind,
+    TypedProgram, TypedStmt, TypedStmtKind,
 };
 pub use types::{
     InferType, ResolvedType, StructDef, StructField, TypeTable, TypeVarGen, TypeVarId,

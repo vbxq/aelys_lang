@@ -4,6 +4,7 @@ use std::sync::Arc;
 use aelys_syntax::Source;
 use aelys_syntax::Span;
 use aelys_syntax::{BinaryOp, Decorator, ForeignDecl, NeedsStmt, TypeBounds, UnaryOp};
+pub use aelys_syntax::{MatchOrigin, PatLit};
 
 use crate::types::InferType;
 use crate::types::TypeTable;
@@ -291,6 +292,7 @@ pub enum TypedExprKind {
     Match {
         scrutinee: Box<TypedExpr>,
         arms: Vec<TypedMatchArm>,
+        origin: MatchOrigin,
     },
 
     ResultAssert {
@@ -315,19 +317,178 @@ pub enum ResultAssertOnErr {
 #[derive(Debug, Clone)]
 pub struct TypedMatchArm {
     pub pattern: TypedPattern,
-    pub body: Box<TypedExpr>,
+    guard: Option<Box<TypedExpr>>,
+    rhs: Box<TypedExpr>,
+}
+
+impl TypedMatchArm {
+    pub fn new(pattern: TypedPattern, guard: Option<TypedExpr>, body: TypedExpr) -> Self {
+        Self {
+            pattern,
+            guard: guard.map(Box::new),
+            rhs: Box::new(body),
+        }
+    }
+
+    pub fn guard(&self) -> Option<&TypedExpr> {
+        self.guard.as_deref()
+    }
+
+    pub fn body(&self) -> &TypedExpr {
+        &self.rhs
+    }
+
+    pub fn body_mut(&mut self) -> &mut TypedExpr {
+        &mut self.rhs
+    }
+
+    pub fn body_box_mut(&mut self) -> &mut Box<TypedExpr> {
+        &mut self.rhs
+    }
+
+    pub fn exprs(&self) -> impl Iterator<Item = &TypedExpr> {
+        self.guard.as_deref().into_iter().chain(std::iter::once(&*self.rhs))
+    }
+
+    pub fn exprs_mut(&mut self) -> impl Iterator<Item = &mut TypedExpr> {
+        self.guard
+            .as_deref_mut()
+            .into_iter()
+            .chain(std::iter::once(&mut *self.rhs))
+    }
+
+    pub fn bindings(&self) -> Vec<(&str, &InferType, Span)> {
+        self.pattern.bindings()
+    }
+
+    pub fn map_exprs(self, mut f: impl FnMut(TypedExpr) -> TypedExpr) -> Self {
+        Self {
+            pattern: self.pattern,
+            guard: self.guard.map(|g| Box::new(f(*g))),
+            rhs: Box::new(f(*self.rhs)),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
-pub enum TypedPattern {
+pub struct TypedPattern {
+    pub kind: TypedPatternKind,
+    pub ty: InferType,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum TypedPatternKind {
+    Wildcard,
+    Binding {
+        name: String,
+        sub: Option<Box<TypedPattern>>,
+    },
+    Lit(PatLit),
+    Range {
+        lo: PatLit,
+        hi: PatLit,
+    },
     Variant {
         enum_name: String,
         variant: String,
         tag: u32,
-        bindings: Vec<(String, InferType)>,
-        span: Span,
+        fields: Vec<TypedPattern>,
     },
-    Wildcard,
+    Struct {
+        name: String,
+        fields: Vec<(String, TypedPattern)>,
+    },
+    Tuple(Vec<TypedPattern>),
+    Or(Vec<TypedPattern>),
+}
+
+impl TypedPattern {
+    pub fn new(kind: TypedPatternKind, ty: InferType, span: Span) -> Self {
+        Self { kind, ty, span }
+    }
+
+    pub fn bindings(&self) -> Vec<(&str, &InferType, Span)> {
+        let mut out = Vec::new();
+        self.collect_bindings(&mut out);
+        out
+    }
+
+    fn collect_bindings<'a>(&'a self, out: &mut Vec<(&'a str, &'a InferType, Span)>) {
+        match &self.kind {
+            TypedPatternKind::Wildcard
+            | TypedPatternKind::Lit(_)
+            | TypedPatternKind::Range { .. } => {}
+            TypedPatternKind::Binding { name, sub } => {
+                out.push((name.as_str(), &self.ty, self.span));
+                if let Some(sub) = sub {
+                    sub.collect_bindings(out);
+                }
+            }
+            TypedPatternKind::Variant { fields, .. } | TypedPatternKind::Tuple(fields) => {
+                for f in fields {
+                    f.collect_bindings(out);
+                }
+            }
+            TypedPatternKind::Struct { fields, .. } => {
+                for (_, f) in fields {
+                    f.collect_bindings(out);
+                }
+            }
+            TypedPatternKind::Or(alts) => {
+                if let Some(first) = alts.first() {
+                    first.collect_bindings(out);
+                }
+            }
+        }
+    }
+
+    pub fn irrefutable_shallow(&self) -> bool {
+        match &self.kind {
+            TypedPatternKind::Wildcard => true,
+            TypedPatternKind::Binding { sub, .. } => sub.as_ref().is_none_or(|s| s.irrefutable_shallow()),
+            _ => false,
+        }
+    }
+
+    pub fn map_types(self, f: &mut impl FnMut(InferType) -> InferType) -> Self {
+        let kind = match self.kind {
+            TypedPatternKind::Binding { name, sub } => TypedPatternKind::Binding {
+                name,
+                sub: sub.map(|s| Box::new(s.map_types(f))),
+            },
+            TypedPatternKind::Variant {
+                enum_name,
+                variant,
+                tag,
+                fields,
+            } => TypedPatternKind::Variant {
+                enum_name,
+                variant,
+                tag,
+                fields: fields.into_iter().map(|p| p.map_types(f)).collect(),
+            },
+            TypedPatternKind::Struct { name, fields } => TypedPatternKind::Struct {
+                name,
+                fields: fields
+                    .into_iter()
+                    .map(|(n, p)| (n, p.map_types(f)))
+                    .collect(),
+            },
+            TypedPatternKind::Tuple(elems) => {
+                TypedPatternKind::Tuple(elems.into_iter().map(|p| p.map_types(f)).collect())
+            }
+            TypedPatternKind::Or(alts) => {
+                TypedPatternKind::Or(alts.into_iter().map(|p| p.map_types(f)).collect())
+            }
+            other => other,
+        };
+        Self {
+            kind,
+            ty: f(self.ty),
+            span: self.span,
+        }
+    }
 }
 
 impl TypedExpr {

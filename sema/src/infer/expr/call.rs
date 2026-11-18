@@ -431,6 +431,7 @@ impl TypeInference {
         let e_name = self.next_map_error_binding('e');
 
         let ok_arm = MatchArm {
+            guard: None,
             pattern: variant_pattern(&enum_name, "Ok", vec![v_name.clone()], span),
             body: Box::new(variant_construct(
                 &enum_name,
@@ -441,6 +442,7 @@ impl TypeInference {
             span,
         };
         let err_arm = MatchArm {
+            guard: None,
             pattern: variant_pattern(&enum_name, "Err", vec![e_name.clone()], span),
             body: Box::new(variant_construct(
                 &enum_name,
@@ -456,7 +458,7 @@ impl TypeInference {
         };
 
         let arms = vec![ok_arm, err_arm];
-        let (kind, _) = self.infer_match_typed(typed_object, obj_span, &arms, span, false);
+        let (kind, _) = self.infer_match_typed(typed_object, obj_span, &arms, span, aelys_syntax::MatchOrigin::Match);
         (kind, InferType::Enum(enum_name, vec![t, e2]))
     }
 
@@ -481,13 +483,7 @@ fn describe_callback_arg(arg: &Expr) -> String {
 }
 
 fn variant_pattern(enum_name: &str, variant: &str, bindings: Vec<String>, span: Span) -> Pattern {
-    Pattern::Variant {
-        enum_name: enum_name.to_string(),
-        variant: variant.to_string(),
-        bindings,
-        span,
-        unqualified: false,
-    }
+    Pattern::flat_variant(enum_name, variant, bindings, span)
 }
 
 fn ident_expr(name: &str, span: Span) -> Expr {

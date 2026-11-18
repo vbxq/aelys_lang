@@ -16,6 +16,7 @@ mod stmt;
 mod structs;
 mod substitute;
 pub(crate) mod unresolved;
+mod usefulness;
 mod validate;
 mod vec_form;
 mod visibility;
@@ -54,7 +55,7 @@ pub struct TypeInference {
     keep_binding_use: bool,
     try_counter: usize,
     unsafe_depth: usize,
-    catch_match_pending: bool,
+    refused_matches: std::collections::HashSet<(usize, usize)>,
     nogc_fn_params: HashSet<String>,
     bound_generic_sigs: HashMap<String, Vec<bounds::BoundGenericSig>>,
     foreign_sigs: HashSet<String>,

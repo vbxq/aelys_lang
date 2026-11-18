@@ -3,6 +3,7 @@
 mod atom;
 mod binary;
 mod call;
+mod pattern;
 mod unary;
 
 use super::Parser;

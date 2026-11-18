@@ -348,35 +348,21 @@ impl TypeInference {
                 tail: Box::new(self.finalize_expr(*tail)),
             },
 
-            TypedExprKind::Match { scrutinee, arms } => TypedExprKind::Match {
+            TypedExprKind::Match {
+                scrutinee,
+                arms,
+                origin,
+            } => TypedExprKind::Match {
                 scrutinee: Box::new(self.finalize_expr(*scrutinee)),
                 arms: arms
                     .into_iter()
-                    .map(|arm| crate::typed_ast::TypedMatchArm {
-                        pattern: match arm.pattern {
-                            crate::typed_ast::TypedPattern::Variant {
-                                enum_name,
-                                variant,
-                                tag,
-                                bindings,
-                                span,
-                            } => crate::typed_ast::TypedPattern::Variant {
-                                enum_name,
-                                variant,
-                                tag,
-                                bindings: bindings
-                                    .into_iter()
-                                    .map(|(n, ty)| (n, Self::finalize_type(ty)))
-                                    .collect(),
-                                span,
-                            },
-                            crate::typed_ast::TypedPattern::Wildcard => {
-                                crate::typed_ast::TypedPattern::Wildcard
-                            }
-                        },
-                        body: Box::new(self.finalize_expr(*arm.body)),
+                    .map(|arm| {
+                        let mut arm = arm.map_exprs(|e| self.finalize_expr(e));
+                        arm.pattern = arm.pattern.map_types(&mut Self::finalize_type);
+                        arm
                     })
                     .collect(),
+                origin,
             },
 
             // payload_ty is a separate copy of the node type, so finalize it too or a var leaks

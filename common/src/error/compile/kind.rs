@@ -40,6 +40,12 @@ pub enum CompileErrorKind {
         name: String,
     },
     NestedPattern,
+    PatternUnsupported {
+        detail: String,
+    },
+    PatternFormNotSupported {
+        what: String,
+    },
     UppercaseBinding {
         name: String,
     },

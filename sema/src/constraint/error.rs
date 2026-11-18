@@ -115,6 +115,18 @@ pub enum TypeErrorKind {
         owner: Option<String>,
     },
     RcFieldAssignIndirect,
+    PatternUnreachable {
+        detail: String,
+    },
+    PatternAltMismatch {
+        detail: String,
+    },
+    PatternUnsupported {
+        detail: String,
+    },
+    PatternMalformed {
+        detail: String,
+    },
     NotSupportedYet {
         detail: String,
     },
@@ -429,7 +441,11 @@ impl fmt::Display for TypeError {
                 }
                 Ok(())
             }
-            TypeErrorKind::NotSupportedYet { detail } => write!(f, "{detail}"),
+            TypeErrorKind::NotSupportedYet { detail }
+            | TypeErrorKind::PatternUnreachable { detail }
+            | TypeErrorKind::PatternAltMismatch { detail }
+            | TypeErrorKind::PatternUnsupported { detail }
+            | TypeErrorKind::PatternMalformed { detail } => write!(f, "{detail}"),
             TypeErrorKind::Coded { message, .. } => write!(f, "{message}"),
             TypeErrorKind::StringSlice => write!(
                 f,
@@ -1456,6 +1472,17 @@ impl TypeError {
                  and `Rc` handles by identity"
                     .to_string(),
             ),
+            suggestion: None,
+        }
+    }
+
+    pub fn pattern(kind: TypeErrorKind, span: Span) -> Self {
+        Self {
+            kind,
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
             suggestion: None,
         }
     }

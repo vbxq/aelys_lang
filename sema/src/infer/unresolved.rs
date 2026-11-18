@@ -1,7 +1,7 @@
 use super::TypeInference;
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{
-    TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedPattern, TypedStmt,
+    TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedStmt,
     TypedStmtKind,
 };
 use crate::types::{InferType, TypeVarId};
@@ -258,7 +258,7 @@ pub(crate) fn diverges(expr: &TypedExpr) -> bool {
         _ if matches!(expr.ty, InferType::Never) => true,
         TypedExprKind::Grouping(inner) => diverges(inner),
         TypedExprKind::Match { arms, .. } => {
-            !arms.is_empty() && arms.iter().all(|arm| diverges(&arm.body))
+            !arms.is_empty() && arms.iter().all(|arm| diverges(arm.body()))
         }
         TypedExprKind::If {
             then_branch,
@@ -376,15 +376,17 @@ fn sites_in_expr(expr: &TypedExpr, sites: &mut Vec<Site>) {
             stmts.iter().for_each(|s| sites_in_stmt(s, sites));
             sites_in_expr(tail, sites);
         }
-        TypedExprKind::Match { scrutinee, arms } => {
+        TypedExprKind::Match {
+            scrutinee, arms, ..
+        } => {
             sites_in_expr(scrutinee, sites);
             for arm in arms {
-                if let TypedPattern::Variant { bindings, span, .. } = &arm.pattern {
-                    for (name, ty) in bindings.iter().filter(|(name, _)| name != "_") {
-                        push(sites, Rank::Binding, *span, Some(name), ty);
-                    }
+                for (name, ty, span) in arm.bindings() {
+                    push(sites, Rank::Binding, span, Some(name), ty);
                 }
-                sites_in_expr(&arm.body, sites);
+                for e in arm.exprs() {
+                    sites_in_expr(e, sites);
+                }
             }
         }
         TypedExprKind::ResultAssert { scrutinee, .. } => sites_in_expr(scrutinee, sites),

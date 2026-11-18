@@ -235,35 +235,23 @@ impl TypeInference {
                     .collect(),
                 tail: Box::new(self.apply_substitution_expr(tail, subst)),
             },
-            TypedExprKind::Match { scrutinee, arms } => TypedExprKind::Match {
+            TypedExprKind::Match {
+                scrutinee,
+                arms,
+                origin,
+            } => TypedExprKind::Match {
                 scrutinee: Box::new(self.apply_substitution_expr(scrutinee, subst)),
                 arms: arms
                     .iter()
-                    .map(|arm| crate::typed_ast::TypedMatchArm {
-                        pattern: match &arm.pattern {
-                            crate::typed_ast::TypedPattern::Variant {
-                                enum_name,
-                                variant,
-                                tag,
-                                bindings,
-                                span,
-                            } => crate::typed_ast::TypedPattern::Variant {
-                                enum_name: enum_name.clone(),
-                                variant: variant.clone(),
-                                tag: *tag,
-                                bindings: bindings
-                                    .iter()
-                                    .map(|(n, ty)| (n.clone(), subst.apply(ty)))
-                                    .collect(),
-                                span: *span,
-                            },
-                            crate::typed_ast::TypedPattern::Wildcard => {
-                                crate::typed_ast::TypedPattern::Wildcard
-                            }
-                        },
-                        body: Box::new(self.apply_substitution_expr(&arm.body, subst)),
+                    .map(|arm| {
+                        let mut arm = arm
+                            .clone()
+                            .map_exprs(|e| self.apply_substitution_expr(&e, subst));
+                        arm.pattern = arm.pattern.map_types(&mut |t| subst.apply(&t));
+                        arm
                     })
                     .collect(),
+                origin: *origin,
             },
 
             TypedExprKind::ResultAssert {

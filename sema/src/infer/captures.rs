@@ -265,16 +265,18 @@ impl TypeInference {
                 }
                 self.collect_captures_inner(tail, &block_locals, captures, seen);
             }
-            TypedExprKind::Match { scrutinee, arms } => {
+            TypedExprKind::Match {
+                scrutinee, arms, ..
+            } => {
                 self.collect_captures_inner(scrutinee, locals, captures, seen);
                 for arm in arms {
                     let mut arm_locals = locals.clone();
-                    if let crate::typed_ast::TypedPattern::Variant { bindings, .. } = &arm.pattern {
-                        for (name, _) in bindings {
-                            arm_locals.insert(name.clone());
-                        }
+                    for (name, _, _) in arm.bindings() {
+                        arm_locals.insert(name.to_string());
                     }
-                    self.collect_captures_inner(&arm.body, &arm_locals, captures, seen);
+                    for e in arm.exprs() {
+                        self.collect_captures_inner(e, &arm_locals, captures, seen);
+                    }
                 }
             }
             TypedExprKind::ResultAssert { scrutinee, .. } => {

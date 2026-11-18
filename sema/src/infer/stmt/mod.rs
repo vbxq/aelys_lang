@@ -62,30 +62,34 @@ impl TypeInference {
         ) {
             use aelys_syntax::Pattern;
             match pattern {
-                Pattern::Binding { name, span, .. } => {
+                Pattern::Binding {
+                    name, span, sub, ..
+                } => {
                     if seen.contains(&name.as_str()) {
                         out.push((name.clone(), *span));
                     } else {
                         seen.push(name);
                     }
+                    if let Some(sub) = sub {
+                        walk(sub, seen, out);
+                    }
                 }
-                Pattern::Tuple { elems, .. } => {
+                Pattern::Tuple { elems, .. } | Pattern::Variant { fields: elems, .. } => {
                     for e in elems {
                         walk(e, seen, out);
                     }
                 }
-                Pattern::Variant { bindings, span, .. } => {
-                    for b in bindings {
-                        if b == "_" {
-                            continue;
-                        }
-                        if seen.contains(&b.as_str()) {
-                            out.push((b.clone(), *span));
-                        } else {
-                            seen.push(b);
-                        }
+                Pattern::Or(alts, _) => {
+                    if let Some(first) = alts.first() {
+                        walk(first, seen, out);
                     }
                 }
+                Pattern::Struct { fields, .. } => {
+                    for (_, e, _) in fields {
+                        walk(e, seen, out);
+                    }
+                }
+                Pattern::Lit(..) | Pattern::Range { .. } => {}
                 Pattern::Wildcard(_) => {}
             }
         }
@@ -115,10 +119,14 @@ impl TypeInference {
             Pattern::Binding {
                 name,
                 mutable,
+                sub,
                 span,
             } => {
                 let kind = self.infer_let_stmt(*span, name, *mutable, &None, &source, false);
                 out.push(TypedStmt { kind, span: *span });
+                if let Some(sub) = sub {
+                    self.bind_pattern_parts(sub, ty, source, out);
+                }
             }
             Pattern::Tuple { elems, span } => {
                 let parts = match ty {
@@ -158,7 +166,11 @@ impl TypeInference {
                     self.bind_pattern_parts(elem, part, access, out);
                 }
             }
-            Pattern::Variant { span, .. } => {
+            Pattern::Variant { span, .. }
+            | Pattern::Lit(_, span)
+            | Pattern::Range { span, .. }
+            | Pattern::Struct { span, .. }
+            | Pattern::Or(_, span) => {
                 self.errors.push(TypeError::coded(
                     "E0101",
                     "a let pattern cannot fail; use match",

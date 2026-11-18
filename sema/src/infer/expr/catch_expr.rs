@@ -37,6 +37,7 @@ impl TypeInference {
         let obj_span = typed_scrutinee.span;
         let v_name = self.next_catch_binding('v');
         let ok_arm = MatchArm {
+            guard: None,
             pattern: variant_pattern(&enum_name, "Ok", vec![v_name.clone()], obj_span),
             body: Box::new(ident_expr(&v_name, span)),
             span,
@@ -44,21 +45,23 @@ impl TypeInference {
 
         let err_arm = match handler {
             CatchHandler::Binding { name, body } => MatchArm {
+                guard: None,
                 pattern: variant_pattern(&enum_name, "Err", vec![name.clone()], obj_span),
                 body: body.clone(),
                 span,
             },
             CatchHandler::Arms(arms) => {
-                self.catch_match_pending = true;
                 let e_name = self.next_catch_binding('e');
                 let inner = Expr::new(
                     ExprKind::Match {
                         scrutinee: Box::new(ident_expr(&e_name, span)),
                         arms: arms.clone(),
+                        origin: aelys_syntax::MatchOrigin::Catch,
                     },
                     span,
                 );
                 MatchArm {
+                    guard: None,
                     pattern: variant_pattern(&enum_name, "Err", vec![e_name], obj_span),
                     body: Box::new(inner),
                     span,
@@ -67,7 +70,7 @@ impl TypeInference {
         };
 
         let arms = vec![ok_arm, err_arm];
-        let (kind, _) = self.infer_match_typed(typed_scrutinee, obj_span, &arms, span, false);
+        let (kind, _) = self.infer_match_typed(typed_scrutinee, obj_span, &arms, span, aelys_syntax::MatchOrigin::Match);
         // pin t so must-use never fires: catch removes e, so the value is no longer a result
         (kind, t)
     }
@@ -81,13 +84,7 @@ impl TypeInference {
 }
 
 fn variant_pattern(enum_name: &str, variant: &str, bindings: Vec<String>, span: Span) -> Pattern {
-    Pattern::Variant {
-        enum_name: enum_name.to_string(),
-        variant: variant.to_string(),
-        bindings,
-        span,
-        unqualified: false,
-    }
+    Pattern::flat_variant(enum_name, variant, bindings, span)
 }
 
 fn ident_expr(name: &str, span: Span) -> Expr {

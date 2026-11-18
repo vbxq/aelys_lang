@@ -67,9 +67,11 @@ pub fn may_trap_or_allocate(expr: &TypedExpr) -> bool {
                 || args.iter().any(may_trap_or_allocate)
         }
         TypedExprKind::Cast { expr: inner, .. } => may_trap_or_allocate(inner),
-        TypedExprKind::Match { scrutinee, arms } => {
+        TypedExprKind::Match {
+            scrutinee, arms, ..
+        } => {
             may_trap_or_allocate(scrutinee)
-                || arms.iter().any(|arm| may_trap_or_allocate(&arm.body))
+                || arms.iter().any(|arm| arm.exprs().any(may_trap_or_allocate))
         }
         TypedExprKind::Block { stmts, tail } => {
             stmts.iter().any(stmt_may_trap_or_allocate) || may_trap_or_allocate(tail)

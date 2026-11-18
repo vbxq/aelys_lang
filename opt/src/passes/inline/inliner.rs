@@ -188,10 +188,14 @@ impl FunctionInliner {
                     self.inline_in_stmt(s, analysis);
                 }
             }
-            TypedExprKind::Match { scrutinee, arms } => {
+            TypedExprKind::Match {
+                scrutinee, arms, ..
+            } => {
                 self.inline_in_expr(scrutinee, analysis);
                 for arm in arms.iter_mut() {
-                    self.inline_in_expr(&mut arm.body, analysis);
+                    for e in arm.exprs_mut() {
+                        self.inline_in_expr(e, analysis);
+                    }
                 }
             }
             TypedExprKind::Block { stmts, tail } => {

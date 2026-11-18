@@ -17,6 +17,8 @@ impl CompileErrorKind {
             Self::UnknownTypeBound { .. } => "not a bound",
             Self::NotAVariantInScope { .. } => "not a variant in scope",
             Self::NestedPattern => "nested pattern",
+            Self::PatternUnsupported { .. } => "unsupported pattern",
+            Self::PatternFormNotSupported { .. } => "unsupported pattern",
             Self::UppercaseBinding { .. } => "capitalized binding",
             Self::ReservedVariantName { .. } => "reserved for a prelude variant",
             Self::ReturnOutsideFunction => "not inside a function",
