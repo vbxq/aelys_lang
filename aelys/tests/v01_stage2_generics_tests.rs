@@ -444,24 +444,17 @@ const ORDER_ON_A_STRING: &str = r#"
 fn below<T: ord>(a: T, b: T) -> bool { return a < b }
 
 fn main() -> i64 {
-    if below("a", "b") { return 1 }
+    println(below("a", "b"))
+    println(below("ab", "a"))
+    println(below("é", "ê"))
     return 0
 }
 "#;
 
-// the limit is on record here rather than discovered by a user: `ord` is not `string`
 #[test]
-fn s2_the_ord_bound_refuses_string_and_points_at_str_compare() {
+fn s2_the_ord_bound_accepts_string_and_orders_by_bytes() {
     let h = Harness::new();
-    h.rejects_at_every_level(
-        "S2-ORD-STRING",
-        ORDER_ON_A_STRING,
-        "E0732",
-        &[
-            "is bound `ord`, but this call instantiates it with `string`, which is not `ord`",
-            "`string` is not, use `str.compare`",
-        ],
-    );
+    h.value_row("S2-ORD-STRING", ORDER_ON_A_STRING, "true\nfalse\ntrue\n");
 }
 
 const SLICE_ELEMENT_BINDS_THE_TYPE_PARAMETER: &str = r#"
@@ -917,9 +910,9 @@ fn s2_the_ord_bound_holds_of_exactly_what_the_order_operator_answers() {
     assert_eq!(
         ordered,
         vec![
-            "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "char"
+            "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "char", "string"
         ],
-        "`ord` must be the integers, the floats and `char`, and `string` must not be among them"
+        "`ord` must be the integers, the floats, `char` and `string`"
     );
 }
 
@@ -1035,8 +1028,8 @@ fn s2_the_library_is_generic_and_sort_strings_is_the_named_exception() {
     }
     assert!(
         text.contains("fn strings(s: &mut [string])"),
-        "`ord` excludes `string`, so `sort.strings` is the entry point that orders them and it \
-         must survive\n{text}"
+        "`sort.strings` is the entry point that orders strings by their bytes and it must \
+         survive\n{text}"
     );
 }
 
@@ -1049,7 +1042,7 @@ fn s2_the_bound_refusal_explains_itself() {
             vec![
                 "`==` and `!=` on a type parameter need `eq`",
                 "fn lt<T: ord>(a: T, b: T) -> bool { return a < b }",
-                "`string` is\ndeliberately not `ord`",
+                "floats, `char` and `string`, which orders by its bytes like `str.compare`",
             ],
         ),
         (

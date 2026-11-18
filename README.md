@@ -937,7 +937,7 @@ from nogc
 
 A function takes a type parameter and unifies it against the element of a slice at the call site.
 
-A bound is `nogc`, a builtin trait (`eq`, `ord`, `Display`) or a user trait, combined with `+` or written in a `where` clause; a name that is none of these is refused where it is written (`E0106`). `nogc` stays structural and cannot be implemented: it says the type is a value a `nogc` function may hold, a primitive, a fixed array, a reference, a `nogc fn`, or a non-generic struct or enum built only from those. `eq` holds structurally of the numeric types, `char`, `bool` and `string`, `ord` of the numeric types and `char`, `Display` of the numeric types, `char`, `bool` and `string`; a struct or enum gets them from `impl eq for P`, `impl ord for P` (which needs `impl eq`) and `impl Display for P`, and then `==`, `<` and `println` use the impl.
+A bound is `nogc`, a builtin trait (`eq`, `ord`, `Display`) or a user trait, combined with `+` or written in a `where` clause; a name that is none of these is refused where it is written (`E0106`). `nogc` stays structural and cannot be implemented: it says the type is a value a `nogc` function may hold, a primitive, a fixed array, a reference, a `nogc fn`, or a non-generic struct or enum built only from those. `eq` holds structurally of the numeric types, `char`, `bool`, `string` and a tuple of `eq` elements, `ord` of the numeric types, `char` and `string`, `Display` of the numeric types, `char`, `bool` and `string`; a struct or enum gets them from `impl eq for P`, `impl ord for P` (which needs `impl eq`) and `impl Display for P`, and then `==`, `<` and `println` use the impl.
 
 Traits dispatch statically: each instance of a generic function calls the impl of its type argument, there is no `dyn`. An impl lives in the module of the trait or of the type, impls of one trait never overlap, and a trait method may have a default body that an impl can override.
 
@@ -1087,9 +1087,9 @@ For more information about this error, try `aelys-cli --explain E0106`
 error: aborting due to 1 previous error
 ```
 
-`ord` deliberately excludes `string`:
+`ord` includes `string`: `<`, `<=`, `>` and `>=` order two strings by their bytes, so a multi-byte character sorts after every ASCII one and a prefix sorts before the longer string:
 
-```rust refused E0732
+```rust run
 fn first<T: ord>(xs: &[T]) -> T {
     return xs[0]
 }
@@ -1097,24 +1097,21 @@ fn first<T: ord>(xs: &[T]) -> T {
 fn main() -> i64 {
     let mut ss: Vec<string> = vec["pear", "apple"]
     println(first(ss[0..2]))
+    println("apple" < "pear")
+    println("é" > "z")
+    println("ab" < "abc")
     return 0
 }
 ```
 
-```diagnostic
-error[E0732]: [bound] type parameter `T` of `first` is bound `ord`, but this call instantiates it with `string`, which is not `ord`
- --> main.aelys:7:19
-  |
-7 |     println(first(ss[0..2]))
-  |             ----- `T` of `first` carries an `ord` bound
-  |                   ^^^^^^^^ bound not satisfied here
-   = help: the integers, the floats and `char` are `ord`; `string` is not, use `str.compare`
-
-For more information about this error, try `aelys-cli --explain E0732`
-error: aborting due to 1 previous error
+```output
+pear
+true
+true
+true
 ```
 
-Strings order through `str.compare(a, b)`, which answers `-1`, `0` or `1` over the bytes, and `sort.strings` is built on it.
+`str.compare(a, b)` answers `-1`, `0` or `1` over the same bytes, and `sort.strings` is built on it.
 
 ```rust run
 needs std.sort

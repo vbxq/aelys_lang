@@ -722,17 +722,18 @@ fn group_surface_option_reaches_a_program_that_imports_nothing() {
 }
 
 #[test]
-fn group_surface_strings_order_through_a_capability_and_the_refusal_names_it() {
+fn group_surface_strings_order_with_the_operators_and_through_a_capability() {
     let h = Harness::new();
-    let _pin = pin_legs("string ordering", LEVELS.len());
-    h.refuses(
+    let _pin = pin_legs("string ordering", 2 * LEVELS.len());
+    h.counted_row(
         "string_order_operator",
         "fn main() -> i64 {\n\
          \x20   if \"é\" < \"ê\" { println(1) } else { println(0) }\n\
          \x20   return 0\n\
          }\n",
-        "E0301",
-        "`string` has no ordering operator",
+        "1\n",
+        Some((0, 0)),
+        None,
     );
     h.value_row(
         "string_order_capability",

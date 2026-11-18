@@ -2,7 +2,7 @@ use aelys_air::symbols::SymbolCarrier;
 use aelys_codegen::{AirNodeLocation, AirNodePosition, LlvmBackendError};
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind, Fault};
 use aelys_common::{Diagnostic, Replacement, Severity, Suggestion};
-use aelys_sema::{ConstraintReason, InferType, TypeError, TypeErrorKind};
+use aelys_sema::{InferType, TypeError, TypeErrorKind};
 use aelys_syntax::{Source, Span as SyntaxSpan};
 use std::sync::Arc;
 
@@ -601,11 +601,6 @@ fn promoted_reason(error: &TypeError) -> Option<String> {
     (!reason.trim().is_empty()).then(|| user_facing(reason))
 }
 
-fn string_ordering(error: &TypeError) -> bool {
-    matches!(&error.kind, TypeErrorKind::NotOneOf { ty, .. } if matches!(ty, InferType::String))
-        && matches!(error.reason, ConstraintReason::Comparison)
-}
-
 fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnostic {
     let promoted = promoted_reason(error);
     let (code, message, annotation) = match &error.kind {
@@ -665,20 +660,12 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             "infinite type".to_string(),
         ),
         TypeErrorKind::NotOneOf { ty, options } => {
-            if string_ordering(error) {
-                (
-                    "E0301",
-                    "`string` has no ordering operator".to_string(),
-                    "no `<`, `<=`, `>` or `>=` on `string`".to_string(),
-                )
-            } else {
-                let opts: Vec<_> = options.iter().map(|o| format!("`{}`", o)).collect();
-                (
-                    "E0301",
-                    format!("type `{}` is not one of [{}]", ty, opts.join(", ")),
-                    "type mismatch".to_string(),
-                )
-            }
+            let opts: Vec<_> = options.iter().map(|o| format!("`{}`", o)).collect();
+            (
+                "E0301",
+                format!("type `{}` is not one of [{}]", ty, opts.join(", ")),
+                "type mismatch".to_string(),
+            )
         }
         TypeErrorKind::ArityMismatch { expected, found } => {
             let reason_str = error.reason.to_string();
@@ -1003,13 +990,6 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             }
         },
         _ => {}
-    }
-
-    if string_ordering(error) {
-        diag.add_help(
-            "order two strings with `str.compare(a, b)`, which is negative, zero or positive"
-                .to_string(),
-        );
     }
 
     if let Some(help) = &error.help {

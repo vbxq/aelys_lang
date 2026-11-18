@@ -664,6 +664,19 @@ impl<'a> FunctionCodegen<'a> {
         self.module.add_function("__aelys_str_eq", fn_ty, None)
     }
 
+    pub(crate) fn ensure_str_cmp_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_str_cmp") {
+            return function;
+        }
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        let i64_ty = self.context.i64_type().into();
+        let fn_ty = self
+            .context
+            .i64_type()
+            .fn_type(&[ptr_ty, i64_ty, ptr_ty, i64_ty], false);
+        self.module.add_function("__aelys_str_cmp", fn_ty, None)
+    }
+
     pub(crate) fn ensure_str_concat_function(&self) -> FunctionValue<'static> {
         let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
         let i64_ty = self.context.i64_type().into();

@@ -486,9 +486,37 @@ impl<'a> FunctionCodegen<'a> {
                     .map(Into::into)
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))
             }
+            BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
+                let (a_ptr, a_len) = self.string_parts_from_value(left)?;
+                let (b_ptr, b_len) = self.string_parts_from_value(right)?;
+                let cmp_fn = self.ensure_str_cmp_function();
+                let order = self
+                    .builder
+                    .build_call(
+                        cmp_fn,
+                        &[a_ptr.into(), a_len.into(), b_ptr.into(), b_len.into()],
+                        "str_cmp",
+                    )
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                    .try_as_basic_value()
+                    .basic()
+                    .ok_or_else(|| CodegenError::LlvmError("str_cmp returned void".to_string()))?
+                    .into_int_value();
+                let pred = match op {
+                    BinOp::Lt => IntPredicate::SLT,
+                    BinOp::Le => IntPredicate::SLE,
+                    BinOp::Gt => IntPredicate::SGT,
+                    _ => IntPredicate::SGE,
+                };
+                self.builder
+                    .build_int_compare(pred, order, self.context.i64_type().const_zero(), "str_ord")
+                    .map(Into::into)
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))
+            }
             BinOp::Add => self.emit_str_concat(left.into(), right.into()),
             _ => Err(CodegenError::UnsupportedInstruction(
-                "unsupported string binary op (only +, == and != are supported)".to_string(),
+                "unsupported string binary op (only +, ==, !=, <, <=, > and >= are supported)"
+                    .to_string(),
             )),
         }
     }

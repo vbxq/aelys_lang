@@ -350,14 +350,13 @@ impl InferType {
     pub fn ord_types() -> Vec<InferType> {
         let mut types = Self::all_numeric_types();
         types.push(InferType::Char);
+        types.push(InferType::String);
         types
     }
 
-    // `string` answers `==` and refuses `<`, which points at `str.compare` instead
     pub fn eq_types() -> Vec<InferType> {
         let mut types = Self::ord_types();
         types.push(InferType::Bool);
-        types.push(InferType::String);
         types
     }
 

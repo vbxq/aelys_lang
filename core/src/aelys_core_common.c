@@ -949,6 +949,21 @@ long long __aelys_str_eq(const char *a_ptr, long long a_len,
     return (memcmp(a_ptr, b_ptr, (size_t)a_len) == 0) ? 1 : 0;
 }
 
+long long __aelys_str_cmp(const char *a_ptr, long long a_len,
+                          const char *b_ptr, long long b_len) {
+    long long n = a_len < b_len ? a_len : b_len;
+    if (n > 0) {
+        int c = memcmp(a_ptr, b_ptr, (size_t)n);
+        if (c != 0) {
+            return c < 0 ? -1 : 1;
+        }
+    }
+    if (a_len == b_len) {
+        return 0;
+    }
+    return a_len < b_len ? -1 : 1;
+}
+
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;

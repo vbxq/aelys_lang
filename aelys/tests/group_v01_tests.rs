@@ -62,7 +62,7 @@ const CENSUS: &[(&str, Bucket, &str)] = &[
          every measured point",
     ),
     ("r19_generic_library_over_two_element_types", Bucket::Anchor, ""),
-    ("r20_ord_excludes_string", Bucket::Anchor, ""),
+    ("r20_ord_includes_string", Bucket::Anchor, ""),
     ("r21_eq_bound_over_two_element_types", Bucket::Anchor, ""),
     ("r22_expected_found_order", Bucket::Anchor, ""),
     ("r23_character_loop_values", Bucket::Anchor, ""),
@@ -697,10 +697,10 @@ fn group_v01_r19_generic_library_over_two_element_types() {
 }
 
 #[test]
-fn group_v01_r20_ord_excludes_string() {
+fn group_v01_r20_ord_includes_string() {
     let h = Harness::new();
-    let _pin = pin_legs("r20", LEVELS.len());
-    h.refuses(
+    let _pin = pin_legs("r20", LEVELS.len() * ALLOCATORS.len());
+    h.runs(
         "r20",
         "fn mx<T: ord>(a: T, b: T) -> T { if a > b { return a } return b }\n\
          \n\
@@ -708,8 +708,9 @@ fn group_v01_r20_ord_excludes_string() {
          \x20   println(mx(\"abc\", \"abd\"))\n\
          \x20   return 0\n\
          }\n",
-        "E0732",
-        "is bound `ord`, but this call instantiates it with `string`, which is not `ord`",
+        0,
+        "abd\n",
+        Some((0, 0)),
     );
 }
 

@@ -1228,9 +1228,9 @@ have no operation to compile.
     fn eq<T: eq>(a: T, b: T) -> bool { return a == b }
     fn lt<T: ord>(a: T, b: T) -> bool { return a < b }
 
-`eq` holds of the integers, the floats, `bool`, `char` and `string`;
-`ord` holds of the integers, the floats and `char`. `string` is
-deliberately not `ord`: ordering strings goes through `str.compare`.
+`eq` holds of the integers, the floats, `bool`, `char`, `string` and a
+tuple whose elements are all `eq`; `ord` holds of the integers, the
+floats, `char` and `string`, which orders by its bytes like `str.compare`.
 `Display` holds of the integers, the floats, `bool`, `char` and `string`.
 A struct or an enum satisfies a trait through its impl (`impl eq for P`,
 `impl ord for P`, `impl Display for P`, or an impl of a user trait).",

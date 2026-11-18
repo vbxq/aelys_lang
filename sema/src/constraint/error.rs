@@ -1115,7 +1115,7 @@ impl TypeError {
     ) -> Self {
         let carries = match bound {
             "ord" => {
-                "the integers, the floats and `char` are `ord`; `string` is not, use `str.compare`"
+                "the integers, the floats, `char` and `string` are `ord`"
             }
             _ if matches!(found, InferType::Rc(_)) => {
                 "an `Rc` answers `==` by identity, but it is not `eq`: a bound `==` compares \
