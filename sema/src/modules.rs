@@ -67,6 +67,7 @@ pub struct TraitMethodSig {
 pub struct TraitDef {
     pub name: String,
     pub qualified: String,
+    pub type_params: Vec<String>,
     pub module: String,
     pub is_pub: bool,
     pub methods: Vec<TraitMethodSig>,
@@ -75,6 +76,7 @@ pub struct TraitDef {
 #[derive(Debug, Clone)]
 pub struct ImplDef {
     pub trait_q: String,
+    pub trait_args: Vec<InferType>,
     pub type_params: Vec<String>,
     pub bounds: Vec<TypeBounds>,
     pub self_ty: InferType,
@@ -533,6 +535,11 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
     for imp in &program.impls {
         let mut imp = imp.clone();
         imp.self_ty = qualify_infer_type(&imp.self_ty, path, &owned);
+        imp.trait_args = imp
+            .trait_args
+            .iter()
+            .map(|t| qualify_infer_type(t, path, &owned))
+            .collect();
         imp.values = imp
             .methods
             .iter()

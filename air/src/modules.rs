@@ -137,6 +137,9 @@ pub fn qualify(program: &mut AirProgram, path: &str) {
     }
     for imp in &mut program.impls {
         qualify_type(&mut imp.self_ty, &q);
+        for t in &mut imp.trait_args {
+            qualify_type(t, &q);
+        }
     }
 }
 

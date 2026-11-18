@@ -10,7 +10,7 @@ enum Bound {
     Nogc,
     Eq,
     Ord,
-    Trait(String),
+    Trait(String, aelys_syntax::TraitRef),
 }
 
 impl Bound {
@@ -25,14 +25,14 @@ impl Bound {
             wanted.push(Bound::Eq);
         }
         for t in &set.traits {
-            wanted.push(Bound::Trait(t.name.clone()));
+            wanted.push(Bound::Trait(t.name.clone(), t.clone()));
         }
         wanted
     }
 
     fn article(&self) -> &'static str {
         match self {
-            Bound::Nogc | Bound::Trait(_) => "a",
+            Bound::Nogc | Bound::Trait(..) => "a",
             Bound::Eq | Bound::Ord => "an",
         }
     }
@@ -42,7 +42,7 @@ impl Bound {
             Bound::Nogc => "nogc",
             Bound::Eq => "eq",
             Bound::Ord => "ord",
-            Bound::Trait(q) => crate::infer::traits::trait_shown(q),
+            Bound::Trait(q, _) => crate::infer::traits::trait_shown(q),
         }
     }
 }
@@ -176,20 +176,20 @@ impl TypeInference {
     }
 
     /// without this a bounded generic could not hand its own parameter to another one
-    fn binding_satisfies(&self, ty: &InferType, want: &Bound) -> bool {
+    fn binding_satisfies_with(&self, ty: &InferType, want: &Bound, targs: &[InferType]) -> bool {
         if let Some((_, carried)) = self.bounds_on_type_param(ty) {
             return match want {
                 Bound::Nogc => carried.nogc,
                 Bound::Eq => carried.needs_eq() || carried.traits.iter().any(|t| t.name == "eq"),
                 Bound::Ord => carried.needs_ord() || carried.traits.iter().any(|t| t.name == "ord"),
-                Bound::Trait(q) => carried.traits.iter().any(|t| t.name == *q),
+                Bound::Trait(q, _) => self.satisfies_trait_args(q, targs, ty) || carried.traits.iter().any(|t| t.name == *q && targs.is_empty()),
             };
         }
         match want {
             Bound::Nogc => self.type_table.is_nogc_value(ty),
             Bound::Eq => ty.satisfies_eq() || self.impl_for("eq", ty).is_some(),
             Bound::Ord => ty.satisfies_ord() || self.impl_for("ord", ty).is_some(),
-            Bound::Trait(q) => self.satisfies_trait(q, ty),
+            Bound::Trait(q, _) => self.satisfies_trait_args(q, targs, ty),
         }
     }
 
@@ -245,8 +245,55 @@ impl TypeInference {
                 let param_slots: &[usize] = slots.get(i).map_or(&[], |s| s);
                 let mut err = None;
                 for want in Bound::required_by(&set) {
+                    let targs: Vec<InferType> = match &want {
+                        Bound::Trait(_, anns) => {
+                            let map: HashMap<String, InferType> = bindings
+                                .iter()
+                                .map(|(k, (t, _))| (k.clone(), t.clone()))
+                                .collect();
+                            anns.args.iter().map(|a| self.ann_type(a, &map)).collect()
+                        }
+                        _ => Vec::new(),
+                    };
+                    if let (Bound::Trait(q, _), Some((ty, _))) = (&want, bindings.get(type_param))
+                        && !targs.is_empty()
+                        && targs.iter().any(|t| !t.is_concrete() || matches!(t, InferType::Var(_)))
+                        && self.bounds_on_type_param(ty).is_none()
+                    {
+                        let hits = self.impls_matching(q, ty);
+                        if hits.len() > 1 {
+                            let shown: Vec<String> = hits
+                                .iter()
+                                .map(|(i, _)| {
+                                    let a: Vec<String> =
+                                        i.trait_args.iter().map(|t| t.to_string()).collect();
+                                    format!(
+                                        "`impl {}<{}> for {}`",
+                                        crate::infer::traits::trait_shown(q),
+                                        a.join(", "),
+                                        i.self_ty
+                                    )
+                                })
+                                .collect();
+                            err = Some(TypeError::coded(
+                                "E0759",
+                                format!(
+                                    "this call does not say which impl of `{}` it uses: it is \
+                                     provided by both {}",
+                                    crate::infer::traits::trait_shown(q),
+                                    shown.join(" and ")
+                                ),
+                                "ambiguous trait argument",
+                                callee.span,
+                            ));
+                            break;
+                        }
+                        if hits.len() == 1 {
+                            continue;
+                        }
+                    }
                     if let Some((ty, _)) = bindings.get(type_param)
-                        && self.binding_satisfies(ty, &want)
+                        && self.binding_satisfies_with(ty, &want, &targs)
                     {
                         continue;
                     }
@@ -286,7 +333,7 @@ impl TypeInference {
                 want.spelling()
             )
         };
-        if let Bound::Trait(q) = &want {
+        if let Bound::Trait(q, _) = &want {
             let t = crate::infer::traits::trait_shown(q);
             if name.starts_with(crate::infer::traits::STUB) {
                 let (ty, span) = match binding {

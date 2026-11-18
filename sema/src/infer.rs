@@ -99,4 +99,5 @@ pub struct TypeInference {
     pub(crate) local_impls: Vec<usize>,
     pub(crate) local_traits: Vec<String>,
     pub(crate) used_builtin_stubs: HashSet<String>,
+    pub(crate) pending_trait_args: Option<Vec<InferType>>,
 }

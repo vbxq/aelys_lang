@@ -569,9 +569,15 @@ impl<'a> LoweringContext<'a> {
             let saved = std::mem::take(&mut self.type_params_map);
             let type_params = self.lower_type_params(&imp.type_params);
             let self_ty = self.lower_type_from_infer(&imp.self_ty);
+            let trait_args = imp
+                .trait_args
+                .iter()
+                .map(|t| self.lower_type_from_infer(t))
+                .collect();
             self.type_params_map = saved;
             out.push(crate::AirImpl {
                 trait_q: imp.trait_q.clone(),
+                trait_args,
                 type_params,
                 self_ty,
                 methods: imp.methods.clone(),

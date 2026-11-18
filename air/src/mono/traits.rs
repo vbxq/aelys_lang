@@ -76,7 +76,12 @@ fn match_air(
 }
 
 impl MonoContext {
-    pub(super) fn resolve_impl(&self, q: &str, ty: &AirType) -> Option<(usize, Vec<AirType>)> {
+    pub(super) fn resolve_impl_args(
+        &self,
+        q: &str,
+        ty: &AirType,
+        targs: &[AirType],
+    ) -> Option<(usize, Vec<AirType>)> {
         let mut found = None;
         for (i, imp) in self.impls.iter().enumerate() {
             if imp.trait_q != q {
@@ -84,6 +89,16 @@ impl MonoContext {
             }
             let mut map = HashMap::new();
             if !match_air(&imp.self_ty, &imp.type_params, ty, &mut map) {
+                continue;
+            }
+            if !targs.is_empty()
+                && (targs.len() != imp.trait_args.len()
+                    || !imp
+                        .trait_args
+                        .iter()
+                        .zip(targs.iter())
+                        .all(|(p, t)| match_air(p, &imp.type_params, t, &mut map)))
+            {
                 continue;
             }
             let Some(args) = imp
@@ -103,7 +118,17 @@ impl MonoContext {
     }
 
     pub(super) fn method_target(&self, q: &str, method: &str, ty: &AirType) -> Option<StubTarget> {
-        let (i, args) = self.resolve_impl(q, ty)?;
+        self.method_target_args(q, method, ty, &[])
+    }
+
+    fn method_target_args(
+        &self,
+        q: &str,
+        method: &str,
+        ty: &AirType,
+        targs: &[AirType],
+    ) -> Option<StubTarget> {
+        let (i, args) = self.resolve_impl_args(q, ty, targs)?;
         let imp = &self.impls[i];
         let sym = imp.methods.iter().find(|(m, _)| m == method)?.1.clone();
         Some(if args.is_empty() {
@@ -120,9 +145,10 @@ impl MonoContext {
                 shown_trait(q)
             ));
         };
-        if self.resolve_impl(q, self_ty).is_some() {
+        let targs = &args[1..];
+        if self.resolve_impl_args(q, self_ty, targs).is_some() {
             return self
-                .method_target(q, method, self_ty)
+                .method_target_args(q, method, self_ty, targs)
                 .unwrap_or(StubTarget::Default);
         }
         let structural = BUILTIN.contains(&q)

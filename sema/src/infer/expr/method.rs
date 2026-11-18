@@ -18,7 +18,7 @@ enum Form {
 }
 
 impl TypeInference {
-    pub(super) fn stash_pretyped(&mut self, typed: TypedExpr) -> Expr {
+    pub(crate) fn stash_pretyped(&mut self, typed: TypedExpr) -> Expr {
         let name = format!("{PRETYPED}{}", self.recv_counter);
         self.recv_counter += 1;
         let span = typed.span;
@@ -404,6 +404,8 @@ impl TypeInference {
         let InferType::Function { params, .. } = ty else {
             return None;
         };
+        let hidden = self.hidden_count(&entry.fn_name);
+        let params: Vec<InferType> = params[..params.len().saturating_sub(hidden)].to_vec();
         let tparams = match &entry.value {
             Some(v) => v.type_params.clone(),
             None => self

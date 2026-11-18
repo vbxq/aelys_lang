@@ -1,0 +1,42 @@
+trait Collection<T> {
+    fn insert(&mut self, x: T)
+    fn contains(&self, x: T) -> bool
+    fn size(&self) -> i64
+    fn is_empty(&self) -> bool { return self.size() == 0 }
+}
+
+struct Ring { data: [i64; 8], n: i64 }
+
+impl Collection<i64> for Ring {
+    fn insert(&mut self, x: i64) {
+        self.data[self.n] = x
+        self.n = self.n + 1
+    }
+    fn contains(&self, x: i64) -> bool {
+        for i in 0..self.n {
+            if self.data[i] == x { return true }
+        }
+        return false
+    }
+    fn size(&self) -> i64 { return self.n }
+}
+
+fn fill<C: Collection<i64>>(c: &mut C, k: i64) {
+    for i in 0..k { c.insert(i * 3) }
+}
+
+fn probe<C: Collection<i64>>(c: &C) -> i64 {
+    if c.is_empty() { return -1 }
+    let hit: i64 = if c.contains(9) { 1 } else { 0 }
+    return c.size() * 10 + hit
+}
+
+fn main() -> i64 {
+    let mut r = Ring { data: [0, 0, 0, 0, 0, 0, 0, 0], n: 0 }
+    println(probe(&r))
+    fill(&mut r, 4)
+    println(probe(&r))
+    println(r.contains(6))
+    println(r.contains(7))
+    return 0
+}

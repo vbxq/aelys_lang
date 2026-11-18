@@ -123,6 +123,26 @@ impl TypeInference {
         args: &[Expr],
         span: Span,
     ) -> (TypedExprKind, InferType) {
+        let extended: Vec<Expr>;
+        let args: &[Expr] = match &callee.kind {
+            ExprKind::Identifier(name) if self.hidden_count(name) > 0 => {
+                let n = self.hidden_count(name);
+                let declared = match self.env.lookup_function(name).map(|t| t.as_ref().clone()) {
+                    Some(InferType::Function { params, .. }) => params.len(),
+                    _ => 0,
+                };
+                if declared == args.len() + n {
+                    let mut full = args.to_vec();
+                    full.extend(self.hidden_args(n, span));
+                    extended = full;
+                    &extended
+                } else {
+                    self.pending_trait_args = None;
+                    args
+                }
+            }
+            _ => args,
+        };
         if let ExprKind::Identifier(name) = &callee.kind
             && self.unsafe_depth == 0
             && self.foreign_sigs.contains(name)

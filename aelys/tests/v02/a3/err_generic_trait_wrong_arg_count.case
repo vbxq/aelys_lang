@@ -1,0 +1,13 @@
+trait Sink<T> {
+    fn put(&mut self, x: T) -> i64
+}
+
+struct Log { total: i64 }
+
+impl Sink for Log {
+    fn put(&mut self, x: i64) -> i64 { return x }
+}
+
+fn main() -> i64 {
+    return 0
+}

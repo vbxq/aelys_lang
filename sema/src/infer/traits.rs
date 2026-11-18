@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 pub(crate) const STUB: &str = "__trait$";
 pub(crate) const IMPL: &str = "__impl$";
 const SELF: &str = "Self";
+pub(crate) const HIDDEN: &str = "__ta$";
 
 pub(crate) fn stub_name(q: &str, m: &str) -> String {
     format!("{STUB}{q}${m}")
@@ -112,6 +113,7 @@ pub(crate) fn builtin_traits() -> Vec<TraitDef> {
         TraitDef {
             name: "eq".to_string(),
             qualified: "eq".to_string(),
+            type_params: Vec::new(),
             module: String::new(),
             is_pub: true,
             methods: vec![sig("eq", "eq", f(vec![self_ref(), self_ref()], InferType::Bool))],
@@ -119,6 +121,7 @@ pub(crate) fn builtin_traits() -> Vec<TraitDef> {
         TraitDef {
             name: "ord".to_string(),
             qualified: "ord".to_string(),
+            type_params: Vec::new(),
             module: String::new(),
             is_pub: true,
             methods: vec![sig("ord", "cmp", f(vec![self_ref(), self_ref()], InferType::I64))],
@@ -126,6 +129,7 @@ pub(crate) fn builtin_traits() -> Vec<TraitDef> {
         TraitDef {
             name: "Display".to_string(),
             qualified: "Display".to_string(),
+            type_params: Vec::new(),
             module: String::new(),
             is_pub: true,
             methods: vec![sig(
@@ -198,10 +202,7 @@ fn builtin_stub(q: &str, span: Span) -> Function {
             )
         }
         _ => {
-            bounds.traits.push(TraitRef {
-                name: "Display".to_string(),
-                span,
-            });
+            bounds.traits.push(TraitRef::new("Display".to_string(), span));
             (
                 "to_string",
                 vec![recv],
@@ -361,6 +362,123 @@ fn head_name(ty: &InferType) -> Option<String> {
 }
 
 impl TypeInference {
+    pub(crate) fn hidden_count(&self, name: &str) -> usize {
+        let Some(rest) = name.strip_prefix(STUB) else {
+            return 0;
+        };
+        let Some(cut) = rest.rfind('$') else {
+            return 0;
+        };
+        self.trait_defs
+            .get(&rest[..cut])
+            .map_or(0, |d| d.type_params.len())
+    }
+
+    pub(crate) fn hidden_args(&mut self, n: usize, span: Span) -> Vec<Expr> {
+        let pending = self.pending_trait_args.take();
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            let ty = pending
+                .as_ref()
+                .and_then(|p| p.get(i).cloned())
+                .unwrap_or_else(|| self.type_gen.fresh());
+            let null = crate::typed_ast::TypedExpr::new(
+                crate::typed_ast::TypedExprKind::Null,
+                InferType::Ref {
+                    referent: Box::new(ty),
+                    mutable: false,
+                },
+                span,
+            );
+            let init = self.stash_pretyped(null);
+            let name = format!("{HIDDEN}l{}", self.recv_counter);
+            self.recv_counter += 1;
+            out.push(Expr::new(
+                ExprKind::Block {
+                    stmts: vec![Stmt::new(
+                        StmtKind::Let {
+                            name: name.clone(),
+                            mutable: false,
+                            type_annotation: None,
+                            initializer: init,
+                            is_pub: false,
+                        },
+                        span,
+                    )],
+                    tail: Box::new(ident(&name, span)),
+                },
+                span,
+            ));
+        }
+        out
+    }
+
+    fn impl_of_symbol(&self, sym: &str) -> Option<ImplDef> {
+        self.impl_defs
+            .iter()
+            .find(|i| i.methods.iter().any(|(_, s)| s == sym))
+            .cloned()
+    }
+
+    fn settle_generic_trait_entry(
+        &mut self,
+        ty: &InferType,
+        mut hits: Vec<MethodEntry>,
+    ) -> Vec<MethodEntry> {
+        let trait_of = |this: &Self, e: &MethodEntry| -> Option<String> {
+            if let Some(rest) = e.fn_name.strip_prefix(STUB) {
+                return rest.rfind('$').map(|c| rest[..c].to_string());
+            }
+            this.impl_of_symbol(&e.fn_name).map(|i| i.trait_q)
+        };
+        let qs: Vec<Option<String>> = hits.iter().map(|e| trait_of(self, e)).collect();
+        let generic = |this: &Self, q: &Option<String>| {
+            q.as_ref()
+                .and_then(|q| this.trait_defs.get(q))
+                .is_some_and(|d| !d.type_params.is_empty())
+        };
+        if hits.len() > 1
+            && qs.iter().all(|q| q.is_some() && *q == qs[0])
+            && generic(self, &qs[0])
+        {
+            let q = qs[0].clone().expect("checked");
+            let name = hits[0].name.clone();
+            if let Some(m) = self
+                .trait_defs
+                .get(&q)
+                .and_then(|d| d.methods.iter().find(|m| m.name == name).cloned())
+            {
+                hits = vec![MethodEntry {
+                    name: m.name.clone(),
+                    receiver: m.receiver,
+                    fn_name: m.stub.clone(),
+                    is_pub: true,
+                    module: String::new(),
+                    value: None,
+                    head: None,
+                }];
+                self.pending_trait_args = None;
+                return hits;
+            }
+        }
+        if hits.len() == 1
+            && let Some(q) = &qs[0]
+            && hits[0].fn_name.starts_with(STUB)
+            && generic(self, &qs[0])
+        {
+            let matching = self.impls_matching(q, ty);
+            if let [(imp, subst)] = matching.as_slice() {
+                self.pending_trait_args = Some(
+                    imp.trait_args
+                        .iter()
+                        .map(|t| subst_names(t, subst))
+                        .collect(),
+                );
+            }
+        }
+        hits
+    }
+
     pub(crate) fn lookup_for(
         &mut self,
         ty: &InferType,
@@ -374,6 +492,7 @@ impl TypeInference {
             hits.extend(entries.iter().filter(|e| e.name == member).cloned());
         }
         hits.extend(self.trait_candidates(ty, member));
+        let mut hits = self.settle_generic_trait_entry(ty, hits);
         match hits.len() {
             0 => super::impls::MethodLookup::Missing,
             1 => super::impls::MethodLookup::Found(hits.pop().expect("one hit")),
@@ -487,7 +606,11 @@ impl TypeInference {
             let mut kept = Vec::new();
             for r in std::mem::take(&mut set.traits) {
                 match self.resolve_trait_name(&r.name) {
-                    Some(q) => kept.push(TraitRef { name: q, span: r.span }),
+                    Some(q) => kept.push(TraitRef {
+                        name: q,
+                        span: r.span,
+                        args: r.args.clone(),
+                    }),
                     None => self.errors.push(TypeError::coded(
                         "E0106",
                         format!(
@@ -632,6 +755,17 @@ impl TypeInference {
                 params.push(p);
             }
             params.extend(std::mem::take(&mut func.params));
+            let visible = params.len();
+            for (i, tp) in decl.type_params.iter().enumerate() {
+                let mut ann = TypeAnnotation::new(tp.clone(), func.span);
+                ann.reference = Some(RefKind::Shared);
+                params.push(Parameter::new(
+                    format!("{HIDDEN}{i}"),
+                    false,
+                    Some(ann),
+                    func.span,
+                ));
+            }
             let body = if method.has_default {
                 std::mem::take(&mut func.body)
             } else {
@@ -649,16 +783,24 @@ impl TypeInference {
                     Vec::new()
                 }
             };
-            let bounds = vec![TypeBounds {
+            let mut bounds = vec![TypeBounds {
                 traits: vec![TraitRef {
                     name: q.clone(),
                     span: func.span,
+                    args: decl
+                        .type_params
+                        .iter()
+                        .map(|tp| TypeAnnotation::new(tp.clone(), func.span))
+                        .collect(),
                 }],
                 ..TypeBounds::default()
             }];
+            bounds.resize(decl.type_params.len() + 1, TypeBounds::default());
+            let mut stub_tparams = vec![SELF.to_string()];
+            stub_tparams.extend(decl.type_params.iter().cloned());
             let stub_fn = Function {
                 name: stub.clone(),
-                type_params: vec![SELF.to_string()],
+                type_params: stub_tparams.clone(),
                 bounds,
                 params,
                 return_type: func.return_type.clone(),
@@ -669,11 +811,9 @@ impl TypeInference {
                 foreign: None,
                 span: func.span,
             };
-            self.method_tparams
-                .insert(stub.clone(), vec![SELF.to_string()]);
-            let saved = std::mem::replace(&mut self.type_params_in_scope, vec![SELF.to_string()]);
-            let params_ty: Vec<InferType> = stub_fn
-                .params
+            self.method_tparams.insert(stub.clone(), stub_tparams.clone());
+            let saved = std::mem::replace(&mut self.type_params_in_scope, stub_tparams);
+            let params_ty: Vec<InferType> = stub_fn.params[..visible]
                 .iter()
                 .map(|p| match &p.type_annotation {
                     Some(a) => self.type_from_param_annotation(a),
@@ -696,6 +836,7 @@ impl TypeInference {
         let def = TraitDef {
             name: decl.name.clone(),
             qualified: q.clone(),
+            type_params: decl.type_params.clone(),
             module: path,
             is_pub: decl.is_pub,
             methods: sigs
@@ -764,7 +905,55 @@ impl TypeInference {
         matches!(ty, InferType::Enum(n, _) if self.type_table.get_enum(n).is_some_and(|d| d.variants.iter().all(|v| v.data.is_empty())))
     }
 
+    pub(crate) fn ann_type(&self, ann: &TypeAnnotation, subst: &HashMap<String, InferType>) -> InferType {
+        let raw = InferType::from_annotation(ann);
+        subst_names(&self.enum_fix(raw), subst)
+    }
+
+    fn enum_fix(&self, ty: InferType) -> InferType {
+        match ty {
+            InferType::Struct(n, a) => {
+                let a: Vec<InferType> = a.into_iter().map(|t| self.enum_fix(t)).collect();
+                if self.type_table.has_enum(&n) {
+                    InferType::Enum(n, a)
+                } else {
+                    InferType::Struct(n, a)
+                }
+            }
+            InferType::Ref { referent, mutable } => InferType::Ref {
+                referent: Box::new(self.enum_fix(*referent)),
+                mutable,
+            },
+            InferType::Vec(i) => InferType::Vec(Box::new(self.enum_fix(*i))),
+            InferType::Array(i, n) => InferType::Array(Box::new(self.enum_fix(*i)), n),
+            other => other,
+        }
+    }
+
     pub(crate) fn impl_for(&self, q: &str, ty: &InferType) -> Option<(ImplDef, HashMap<String, InferType>)> {
+        self.impl_for_args(q, None, ty)
+    }
+
+    pub(crate) fn impls_matching(&self, q: &str, ty: &InferType) -> Vec<(ImplDef, HashMap<String, InferType>)> {
+        let mut out = Vec::new();
+        for imp in &self.impl_defs {
+            if imp.trait_q != q {
+                continue;
+            }
+            let mut subst = HashMap::new();
+            if match_head(&imp.self_ty, &imp.type_params, ty, &mut subst) && self.impl_bounds_hold(imp, &subst) {
+                out.push((imp.clone(), subst));
+            }
+        }
+        out
+    }
+
+    pub(crate) fn impl_for_args(
+        &self,
+        q: &str,
+        args: Option<&[InferType]>,
+        ty: &InferType,
+    ) -> Option<(ImplDef, HashMap<String, InferType>)> {
         for imp in &self.impl_defs {
             if imp.trait_q != q {
                 continue;
@@ -773,37 +962,65 @@ impl TypeInference {
             if !match_head(&imp.self_ty, &imp.type_params, ty, &mut subst) {
                 continue;
             }
-            let ok = imp.type_params.iter().enumerate().all(|(i, tp)| {
-                let Some(bound) = imp.bounds.get(i) else {
-                    return true;
-                };
-                let Some(arg) = subst.get(tp) else {
-                    return true;
-                };
-                bound.traits.iter().all(|t| self.satisfies_trait(&t.name, arg))
-                    && (!bound.ord || self.satisfies_trait("ord", arg))
-                    && (!bound.eq || self.satisfies_trait("eq", arg))
-                    && (!bound.nogc || self.type_table.is_nogc_value(arg))
-            });
-            if ok {
+            if let Some(args) = args
+                && (args.len() != imp.trait_args.len()
+                    || !imp
+                        .trait_args
+                        .iter()
+                        .zip(args.iter())
+                        .all(|(p, a)| match_head(p, &imp.type_params, a, &mut subst)))
+            {
+                continue;
+            }
+            if self.impl_bounds_hold(imp, &subst) {
                 return Some((imp.clone(), subst));
             }
         }
         None
     }
 
+    fn impl_bounds_hold(&self, imp: &ImplDef, subst: &HashMap<String, InferType>) -> bool {
+        imp.type_params.iter().enumerate().all(|(i, tp)| {
+            let Some(bound) = imp.bounds.get(i) else {
+                return true;
+            };
+            let Some(arg) = subst.get(tp) else {
+                return true;
+            };
+            bound.traits.iter().all(|t| {
+                let targs: Vec<InferType> = t.args.iter().map(|a| self.ann_type(a, subst)).collect();
+                self.satisfies_trait_args(&t.name, &targs, arg)
+            }) && (!bound.ord || self.satisfies_trait("ord", arg))
+                && (!bound.eq || self.satisfies_trait("eq", arg))
+                && (!bound.nogc || self.type_table.is_nogc_value(arg))
+        })
+    }
+
     pub(crate) fn satisfies_trait(&self, q: &str, ty: &InferType) -> bool {
+        self.satisfies_trait_args(q, &[], ty)
+    }
+
+    pub(crate) fn satisfies_trait_args(&self, q: &str, args: &[InferType], ty: &InferType) -> bool {
         if let Some((_, carried)) = self.bounds_on_type_param(ty) {
             return match q {
                 "eq" => carried.needs_eq() || carried.traits.iter().any(|t| t.name == q),
                 "ord" => carried.needs_ord() || carried.traits.iter().any(|t| t.name == q),
-                _ => carried.traits.iter().any(|t| t.name == q),
+                _ => carried.traits.iter().any(|t| {
+                    t.name == q
+                        && (args.is_empty()
+                            || (t.args.len() == args.len()
+                                && t.args
+                                    .iter()
+                                    .zip(args.iter())
+                                    .all(|(a, b)| self.ann_type(a, &HashMap::new()) == *b)))
+                }),
             };
         }
         if self.structural(q, ty) {
             return true;
         }
-        self.impl_for(q, ty).is_some()
+        let args = (!args.is_empty()).then_some(args);
+        self.impl_for_args(q, args, ty).is_some()
     }
 
     pub(crate) fn impl_method_symbol(&self, q: &str, ty: &InferType, method: &str) -> Option<String> {
@@ -880,13 +1097,38 @@ impl TypeInference {
             ));
             return;
         }
+        if trait_ref.args.len() != tdef.type_params.len() {
+            self.errors.push(TypeError::coded(
+                "E0754",
+                format!(
+                    "the trait `{tshown}` takes {} type argument{}, and this impl gives {}",
+                    tdef.type_params.len(),
+                    if tdef.type_params.len() == 1 { "" } else { "s" },
+                    trait_ref.args.len()
+                ),
+                "wrong number of trait arguments",
+                trait_ref.span,
+            ));
+            return;
+        }
         let saved = std::mem::replace(&mut self.type_params_in_scope, decl.type_params.clone());
         let errs_before = self.errors.len();
         let self_ty = self.type_from_annotation(&head);
+        let trait_args: Vec<InferType> = trait_ref
+            .args
+            .iter()
+            .map(|a| self.type_from_annotation(a))
+            .collect();
         self.type_params_in_scope = saved;
         if self.errors.len() > errs_before || matches!(self_ty, InferType::Dynamic) {
             return;
         }
+        let arg_map: HashMap<String, InferType> = tdef
+            .type_params
+            .iter()
+            .cloned()
+            .zip(trait_args.iter().cloned())
+            .collect();
         let shown_ty = super::impls::annotation_shown(&head);
         if self.structural(&q, &self_ty) {
             self.errors.push(TypeError::coded(
@@ -919,12 +1161,19 @@ impl TypeInference {
             ));
             return;
         }
+        let joint = |t: &InferType, a: &[InferType]| {
+            let mut v = vec![t.clone()];
+            v.extend(a.iter().cloned());
+            InferType::Tuple(v)
+        };
+        let mine = joint(&self_ty, &trait_args);
         for other in self.impl_defs.iter().filter(|i| i.trait_q == q) {
             let mut sa = HashMap::new();
             let mut sb = HashMap::new();
-            if unifiable(&self_ty, &decl.type_params, &other.self_ty, &other.type_params, &mut sa, &mut sb) {
-                let same = type_key(&self_ty, &decl.type_params)
-                    == type_key(&other.self_ty, &other.type_params);
+            let theirs = joint(&other.self_ty, &other.trait_args);
+            if unifiable(&mine, &decl.type_params, &theirs, &other.type_params, &mut sa, &mut sb) {
+                let same = type_key(&mine, &decl.type_params)
+                    == type_key(&theirs, &other.type_params);
                 let message = if same {
                     format!("`{tshown}` is implemented twice for `{shown_ty}`")
                 } else {
@@ -1014,7 +1263,15 @@ impl TypeInference {
                 errored = true;
                 continue;
             }
-            let symbol = format!("{IMPL}{q}${tkey}${mname}");
+            let symbol = if trait_args.is_empty() {
+                format!("{IMPL}{q}${tkey}${mname}")
+            } else {
+                let qargs: Vec<String> = trait_args
+                    .iter()
+                    .map(|a| type_key(&qualify_infer_type(a, &path, &owned), &decl.type_params))
+                    .collect();
+                format!("{IMPL}{q}[{}]${tkey}${mname}", qargs.join(","))
+            };
             let mut params = Vec::with_capacity(func.params.len() + 1);
             if let Some(p) = recv_param(method.receiver, method.mut_self, &head, func.span) {
                 params.push(p);
@@ -1030,7 +1287,7 @@ impl TypeInference {
                 super::impls::subst_ann(r, &head);
             }
             super::impls::subst_stmts(&mut func.body, &head);
-            if !self.impl_sig_matches(&func, sig, &self_ty, &decl.type_params) {
+            if !self.impl_sig_matches(&func, sig, &self_ty, &arg_map, &decl.type_params) {
                 self.signature_mismatch(&mname, &tshown, func.span);
                 errored = true;
                 continue;
@@ -1068,6 +1325,7 @@ impl TypeInference {
         }
         let imp = ImplDef {
             trait_q: q.clone(),
+            trait_args: trait_args.clone(),
             type_params: decl.type_params.clone(),
             bounds: decl.bounds.clone(),
             self_ty: self_ty.clone(),
@@ -1095,6 +1353,7 @@ impl TypeInference {
         func: &Function,
         sig: &TraitMethodSig,
         self_ty: &InferType,
+        arg_map: &HashMap<String, InferType>,
         tparams: &[String],
     ) -> bool {
         let InferType::Function { params, ret, .. } = &sig.ty else {
@@ -1111,7 +1370,7 @@ impl TypeInference {
                 break;
             };
             let got = self.type_from_param_annotation(ann);
-            if got != subst_self(want, self_ty) {
+            if got != subst_self(&subst_names(want, arg_map), self_ty) {
                 ok = false;
                 break;
             }
@@ -1121,7 +1380,7 @@ impl TypeInference {
                 Some(r) => self.type_from_annotation(r),
                 None => InferType::Null,
             };
-            let want = subst_self(ret, self_ty);
+            let want = subst_self(&subst_names(ret, arg_map), self_ty);
             ok = got == want || (func.return_type.is_none() && matches!(want, InferType::Null));
         }
         self.type_params_in_scope = saved;
@@ -1236,12 +1495,21 @@ impl TypeInference {
             traits.push("ord".to_string());
         }
         let mut hits: Vec<(String, TraitMethodSig)> = Vec::new();
-        for q in &traits {
+        let mut hit_args: Vec<Vec<TypeAnnotation>> = Vec::new();
+        for (k, q) in traits.iter().enumerate() {
             if let Some(def) = self.trait_defs.get(q)
                 && let Some(m) = def.methods.iter().find(|m| m.name == member)
             {
                 hits.push((q.clone(), m.clone()));
+                hit_args.push(bounds.traits.get(k).map(|t| t.args.clone()).unwrap_or_default());
             }
+        }
+        if hits.len() == 1 && !hit_args[0].is_empty() {
+            let args: Vec<InferType> = hit_args[0]
+                .iter()
+                .map(|a| self.type_from_annotation(a))
+                .collect();
+            self.pending_trait_args = Some(args);
         }
         match hits.len() {
             0 => {
@@ -1303,23 +1571,48 @@ impl TypeInference {
                     .insert(m.stub.clone(), vec![SELF.to_string()]);
                 continue;
             }
+            let ty = match &m.ty {
+                InferType::Function { params, ret, nogc } => {
+                    let mut params = params.clone();
+                    for tp in &def.type_params {
+                        params.push(InferType::Ref {
+                            referent: Box::new(InferType::Struct(tp.clone(), Vec::new())),
+                            mutable: false,
+                        });
+                    }
+                    InferType::Function {
+                        params,
+                        ret: ret.clone(),
+                        nogc: *nogc,
+                    }
+                }
+                other => other.clone(),
+            };
+            let mut tparams = vec![SELF.to_string()];
+            tparams.extend(def.type_params.iter().cloned());
+            let mut bounds = vec![TypeBounds {
+                traits: vec![TraitRef {
+                    name: def.qualified.clone(),
+                    span: Span::dummy(),
+                    args: def
+                        .type_params
+                        .iter()
+                        .map(|tp| TypeAnnotation::new(tp.clone(), Span::dummy()))
+                        .collect(),
+                }],
+                ..TypeBounds::default()
+            }];
+            bounds.resize(tparams.len(), TypeBounds::default());
             let value = ModuleValue {
                 kind: ItemKind::Function,
-                ty: m.ty.clone(),
+                ty,
                 qualified: m.stub.clone(),
                 is_pub: true,
-                type_params: vec![SELF.to_string()],
-                bounds: vec![TypeBounds {
-                    traits: vec![TraitRef {
-                        name: def.qualified.clone(),
-                        span: Span::dummy(),
-                    }],
-                    ..TypeBounds::default()
-                }],
+                type_params: tparams.clone(),
+                bounds,
                 literal: None,
             };
-            self.method_tparams
-                .insert(m.stub.clone(), vec![SELF.to_string()]);
+            self.method_tparams.insert(m.stub.clone(), tparams);
             self.define_imported_value(&value);
         }
     }
@@ -1569,5 +1862,35 @@ impl TypeInference {
             }
             kind => TypedExpr::new(kind, expr.ty, span),
         }
+    }
+}
+
+pub(crate) fn subst_names(ty: &InferType, map: &HashMap<String, InferType>) -> InferType {
+    if map.is_empty() {
+        return ty.clone();
+    }
+    let go = |t: &InferType| subst_names(t, map);
+    match ty {
+        InferType::Struct(n, a) if a.is_empty() && map.contains_key(n) => map[n].clone(),
+        InferType::Struct(n, a) => InferType::Struct(n.clone(), a.iter().map(go).collect()),
+        InferType::Enum(n, a) => InferType::Enum(n.clone(), a.iter().map(go).collect()),
+        InferType::Tuple(a) => InferType::Tuple(a.iter().map(go).collect()),
+        InferType::Array(i, n) => InferType::Array(Box::new(go(i)), *n),
+        InferType::Vec(i) => InferType::Vec(Box::new(go(i))),
+        InferType::Rc(i) => InferType::Rc(Box::new(go(i))),
+        InferType::Ref { referent, mutable } => InferType::Ref {
+            referent: Box::new(go(referent)),
+            mutable: *mutable,
+        },
+        InferType::Slice { elem, mutable } => InferType::Slice {
+            elem: Box::new(go(elem)),
+            mutable: *mutable,
+        },
+        InferType::Function { params, ret, nogc } => InferType::Function {
+            params: params.iter().map(go).collect(),
+            ret: Box::new(go(ret)),
+            nogc: *nogc,
+        },
+        other => other.clone(),
     }
 }

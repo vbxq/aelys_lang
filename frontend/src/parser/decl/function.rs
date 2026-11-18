@@ -31,8 +31,22 @@ impl Parser {
             path.push('.');
             path.push_str(&self.consume_identifier("trait name segment")?);
         }
+        let mut args = Vec::new();
+        if self.match_token(&TokenKind::Lt) {
+            loop {
+                args.push(self.parse_type_annotation()?);
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+            }
+            self.consume_gt()?;
+        }
         let span = span.merge(self.previous().span);
-        let r = TraitRef { name: path, span };
+        let r = TraitRef {
+            name: path,
+            span,
+            args,
+        };
         if !set.traits.contains(&r) {
             set.traits.push(r);
         }

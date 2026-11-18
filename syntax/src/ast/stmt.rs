@@ -135,20 +135,40 @@ pub struct TraitMethod {
 #[derive(Debug, Clone)]
 pub struct TraitDecl {
     pub name: String,
+    pub type_params: Vec<String>,
     pub is_pub: bool,
     pub methods: Vec<TraitMethod>,
     pub span: Span,
 }
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone)]
 pub struct TraitRef {
     pub name: String,
     pub span: Span,
+    pub args: Vec<TypeAnnotation>,
 }
+
+impl TraitRef {
+    pub fn new(name: String, span: Span) -> Self {
+        TraitRef {
+            name,
+            span,
+            args: Vec::new(),
+        }
+    }
+}
+
+impl Eq for TraitRef {}
 
 impl PartialEq for TraitRef {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
+            && self.args.len() == other.args.len()
+            && self
+                .args
+                .iter()
+                .zip(other.args.iter())
+                .all(|(a, b)| a.to_string() == b.to_string())
     }
 }
 

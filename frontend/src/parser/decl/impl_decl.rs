@@ -41,10 +41,7 @@ impl Parser {
             let span = self.peek().span;
             self.advance();
             self.advance();
-            Some(TraitRef {
-                name: "nogc".to_string(),
-                span,
-            })
+            Some(TraitRef::new("nogc".to_string(), span))
         } else {
             None
         };
@@ -52,21 +49,23 @@ impl Parser {
         let (trait_ref, self_ty) = if trait_ref.is_some() {
             (trait_ref, first)
         } else if self.match_token(&TokenKind::For) {
-            if first.reference.is_some()
-                || first.type_param.is_some()
-                || !first.type_params.is_empty()
-                || first.is_slice
-                || first.is_function_type()
-            {
+            if first.reference.is_some() || first.is_slice || first.is_function_type() {
                 return Err(self.rule(
                     757,
                     "the name after `impl` and before `for` is a trait name",
                     first.span,
                 ));
             }
+            let mut args: Vec<_> = first.type_params.clone();
+            if args.is_empty()
+                && let Some(p) = &first.type_param
+            {
+                args.push((**p).clone());
+            }
             let r = TraitRef {
                 name: first.name.clone(),
                 span: first.span,
+                args,
             };
             (Some(r), self.parse_type_annotation()?)
         } else {
@@ -121,7 +120,7 @@ impl Parser {
     pub(super) fn starts_trait(&self) -> bool {
         matches!(&self.peek().kind, TokenKind::Identifier(n) if n == "trait")
             && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
-            && self.peek_at(2).kind == TokenKind::LBrace
+            && matches!(self.peek_at(2).kind, TokenKind::LBrace | TokenKind::Lt)
     }
 
     pub(super) fn trait_declaration(&mut self, is_pub: bool) -> Result<Stmt> {
@@ -135,6 +134,16 @@ impl Parser {
             ));
         }
         let name = self.consume_identifier("trait name")?;
+        let mut type_params = Vec::new();
+        if self.match_token(&TokenKind::Lt) {
+            loop {
+                type_params.push(self.consume_identifier("type parameter")?);
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+            }
+            self.consume_gt()?;
+        }
         self.consume(&TokenKind::LBrace, "{")?;
         let mut methods = Vec::new();
         while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
@@ -171,6 +180,7 @@ impl Parser {
         Ok(Stmt::new(
             StmtKind::Trait(TraitDecl {
                 name,
+                type_params,
                 is_pub,
                 methods,
                 span,

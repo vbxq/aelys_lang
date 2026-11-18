@@ -77,6 +77,7 @@ impl Default for TypeInference {
             local_impls: Vec::new(),
             local_traits: Vec::new(),
             used_builtin_stubs: HashSet::new(),
+            pending_trait_args: None,
         }
     }
 }

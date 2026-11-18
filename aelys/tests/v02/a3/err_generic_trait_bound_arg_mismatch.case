@@ -1,0 +1,17 @@
+trait Sink<T> {
+    fn put(&mut self, x: T) -> i64
+}
+
+struct Log { total: i64 }
+
+impl Sink<string> for Log {
+    fn put(&mut self, x: string) -> i64 { return x.len }
+}
+
+fn feed<S: Sink<i64>>(s: &mut S) -> i64 { return s.put(3) }
+
+fn main() -> i64 {
+    let mut l = Log { total: 0 }
+    println(feed(&mut l))
+    return 0
+}

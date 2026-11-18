@@ -36,6 +36,12 @@ impl MonoContext {
             .collect();
         let generic_names: HashSet<&str> = generic_sigs.keys().map(|s| s.as_str()).collect();
 
+        let impl_arity: HashMap<String, usize> = program
+            .functions
+            .iter()
+            .filter(|f| f.name.contains("__impl$"))
+            .map(|f| (f.name.clone(), f.params.len()))
+            .collect();
         for func in &mut program.functions {
             if !func.type_params.is_empty() {
                 continue;
@@ -65,6 +71,22 @@ impl MonoContext {
                     &mono_ret_types,
                     &mut local_type_patches,
                 );
+            }
+
+            for block in &mut func.blocks {
+                for stmt in &mut block.stmts {
+                    if let AirStmtKind::Assign {
+                        rvalue: Rvalue::Call { func: callee, args },
+                        ..
+                    }
+                    | AirStmtKind::CallVoid { func: callee, args } = &mut stmt.kind
+                    {
+                        trim_trait_operands(callee, args, &impl_arity);
+                    }
+                }
+                if let AirTerminator::Invoke { func: callee, args, .. } = &mut block.terminator {
+                    trim_trait_operands(callee, args, &impl_arity);
+                }
             }
 
             // the actual return type of the monomorphized callee
@@ -247,4 +269,14 @@ fn dest_of(place: &Place, locals: &[AirLocal]) -> Option<AirType> {
         return None;
     };
     locals.iter().find(|l| l.id == *id).map(|l| l.ty.clone())
+}
+
+// a generic trait stub carries its trait arguments as trailing operands an impl does not take
+fn trim_trait_operands(callee: &Callee, args: &mut Vec<Operand>, arity: &HashMap<String, usize>) {
+    if let Callee::Named(name) = callee
+        && let Some(&n) = arity.get(name)
+        && args.len() > n
+    {
+        args.truncate(n);
+    }
 }

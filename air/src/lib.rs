@@ -292,6 +292,7 @@ pub struct AirProgram {
 #[derive(Clone)]
 pub struct AirImpl {
     pub trait_q: String,
+    pub trait_args: Vec<AirType>,
     pub type_params: Vec<TypeParamId>,
     pub self_ty: AirType,
     pub methods: Vec<(String, String)>,
