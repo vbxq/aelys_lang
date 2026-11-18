@@ -443,6 +443,19 @@ impl Parser {
         match self.peek().kind.clone() {
             TokenKind::Minus => {
                 self.advance();
+                if let TokenKind::SuffixedInt(value, suffix) = self.peek().kind.clone()
+                    && suffix.starts_with('i')
+                    && !matches!(
+                        self.peek_at(1).kind,
+                        TokenKind::Dot | TokenKind::LParen | TokenKind::LBracket | TokenKind::Question
+                    )
+                {
+                    let literal = self.advance().span;
+                    return self.suffixed_int(value, &suffix, literal, true).map(|mut e| {
+                        e.span = start.merge(literal);
+                        e
+                    });
+                }
                 let operand = self.unary()?;
                 let span = start.merge(operand.span);
                 Ok(match operand.kind {
@@ -657,7 +670,7 @@ impl Parser {
             }
             TokenKind::SuffixedInt(value, suffix) => {
                 self.advance();
-                return self.suffixed_int(value, &suffix, span);
+                return self.suffixed_int(value, &suffix, span, false);
             }
             TokenKind::SuffixedFloat(value, suffix) => {
                 self.advance();
@@ -738,8 +751,7 @@ impl Parser {
         Ok(expr(kind, span))
     }
 
-    fn suffixed_int(&mut self, value: u128, suffix: &str, span: Span) -> Result<Expr> {
-        let negated = self.current >= 2 && self.tokens[self.current - 2].kind == TokenKind::Minus;
+    fn suffixed_int(&mut self, value: u128, suffix: &str, span: Span, negated: bool) -> Result<Expr> {
         let (name, max): (&str, u128) = match suffix {
             "i8" => ("i8", 127),
             "i16" => ("i16", i16::MAX as u128),
@@ -777,7 +789,8 @@ impl Parser {
             let shown = &self.source.content[span.start..span.end];
             return self.fail(128, &format!("the literal `{shown}` is out of range for `{name}`"), span);
         }
-        let int = expr(ExprKind::Int(value as u64 as i64), span);
+        let value = if negated { (value as u64 as i64).wrapping_neg() } else { value as u64 as i64 };
+        let int = expr(ExprKind::Int(value), span);
         if name == "i64" {
             return Ok(int);
         }

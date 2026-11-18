@@ -1,0 +1,2 @@
+refuse E0128
+the literal `128i8` is out of range for `i8`

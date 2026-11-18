@@ -1,0 +1,7 @@
+fn main() {
+    let a: i64 = 10 - 127i8 as i64;
+    let b = -128i8;
+    let c: i64 = 10 - -128i8 as i64;
+    let d = -32768i16;
+    println!("{} {} {} {}", a, b, c, d);
+}

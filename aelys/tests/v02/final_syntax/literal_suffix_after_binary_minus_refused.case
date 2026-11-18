@@ -1,0 +1,4 @@
+fn main() {
+    let x: i64 = 10 - 128i8 as i64;
+    println!("{}", x);
+}
