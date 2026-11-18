@@ -1,0 +1,5 @@
+needs a
+pub fn g() -> i64 { return 1 }
+fn main() {
+    println(a.f())
+}

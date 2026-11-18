@@ -1,0 +1,5 @@
+needs geo
+
+impl Display for geo.Pt {
+    fn to_string(&self) -> string { return "y" }
+}

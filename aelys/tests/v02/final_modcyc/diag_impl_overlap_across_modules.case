@@ -1,0 +1,6 @@
+needs geo
+needs x
+needs y
+fn main() {
+    println(geo.Pt { v: 1 })
+}
