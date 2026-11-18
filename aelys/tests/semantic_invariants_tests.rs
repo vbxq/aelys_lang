@@ -4101,10 +4101,10 @@ fn group_pa_choke_set_is_tracked() {
             occurrences(&all, "Rvalue::Deref("),
             occurrences(&repo_all, "addr_of_own_temp("),
         ),
-        (8, 6, 13, 9, 6),
+        (8, 7, 13, 9, 10),
         "the choke set moved; the first three are counted over air/src/lower minus place.rs, \
          `Rvalue::Deref(` over all of air/src/lower, and `addr_of_own_temp(` over the repo minus \
-         target as one definition and five callers. str_escape.rs and str_temps.rs read these \
+         target as one definition and nine callers. str_escape.rs and str_temps.rs read these \
          forms to decide whether a string is still the only owner, and the only ones they create \
          are the `Rvalue::AddressOf(` of the temporary str_temps.rs releases and of the string \
          str_escape.rs retains after its share left with an alias, before a return or a move. \
@@ -6933,12 +6933,13 @@ fn readme_boundary_example_compiles_and_runs_as_claimed() {
 const STAGE3_GAP_FORMS: &[(&str, &str, &str)] = &[
     (
         "S3-UMS-gap-struct",
-        "E0902",
+        "E0711",
         r#"
 struct Box { v: Vec<i64> }
 fn main() -> i64 {
     let mut b = Box{v: vec[7919, 2, 3]}
     let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(b.v)
+    Vec::push(b.v, 4)
     s[0] = 101
     return 0
 }

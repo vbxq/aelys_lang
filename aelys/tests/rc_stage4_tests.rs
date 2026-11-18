@@ -565,8 +565,8 @@ fn main() -> i64 {
 }
 
 #[test]
-fn f2_struct_with_vec_field_is_rejected() {
-    let err = rc_reject(
+fn f2_struct_with_vec_field_runs() {
+    let Some((code, stderr)) = run_with_stats(
         r#"
 struct H { v: Vec<i64> }
 fn main() -> i64 {
@@ -574,45 +574,50 @@ fn main() -> i64 {
     return h.v[0]
 }
 "#,
-    );
-    assert!(
-        err.contains(
-            "[E0902]: field `v` of struct `H` has type `Vec<i64>`: a Vec inside a struct is not \
-             supported yet; keep the Vec in its own binding and pass it with `&mut`, or use a \
-             fixed-size array field"
-        ),
-        "a struct with a Vec field must be rejected as unsupported: {err}"
-    );
+        RuntimeVariant::Rc,
+    ) else {
+        return;
+    };
+    assert_eq!(code, 1, "stderr:\n{stderr}");
+    assert_eq!(parse_stats(&stderr).expect("stats line"), (1, 1), "stderr:\n{stderr}");
 }
 
 #[test]
-fn f2_nested_struct_with_vec_field_is_rejected() {
-    let err = rc_reject(
+fn f2_nested_struct_with_vec_field_runs() {
+    let Some((code, stderr)) = run_with_stats(
         r#"
 struct Inner { v: Vec<i64> }
 struct Outer { i: Inner }
-fn main() -> i64 { return 0 }
+fn main() -> i64 {
+    let o = Outer { i: Inner { v: vec[4, 5] } }
+    return o.i.v[1]
+}
 "#,
-    );
-    assert!(
-        err.contains("[E0902]") && err.contains("a Vec inside a struct is not supported yet"),
-        "a struct transitively holding a Vec must be rejected: {err}"
-    );
+        RuntimeVariant::Rc,
+    ) else {
+        return;
+    };
+    assert_eq!(code, 5, "stderr:\n{stderr}");
+    assert_eq!(parse_stats(&stderr).expect("stats line"), (1, 1), "stderr:\n{stderr}");
 }
 
 #[test]
-fn f2_forward_referenced_vec_carrier_is_rejected() {
-    let err = rc_reject(
+fn f2_forward_referenced_vec_carrier_runs() {
+    let Some((code, stderr)) = run_with_stats(
         r#"
 struct Outer { i: Inner }
 struct Inner { v: Vec<i64> }
-fn main() -> i64 { return 0 }
+fn main() -> i64 {
+    let o = Outer { i: Inner { v: vec[6, 7] } }
+    return o.i.v[0] + o.i.v.len
+}
 "#,
-    );
-    assert!(
-        err.contains("[E0902]") && err.contains("a Vec inside a struct is not supported yet"),
-        "a forward-referenced Vec carrier must still be rejected: {err}"
-    );
+        RuntimeVariant::Rc,
+    ) else {
+        return;
+    };
+    assert_eq!(code, 8, "stderr:\n{stderr}");
+    assert_eq!(parse_stats(&stderr).expect("stats line"), (1, 1), "stderr:\n{stderr}");
 }
 
 #[test]
