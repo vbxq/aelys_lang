@@ -176,18 +176,34 @@ static uint32_t rc_child_count(void *c) {
     return __aelys_rc_type_table[1 + 2 * type_id];
 }
 
-static void *rc_child_at(void *c, uint32_t i) {
+/* must mirror GUARDED in codegen/src/lowering/globals.rs: the word indexes {offset, tag offset, tag} */
+#define AELYS_RC_GUARDED 0x80000000u
+
+/* a leaf under another variant's tag is not a pointer, so it reads as absent */
+static void **rc_child_slot(void *c, uint32_t i) {
     uint32_t type_id = aelys_rc_type_id(c);
     uint32_t off_idx = __aelys_rc_type_table[1 + 2 * type_id + 1];
-    uint32_t byte_off = __aelys_rc_type_table[off_idx + i];
-    return *(void **)((char *)c + byte_off);
+    uint32_t word = __aelys_rc_type_table[off_idx + i];
+    if ((word & AELYS_RC_GUARDED) == 0) {
+        return (void **)((char *)c + word);
+    }
+    const uint32_t *g = &__aelys_rc_type_table[word & ~AELYS_RC_GUARDED];
+    if (*(uint32_t *)((char *)c + g[1]) != g[2]) {
+        return NULL;
+    }
+    return (void **)((char *)c + g[0]);
+}
+
+static void *rc_child_at(void *c, uint32_t i) {
+    void **slot = rc_child_slot(c, i);
+    return slot == NULL ? NULL : *slot;
 }
 
 static void rc_child_null(void *c, uint32_t i) {
-    uint32_t type_id = aelys_rc_type_id(c);
-    uint32_t off_idx = __aelys_rc_type_table[1 + 2 * type_id + 1];
-    uint32_t byte_off = __aelys_rc_type_table[off_idx + i];
-    *(void **)((char *)c + byte_off) = NULL;
+    void **slot = rc_child_slot(c, i);
+    if (slot != NULL) {
+        *slot = NULL;
+    }
 }
 
 void __aelys_rc_retain(void *ptr) {

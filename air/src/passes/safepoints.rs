@@ -298,6 +298,8 @@ fn block_windows(function: &AirFunction, block: &AirBlock, out: &mut ReleaseWind
                     }
                 }
             } else if let Some(stored) = place_slot(place) {
+                // a value loaded before this store is already replaced, so its release opens no window
+                loaded.retain(|_, slot| !slot.same(&stored));
                 let mut k = 0;
                 while k < open.len() {
                     if !open[k].0.same(&stored) {

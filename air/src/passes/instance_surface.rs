@@ -565,9 +565,9 @@ impl Scan<'_> {
             }
             AirType::Enum(r) if !r.args.is_empty() => {
                 self.holds(ty, |t| matches!(t, AirType::Rc(_)), &mut HashSet::new())
-                    && !matches!(
+                    && matches!(
                         rc_field_paths(ty, &self.program.structs, &self.program.enums),
-                        RcScan::Paths(_)
+                        RcScan::Undecidable(_) | RcScan::RejectedMultiVariant(_)
                     )
             }
             AirType::I8

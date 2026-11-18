@@ -7,6 +7,7 @@ pub struct RcTypeEntry {
     pub ty: AirType,
     pub type_id: u32,
     pub pointer_offsets: Vec<u32>,
+    pub pointer_guards: Vec<Option<(u32, u32)>>,
 }
 #[derive(Debug, Clone, Default)]
 pub struct RcTypeTable {
@@ -35,10 +36,24 @@ pub fn compute_offset_for_path(
     path: &RcLeafPath,
     program: &AirProgram,
 ) -> Result<u32, RcOffsetError> {
+    let (acc, cur) = offset_of_steps(data_ty, &path.steps, program)?;
+    if !matches!(cur, AirType::Rc(_)) {
+        return Err(RcOffsetError(format!(
+            "Rc path does not terminate on an rc leaf (ended on {cur:?})"
+        )));
+    }
+    Ok(acc)
+}
+
+fn offset_of_steps(
+    data_ty: &AirType,
+    steps: &[RcPathStep],
+    program: &AirProgram,
+) -> Result<(u32, AirType), RcOffsetError> {
     let mut acc: u32 = 0;
     let mut cur: AirType = data_ty.clone();
 
-    for step in &path.steps {
+    for step in steps {
         match step {
             RcPathStep::Field(field_name) => {
                 let AirType::Struct(struct_ref) = &cur else {
@@ -103,13 +118,7 @@ pub fn compute_offset_for_path(
             }
         }
     }
-
-    if !matches!(cur, AirType::Rc(_)) {
-        return Err(RcOffsetError(format!(
-            "Rc path does not terminate on an rc leaf (ended on {cur:?})"
-        )));
-    }
-    Ok(acc)
+    Ok((acc, cur))
 }
 
 // id 0 is reserved for the inert sentinel (__aelys_vec_new), so real ids start at 1
@@ -126,11 +135,12 @@ pub fn collect_rc_types(program: &AirProgram) -> Result<RcTypeTable, RcOffsetErr
                     continue;
                 }
                 let type_id = entries.len() as u32 + 1;
-                let pointer_offsets = pointer_offsets_for(ty, program)?;
+                let (pointer_offsets, pointer_guards) = pointer_offsets_for(ty, program)?;
                 entries.push(RcTypeEntry {
                     ty: ty.clone(),
                     type_id,
                     pointer_offsets,
+                    pointer_guards,
                 });
             }
         }
@@ -139,16 +149,34 @@ pub fn collect_rc_types(program: &AirProgram) -> Result<RcTypeTable, RcOffsetErr
     Ok(RcTypeTable { entries })
 }
 
-fn pointer_offsets_for(ty: &AirType, program: &AirProgram) -> Result<Vec<u32>, RcOffsetError> {
-    match rc_field_paths(ty, &program.structs, &program.enums) {
-        RcScan::None => Ok(Vec::new()),
-        RcScan::Paths(paths) => {
-            let mut offsets = Vec::with_capacity(paths.len());
-            for path in &paths {
-                offsets.push(compute_offset_for_path(ty, path, program)?);
-            }
-            Ok(offsets)
-        }
-        RcScan::Undecidable(_) | RcScan::RejectedMultiVariant(_) => Ok(Vec::new()),
+type PointerMap = (Vec<u32>, Vec<Option<(u32, u32)>>);
+
+fn pointer_offsets_for(ty: &AirType, program: &AirProgram) -> Result<PointerMap, RcOffsetError> {
+    if matches!(
+        rc_field_paths(ty, &program.structs, &program.enums),
+        RcScan::Undecidable(_) | RcScan::RejectedMultiVariant(_)
+    ) {
+        return Ok((Vec::new(), Vec::new()));
     }
+    let leaves = crate::rc_paths::rc_traced_leaves(
+        ty,
+        crate::rc_paths::Defs::local(&program.structs, &program.enums),
+    )
+    .map_err(RcOffsetError)?;
+    let mut offsets = Vec::with_capacity(leaves.len());
+    let mut guards = Vec::with_capacity(leaves.len());
+    for leaf in &leaves {
+        offsets.push(compute_offset_for_path(ty, &leaf.path, program)?);
+        guards.push(match leaf.guard {
+            None => None,
+            Some(at) => {
+                let (tag_off, _) = offset_of_steps(ty, &leaf.path.steps[..at], program)?;
+                let RcPathStep::EnumPayload { tag, .. } = &leaf.path.steps[at] else {
+                    return Err(RcOffsetError("a guard names a step that is not a payload".into()));
+                };
+                Some((tag_off, *tag))
+            }
+        });
+    }
+    Ok((offsets, guards))
 }

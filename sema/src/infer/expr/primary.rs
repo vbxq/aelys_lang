@@ -319,9 +319,12 @@ impl TypeInference {
                     for (i, arg_expr) in args.iter().enumerate() {
                         let mut typed_arg = self.infer_expr(arg_expr);
 
+                        let rc_slot = def.variants.len() > 1
+                            && matches!(&v.data[i], InferType::Struct(p, _) if def.type_params.contains(p));
                         self.check_carrier(crate::infer::projection::CarrierCheck::Surface {
                             ty: typed_arg.ty.clone(),
                             generic: is_generic.then_some("enum"),
+                            rc_slot,
                             span: arg_expr.span,
                             what: format!("payload {i} of enum variant `{enum_name}::{variant}`"),
                         });

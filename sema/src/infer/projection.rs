@@ -84,6 +84,7 @@ pub(crate) enum CarrierCheck {
     Surface {
         ty: InferType,
         generic: Option<&'static str>,
+        rc_slot: bool,
         span: Span,
         what: String,
     },
@@ -180,9 +181,13 @@ impl TypeInference {
             CarrierCheck::Surface {
                 ty,
                 generic,
+                rc_slot,
                 span,
                 what,
-            } => self.reject_rc_out_of_carrier_surface(ty, *generic, *span, what),
+            } => {
+                let generic = generic.filter(|_| !(*rc_slot && ty.is_rc()));
+                self.reject_rc_out_of_carrier_surface(ty, generic, *span, what)
+            }
             CarrierCheck::AggregateElement { ty, kind, span } => {
                 self.reject_rc_aggregate_element(ty, kind, *span)
             }

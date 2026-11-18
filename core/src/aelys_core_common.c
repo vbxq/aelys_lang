@@ -424,6 +424,10 @@ void __aelys_rc_release_slot(void *slot) {
     __aelys_rc_release(*(void **)slot);
 }
 
+void __aelys_rc_retain_slot(void *slot) {
+    __aelys_rc_retain(*(void **)slot);
+}
+
 void __aelys_fn_retain(void *slot) {
     __aelys_rc_retain_checked(((AelysClosure *)slot)->env);
 }

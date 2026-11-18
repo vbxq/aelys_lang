@@ -2403,6 +2403,10 @@ impl<'a> LoweringContext<'a> {
             let carrier_capture = matches!(
                 crate::rc_paths::rc_field_paths_in(&cap_air, self.defs()),
                 crate::rc_paths::RcScan::Paths(_)
+            ) || crate::rc_paths::holds_guarded_rc(
+                &cap_air,
+                self.defs(),
+                &mut std::collections::HashSet::new(),
             );
             if cap_ty.is_rc() || cap_ty.contains_rc() || carrier_capture {
                 self.report_unsupported(format!(

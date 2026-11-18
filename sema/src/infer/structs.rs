@@ -182,13 +182,16 @@ impl TypeInference {
                 .iter()
                 .zip(variants.iter())
                 .flat_map(|(v, ast)| v.data.iter().zip(ast.fields.iter()).map(move |p| (v, p)))
-                .find(|(_, (ty, _))| ty.contains_rc() || self.type_table.contains_rc_nominal(ty))
+                .find(|(_, (ty, _))| {
+                    !ty.is_rc() && (ty.contains_rc() || self.type_table.contains_rc_nominal(ty))
+                })
                 .map(|(v, (ty, ann))| (v.name.clone(), ty.to_string(), ann.span));
             if let Some((variant, ty, span)) = offender {
                 self.errors.push(TypeError::rc_carrier_out_of_surface(
                     format!(
                         "variant `{name}::{variant}` has a payload of type `{ty}`, which holds an \
-                         `Rc`: an enum with more than one variant cannot carry an Rc yet"
+                         `Rc` inside it: an enum with more than one variant carries an Rc only as \
+                         a direct `Rc<T>` payload yet"
                     ),
                     span,
                 ));

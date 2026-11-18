@@ -19,6 +19,7 @@ pub const RC_RELEASE: &str = "__aelys_rc_release";
 pub const RC_RELEASE_SLOT: &str = "__aelys_rc_release_slot";
 pub const VEC_RELEASE: &str = "__aelys_vec_release";
 pub const VEC_RETAIN: &str = "__aelys_vec_retain";
+pub const RC_RETAIN_SLOT: &str = "__aelys_rc_retain_slot";
 
 const UNROLL_LIMIT: u64 = 8;
 const INLINE_LIMIT: u64 = 4;
@@ -79,24 +80,26 @@ impl Carriers<'_> {
                     return false;
                 }
                 if let Some(def) = self.enum_def(&symbol) {
+                    let multi = def.variants.len() > 1;
                     return def
                         .variants
                         .iter()
                         .flat_map(|v| v.payload.iter())
-                        .any(|ty| self.carries(ty, seen));
+                        .any(|ty| (multi && matches!(ty, AirType::Rc(_))) || self.carries(ty, seen));
                 }
                 // before the mono an instance names its template, whose charge holds the arguments
                 let Some(def) = self.enum_def(&r.name) else {
                     return r.args.iter().any(|a| self.carries(a, seen));
                 };
+                let multi = def.variants.len() > 1;
                 def.variants
                     .iter()
                     .flat_map(|v| v.payload.iter())
                     .any(|ty| match ty {
-                        AirType::Param(p) => r
-                            .args
-                            .get(p.0 as usize)
-                            .is_none_or(|arg| self.carries(arg, seen)),
+                        AirType::Param(p) => r.args.get(p.0 as usize).is_none_or(|arg| {
+                            (multi && matches!(arg, AirType::Rc(_))) || self.carries(arg, seen)
+                        }),
+                        AirType::Rc(_) if multi => true,
                         other @ (AirType::I8
                         | AirType::I16
                         | AirType::I32
@@ -176,6 +179,7 @@ impl Carriers<'_> {
                 let Some(def) = self.enum_def(&r.symbol()) else {
                     return out;
                 };
+                let multi = def.variants.len() > 1;
                 let carrying: Vec<(u32, Vec<(u32, AirType)>)> = def
                     .variants
                     .iter()
@@ -184,7 +188,9 @@ impl Carriers<'_> {
                             .payload
                             .iter()
                             .enumerate()
-                            .filter(|(_, ty)| self.counted(ty))
+                            .filter(|(_, ty)| {
+                                (multi && matches!(ty, AirType::Rc(_))) || self.counted(ty)
+                            })
                             .map(|(i, ty)| (i as u32, ty.clone()))
                             .collect();
                         (variant.tag, fields)
@@ -872,6 +878,9 @@ impl<'a> GlueSet<'a> {
         }
         if is_closure(ty) {
             return if retain { FN_RETAIN } else { FN_RELEASE }.to_string();
+        }
+        if matches!(ty, AirType::Rc(_)) {
+            return if retain { RC_RETAIN_SLOT } else { RC_RELEASE_SLOT }.to_string();
         }
         self.glue_for(ty, retain)
     }

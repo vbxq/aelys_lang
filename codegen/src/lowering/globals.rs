@@ -49,6 +49,8 @@ impl CodegenContext {
     // index 0 is a reserved {count:0} entry, so a stray type_id 0 object reads zero
     pub(crate) fn emit_rc_type_table(&self, program: &AirProgram) -> Result<(), CodegenError> {
         const SYMBOL: &str = "__aelys_rc_type_table";
+        // must mirror AELYS_RC_GUARDED in aelys_rc_cycles.c
+        const GUARDED: u32 = 0x8000_0000;
         // a re-run must not double-define the symbol
         if self.module.get_global(SYMBOL).is_some() {
             return Ok(());
@@ -91,11 +93,29 @@ impl CodegenContext {
             running += count;
         }
 
+        let mut guard_at = offsets_base + running as usize;
+        let mut guard_words: Vec<u32> = Vec::new();
         for entry in &table.entries {
-            for &off in &entry.pointer_offsets {
-                words.push(off);
+            for (i, &off) in entry.pointer_offsets.iter().enumerate() {
+                match entry.pointer_guards.get(i).copied().flatten() {
+                    None => words.push(off),
+                    Some((tag_off, tag)) => {
+                        let at = u32::try_from(guard_at)
+                            .ok()
+                            .filter(|a| a & GUARDED == 0)
+                            .ok_or_else(|| {
+                                CodegenError::LlvmError(
+                                    "rc type table: guard region too large".to_string(),
+                                )
+                            })?;
+                        words.push(GUARDED | at);
+                        guard_words.extend([off, tag_off, tag]);
+                        guard_at += 3;
+                    }
+                }
             }
         }
+        words.extend(guard_words);
 
         let i32_ty = self.context.i32_type();
         let vals: Vec<_> = words

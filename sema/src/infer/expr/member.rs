@@ -164,8 +164,9 @@ impl TypeInference {
         let releases_old =
             object.ty.is_rc() || (!self.in_nogc_fn && crate::place_spine::owns_field_place(object));
         let field_is_rc = field_ty.is_rc();
-        let field_is_nominal_carrier =
-            !field_is_rc && self.type_table.contains_rc_nominal(field_ty);
+        let field_is_nominal_carrier = !field_is_rc
+            && self.type_table.contains_rc_nominal(field_ty)
+            && !(releases_old && !self.type_table.rc_outside_variant_tags(field_ty));
         if field_is_nominal_carrier || (field_is_rc && !releases_old) {
             self.errors.push(TypeError::rc_out_of_surface(
                 format!(
@@ -424,6 +425,7 @@ impl TypeInference {
                 self.check_carrier(crate::infer::projection::CarrierCheck::Surface {
                     ty: typed_value.ty.clone(),
                     generic: param_slot.then_some("struct"),
+                    rc_slot: false,
                     span: f.span,
                     what: format!("field `{}` of struct literal `{}`", f.name, name),
                 });

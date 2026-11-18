@@ -145,7 +145,9 @@ impl TypeInference {
                         span,
                     ));
             }
-        } else if var_type.contains_rc() || self.aggregate_embeds_rc_nominal(var_type) {
+        } else if (var_type.contains_rc() && self.type_table.rc_outside_variant_tags(var_type))
+            || self.aggregate_embeds_rc_nominal(var_type)
+        {
             self.errors
                 .push(crate::constraint::TypeError::rc_out_of_surface(
                     format!(

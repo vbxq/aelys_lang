@@ -656,6 +656,7 @@ fn the_admitted_runtime_set_is_pinned_and_its_linked_half_is_what_nm_defines() {
         "__aelys_len",
         "__aelys_range",
         "__aelys_rc_release_slot",
+        "__aelys_rc_retain_slot",
         "__aelys_str_release",
         "__aelys_str_retain",
         "__aelys_vec_release",

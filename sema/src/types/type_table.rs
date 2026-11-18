@@ -110,6 +110,59 @@ impl TypeTable {
         self.scan_rc_nominal(ty, &mut visited)
     }
 
+    // an rc a multi-variant enum holds as a direct payload is counted by the enum's glue
+    pub fn rc_outside_variant_tags(&self, ty: &InferType) -> bool {
+        let mut visited = std::collections::HashSet::new();
+        self.scan_rc_outside_tags(ty, &mut visited)
+    }
+
+    fn scan_rc_outside_tags(
+        &self,
+        ty: &InferType,
+        visited: &mut std::collections::HashSet<String>,
+    ) -> bool {
+        match ty {
+            InferType::Rc(_) => true,
+            InferType::Array(inner, _) | InferType::Vec(inner) => self.scan_rc_nominal(inner, visited),
+            InferType::Tuple(elems) => elems.iter().any(|e| self.scan_rc_nominal(e, visited)),
+            InferType::Struct(name, args) => {
+                let Some(fields) = self.struct_fields(name, args) else {
+                    return false;
+                };
+                if !visited.insert(name.clone()) {
+                    return false;
+                }
+                let found = fields.iter().any(|f| self.scan_rc_outside_tags(&f.ty, visited));
+                visited.remove(name);
+                found
+            }
+            InferType::Enum(name, args) => {
+                let Some(def) = self.enums.get(name) else {
+                    return args.iter().any(|a| self.scan_rc_nominal(a, visited));
+                };
+                if !visited.insert(name.clone()) {
+                    return false;
+                }
+                let multi = def.variants.len() > 1;
+                let found = def.variants.iter().flat_map(|v| v.data.iter()).any(|d| {
+                    let concrete = match d {
+                        InferType::Struct(p, a) if a.is_empty() => def
+                            .type_params
+                            .iter()
+                            .position(|tp| tp == p)
+                            .and_then(|at| args.get(at))
+                            .unwrap_or(d),
+                        _ => d,
+                    };
+                    !(multi && concrete.is_rc()) && self.scan_rc_outside_tags(concrete, visited)
+                });
+                visited.remove(name);
+                found
+            }
+            _ => false,
+        }
+    }
+
     pub fn contains_vec_by_value(&self, ty: &InferType) -> bool {
         let mut visited = std::collections::HashSet::new();
         self.scan_vec_by_value(ty, &mut visited)

@@ -19,6 +19,7 @@ pub(crate) const AD_HOC_RUNTIME_SYMBOLS: &[&str] = &[
     "__aelys_fn_retain",
     "__aelys_fn_release",
     "__aelys_rc_release_slot",
+    "__aelys_rc_retain_slot",
     "__aelys_len",
     // the range constructor, whose arity follows the written bounds
     "__aelys_range",

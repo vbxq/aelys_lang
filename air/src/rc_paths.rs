@@ -147,20 +147,25 @@ fn scan(
                 return Ok(());
             }
             if def.variants.len() > 1 {
-                let mut probe = Vec::new();
                 for v in &def.variants {
                     for pty in &v.payload {
+                        if matches!(pty, AirType::Rc(_)) {
+                            continue;
+                        }
+                        let mut probe = Vec::new();
                         scan(pty, defs, &mut Vec::new(), &mut probe, visited)?;
+                        if !probe.is_empty() || holds_guarded_rc(pty, defs, &mut HashSet::new()) {
+                            visited.remove(&name);
+                            return Err(ScanReject::MultiVariant(format!(
+                                "`{name}` is a multi-variant enum that carries an `Rc<T>` nested \
+                                 inside a variant payload; a multi-variant enum carries an `Rc` \
+                                 only as a direct payload, and two multi-variant enums on one \
+                                 `Rc` path are not supported yet"
+                            )));
+                        }
                     }
                 }
                 visited.remove(&name);
-                if !probe.is_empty() {
-                    return Err(ScanReject::MultiVariant(format!(
-                        "`{name}` is a multi-variant enum carrying an `Rc<T>` in a variant payload; \
-                         materializing the payload of the wrong variant would release/retain a \
-                         non-Rc slot (SEGV/UAF). Multi-variant Rc enums are not supported yet"
-                    )));
-                }
                 return Ok(());
             }
             for v in &def.variants {
@@ -180,7 +185,7 @@ fn scan(
         }
         AirType::Array(inner, _) | AirType::Slice(inner) | AirType::Vec(inner) => {
             match rc_field_paths_in(inner, defs) {
-                RcScan::None => Ok(()),
+                RcScan::None if !holds_guarded_rc(inner, defs, &mut HashSet::new()) => Ok(()),
                 _ => Err(ScanReject::Undecidable(
                     "an array/slice field whose element carries an `Rc<T>` is not supported yet"
                         .to_string(),
@@ -211,14 +216,175 @@ fn scan(
     }
 }
 
-// a multi variant instance is refused after mono, so only a single variant template is traced
+// a multi-variant enum holds an rc only as a direct payload, so one tag guards each leaf
+pub fn holds_guarded_rc(ty: &AirType, defs: Defs<'_>, visited: &mut HashSet<String>) -> bool {
+    match ty {
+        AirType::Struct(r) => {
+            let name = r.symbol();
+            let Some(fields) = defs.struct_fields(r) else {
+                return false;
+            };
+            if !visited.insert(name.clone()) {
+                return false;
+            }
+            let found = fields
+                .iter()
+                .any(|(_, ty)| holds_guarded_rc(ty, defs, visited));
+            visited.remove(&name);
+            found
+        }
+        AirType::Enum(r) => {
+            let Some(def) = enum_instance(r, defs) else {
+                return false;
+            };
+            let payloads = || def.variants.iter().flat_map(|v| v.payload.iter());
+            if def.variants.len() > 1 && payloads().any(|p| matches!(p, AirType::Rc(_))) {
+                return true;
+            }
+            if !visited.insert(def.name.clone()) {
+                return false;
+            }
+            let found = payloads().any(|p| holds_guarded_rc(p, defs, visited));
+            visited.remove(&def.name);
+            found
+        }
+        AirType::Array(inner, _) | AirType::Slice(inner) | AirType::Vec(inner) => {
+            holds_guarded_rc(inner, defs, visited)
+        }
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Ptr(_)
+        | AirType::Rc(_)
+        | AirType::FnPtr { .. }
+        | AirType::Param(_)
+        | AirType::Opaque
+        | AirType::Void => false,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TracedLeaf {
+    pub path: RcLeafPath,
+    pub guard: Option<usize>,
+}
+
+// the collector's view: every rc leaf, a leaf under a multi-variant enum named with its guarding step
+pub fn rc_traced_leaves(ty: &AirType, defs: Defs<'_>) -> Result<Vec<TracedLeaf>, String> {
+    let mut out = Vec::new();
+    trace(ty, defs, &mut Vec::new(), None, &mut out, &mut HashSet::new())?;
+    Ok(out)
+}
+
+fn trace(
+    ty: &AirType,
+    defs: Defs<'_>,
+    prefix: &mut Vec<RcPathStep>,
+    guard: Option<usize>,
+    out: &mut Vec<TracedLeaf>,
+    visited: &mut HashSet<String>,
+) -> Result<(), String> {
+    match ty {
+        AirType::Rc(_) => {
+            out.push(TracedLeaf {
+                path: RcLeafPath {
+                    steps: prefix.clone(),
+                },
+                guard,
+            });
+            Ok(())
+        }
+        AirType::Struct(r) => {
+            let name = r.symbol();
+            let Some(fields) = defs.struct_fields(r) else {
+                return Ok(());
+            };
+            if !visited.insert(name.clone()) {
+                return Ok(());
+            }
+            for (field, field_ty) in &fields {
+                prefix.push(RcPathStep::Field(field.clone()));
+                let res = trace(field_ty, defs, prefix, guard, out, visited);
+                prefix.pop();
+                res?;
+            }
+            visited.remove(&name);
+            Ok(())
+        }
+        AirType::Enum(r) => {
+            let Some(def) = enum_instance(r, defs) else {
+                return Ok(());
+            };
+            if !visited.insert(def.name.clone()) {
+                return Ok(());
+            }
+            let multi = def.variants.len() > 1;
+            for v in &def.variants {
+                for (field_index, pty) in v.payload.iter().enumerate() {
+                    let step_guard = if multi && matches!(pty, AirType::Rc(_)) {
+                        if guard.is_some() {
+                            return Err(format!(
+                                "`{}` nests a multi-variant enum carrying an `Rc` under another one",
+                                def.name
+                            ));
+                        }
+                        Some(prefix.len())
+                    } else {
+                        guard
+                    };
+                    prefix.push(RcPathStep::EnumPayload {
+                        enum_ref: r.clone(),
+                        tag: v.tag,
+                        field_index: field_index as u32,
+                    });
+                    let res = trace(pty, defs, prefix, step_guard, out, visited);
+                    prefix.pop();
+                    res?;
+                }
+            }
+            visited.remove(&def.name);
+            Ok(())
+        }
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Ptr(_)
+        | AirType::Array(..)
+        | AirType::Slice(_)
+        | AirType::Vec(_)
+        | AirType::FnPtr { .. }
+        | AirType::Param(_)
+        | AirType::Opaque
+        | AirType::Void => Ok(()),
+    }
+}
+
 pub fn enum_instance(r: &EnumRef, defs: Defs<'_>) -> Option<AirEnumDef> {
     if let Some(def) = defs.find_enum(&r.symbol()) {
         return Some(def.clone());
     }
     let template = defs.find_enum(&r.name)?;
     if r.args.is_empty()
-        || template.variants.len() != 1
         || template.type_params.len() != r.args.len()
         || r.args.iter().any(crate::counts::mentions_param)
     {

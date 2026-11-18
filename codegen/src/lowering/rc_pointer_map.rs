@@ -2,7 +2,7 @@ use crate::CodegenContext;
 use crate::CodegenError;
 use crate::types::{air_basic_type_to_llvm, enum_struct_name};
 use aelys_air::layout::payload_field_offsets;
-use aelys_air::rc_paths::{RcLeafPath, RcPathStep, RcScan, rc_field_paths};
+use aelys_air::rc_paths::{Defs, RcLeafPath, RcPathStep, rc_traced_leaves};
 use aelys_air::{AirProgram, AirType};
 use inkwell::targets::TargetData;
 use inkwell::types::BasicTypeEnum;
@@ -26,11 +26,14 @@ impl CodegenContext {
         }
         let td = TargetData::create(&repr);
         for entry in &program.rc_type_table.entries {
-            let paths = match rc_field_paths(&entry.ty, &program.structs, &program.enums) {
-                RcScan::Paths(paths) => paths,
-                RcScan::None | RcScan::Undecidable(_) | RcScan::RejectedMultiVariant(_) => {
-                    Vec::new()
-                }
+            let paths: Vec<RcLeafPath> = if entry.pointer_offsets.is_empty() {
+                Vec::new()
+            } else {
+                rc_traced_leaves(&entry.ty, Defs::local(&program.structs, &program.enums))
+                    .map_err(|why| map_error(&entry.ty, why))?
+                    .into_iter()
+                    .map(|leaf| leaf.path)
+                    .collect()
             };
             if paths.len() != entry.pointer_offsets.len() {
                 return Err(map_error(
