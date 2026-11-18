@@ -1,2 +1,3 @@
 refuse E0727
-merge_sort
+std.sort.merge_sort
+`sort_unstable` sorts in place without allocating

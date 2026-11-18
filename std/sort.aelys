@@ -1,5 +1,3 @@
-needs std.str
-
 pub fn insertion_sort<T: ord>(s: &mut [T]) {
     let mut i: i64 = 1
     while i < s.len {
@@ -25,20 +23,7 @@ pub fn binary_search<T: ord>(s: &[T], x: T) -> i64 {
     return -1
 }
 
-// `ord` does not hold of `string`, so ordering strings stays its own entry point
-pub nogc fn strings(s: &mut [string]) {
-    let mut i: i64 = 1
-    while i < s.len {
-        let x: string = s[i]
-        let mut j: i64 = i - 1
-        while j >= 0 and str.compare(s[j], x) > 0 {
-            s[j + 1] = s[j]
-            j = j - 1
-        }
-        s[j + 1] = x
-        i = i + 1
-    }
-}
+pub nogc fn strings(s: &mut [string]) { insertion_sort(s) }
 
 fn swap_at<T>(s: &mut [T], i: i64, j: i64) {
     let t: T = s[i]

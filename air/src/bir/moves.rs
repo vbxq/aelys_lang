@@ -156,6 +156,12 @@ fn nogc_diagnostic(
             body.name
         ));
     }
+    if path.contains(&"std.sort.merge_sort") {
+        return diag.with_help(format!(
+            "`sort_unstable` sorts in place without allocating, or drop `nogc` from `{}`",
+            body.name
+        ));
+    }
     diag.with_help(format!(
         "keep the value on the stack (an array or a `&[T]` slice), make every function on this \
          path nogc, or drop `nogc` from `{}`",
