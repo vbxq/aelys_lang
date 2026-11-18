@@ -28,7 +28,8 @@ pub(crate) fn provider_shown(fn_name: &str) -> String {
         if let Some(rest) = fn_name.strip_prefix(prefix) {
             let q = rest.split('$').next().unwrap_or(rest);
             let m = rest.rsplit('$').next().unwrap_or(rest);
-            return format!("{}::{m}", trait_shown(q));
+            let q = q.strip_prefix("__q.").unwrap_or(q);
+            return format!("{q}::{m}");
         }
     }
     match fn_name.split_once("::") {

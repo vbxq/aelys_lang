@@ -1,0 +1,7 @@
+needs Show from tr2
+needs x
+fn main() -> i64 {
+    let p = x.P { v: 1 }
+    println(p.twice())
+    return 0
+}

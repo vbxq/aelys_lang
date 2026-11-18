@@ -1,0 +1,3 @@
+needs Show from tr1
+pub struct P { pub v: i64 }
+impl Show for P { fn show(&self) -> i64 { return self.v + 100 } }
