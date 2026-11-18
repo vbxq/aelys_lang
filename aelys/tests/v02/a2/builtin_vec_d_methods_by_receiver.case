@@ -1,0 +1,19 @@
+fn main() {
+    let mut v: Vec<i64> = Vec::new()
+    v.push(10)
+    v.push(20)
+    v.push(30)
+    v.insert(1, 15)
+    let r = v.remove(0)
+    match v.get(2) {
+        Some(x) => println(x + r)
+        None => println(-1)
+    }
+    match v.get(9) {
+        Some(x) => println(x)
+        None => println(-1)
+    }
+    println(v.len())
+    v.clear()
+    println(v.len())
+}
