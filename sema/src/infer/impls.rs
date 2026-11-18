@@ -741,6 +741,7 @@ fn subst_expr(expr: &mut Expr, head: &TypeAnnotation) {
         | ExprKind::Char(_)
         | ExprKind::Bool(_)
         | ExprKind::Null
+        | ExprKind::Panic(_)
         | ExprKind::Identifier(_) => {}
         ExprKind::FmtString(parts) => {
             for part in parts {

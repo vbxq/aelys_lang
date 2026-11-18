@@ -410,6 +410,8 @@ pub enum ExprKind {
     Unsafe(Box<Expr>),
 
     Tuple(Vec<Expr>),
+
+    Panic(String),
 }
 
 #[derive(Debug, Clone)]

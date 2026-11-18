@@ -1,5 +1,4 @@
 use super::Parser;
-use super::block::method_call;
 use super::expr::is_pure;
 use aelys_common::Result;
 use aelys_syntax::{
@@ -90,7 +89,7 @@ impl Parser {
                     _ => "explicit panic",
                 };
                 let message = self.static_message(args, prefix, name != "panic", span)?;
-                Ok(self.panic_expr(message, span))
+                Ok(expr(ExprKind::Panic(message), span))
             }
             "assert" => self.assert_macro(close, start),
             "assert_eq" | "assert_ne" => self.assert_eq_macro(close, start, name == "assert_eq"),
@@ -449,21 +448,6 @@ impl Parser {
         Ok(if joined { format!("{prefix}: {text}") } else { text })
     }
 
-    pub(super) fn panic_expr(&mut self, message: String, span: Span) -> Expr {
-        let err = expr(
-            ExprKind::EnumVariant {
-                enum_name: "Result".to_string(),
-                variant: "Err".to_string(),
-                args: vec![expr(ExprKind::Int(0), span)],
-                unqualified: true,
-            },
-            span,
-        );
-        let value = method_call(err, "expect", vec![expr(ExprKind::String(message), span)], span);
-        self.panics.insert((span.start, span.end));
-        value
-    }
-
     fn assert_macro(&mut self, close: TokenKind, start: Span) -> Result<Expr> {
         let saved = std::mem::replace(&mut self.no_struct, false);
         let cond = self.expression();
@@ -518,9 +502,7 @@ impl Parser {
     }
 
     fn assert_failing_when(&mut self, failing: Expr, message: String, span: Span) -> Expr {
-        let panic = self.panic_expr(message, span);
-        let panic = self.semi_stmt(panic);
-        self.panics.remove(&(span.start, span.end));
+        let panic = Stmt::new(StmtKind::Semi(expr(ExprKind::Panic(message), span)), span);
         let check = Stmt::new(
             StmtKind::If {
                 condition: failing,

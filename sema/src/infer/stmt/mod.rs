@@ -7,10 +7,10 @@ mod needs;
 mod return_stmt;
 
 use super::TypeInference;
-use crate::constraint::TypeError;
+use crate::constraint::{Constraint, ConstraintReason, TypeError};
 use crate::typed_ast::{TypedStmt, TypedStmtKind};
 use crate::types::InferType;
-use aelys_syntax::{Stmt, StmtKind};
+use aelys_syntax::{ExprKind, Stmt, StmtKind};
 
 impl TypeInference {
     pub(super) fn infer_stmts(&mut self, stmts: &[Stmt]) -> Vec<TypedStmt> {
@@ -262,6 +262,14 @@ impl TypeInference {
         let kind = match &stmt.kind {
             StmtKind::Expression(expr) | StmtKind::Semi(expr) => {
                 let typed_expr = self.infer_expr(expr);
+                if matches!(stmt.kind, StmtKind::Semi(_)) && matches!(expr.kind, ExprKind::Panic(_)) {
+                    self.constraints.push(Constraint::equal(
+                        typed_expr.ty.clone(),
+                        InferType::I64,
+                        expr.span,
+                        ConstraintReason::Other("a panic statement".to_string()),
+                    ));
+                }
                 if let InferType::Enum(name, args) = &typed_expr.ty {
                     if crate::modules::source_type_name(name) == "Result" && args.len() == 2 {
                         self.errors

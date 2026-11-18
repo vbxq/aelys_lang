@@ -1,0 +1,48 @@
+fn get(n: i64) -> Option<i64> {
+    if n > 0 { Some(n) } else { None }
+}
+
+fn both(n: i64) -> i64 {
+    let Some(x) = get(n) else {
+        if n == 0 { return 10; } else { return 20; }
+    };
+    x
+}
+
+fn arms(n: i64) -> i64 {
+    let Some(x) = get(n) else {
+        match n {
+            0 => return 30,
+            _ => return 40,
+        }
+    };
+    x
+}
+
+fn spin(n: i64) -> i64 {
+    let Some(x) = get(n) else { loop {} };
+    x
+}
+
+fn must(n: i64) -> i64 {
+    let Some(x) = get(n) else { panic!("none") };
+    x
+}
+
+fn quit(n: i64) -> i64 {
+    let Some(x) = get(n) else { std::process::exit(3) };
+    x
+}
+
+fn main() {
+    println!("{} {} {} {}", both(0), both(-1), both(5), arms(0));
+    println!("{} {} {}", arms(-2), spin(6), must(7));
+    let mut found = 0;
+    for i in 0..3 {
+        let Some(v) = get(i) else { continue; };
+        found += v;
+    }
+    println!("{}", found);
+    quit(0);
+    println!("not reached");
+}

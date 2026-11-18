@@ -139,6 +139,7 @@ fn expr(e: &mut Expr, f: &mut dyn FnMut(&mut TypeAnnotation)) {
         | ExprKind::Char(_)
         | ExprKind::Bool(_)
         | ExprKind::Null
+        | ExprKind::Panic(_)
         | ExprKind::Identifier(_) => {}
         ExprKind::FmtString(parts) => {
             for p in parts {

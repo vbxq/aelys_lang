@@ -408,6 +408,10 @@ impl TypeInference {
             ExprKind::Catch { scrutinee, handler } => {
                 self.infer_catch_expr(scrutinee, handler, expr.span)
             }
+            ExprKind::Panic(message) => {
+                let t = self.infer_expr(&panic_call(message, expr.span));
+                (t.kind, t.ty)
+            }
             ExprKind::Unsafe(inner) => {
                 self.unsafe_depth += 1;
                 let t = self.infer_expr(inner);
@@ -1262,4 +1266,30 @@ impl TypeInference {
             }
         }
     }
+}
+
+pub(crate) fn panic_call(message: &str, span: aelys_syntax::Span) -> Expr {
+    let err = Expr::new(
+        ExprKind::EnumVariant {
+            enum_name: "Result".to_string(),
+            variant: "Err".to_string(),
+            args: vec![Expr::new(ExprKind::Int(0), span)],
+            unqualified: true,
+        },
+        span,
+    );
+    let callee = Expr::new(
+        ExprKind::Member {
+            object: Box::new(err),
+            member: "expect".to_string(),
+        },
+        span,
+    );
+    Expr::new(
+        ExprKind::Call {
+            callee: Box::new(callee),
+            args: vec![Expr::new(ExprKind::String(message.to_string()), span)],
+        },
+        span,
+    )
 }

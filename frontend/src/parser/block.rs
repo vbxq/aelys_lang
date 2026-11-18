@@ -151,17 +151,147 @@ fn if_then(cond: Expr, then: Vec<Stmt>, span: Span) -> Stmt {
     )
 }
 
-fn is_jump(stmt: &Stmt) -> bool {
-    match &stmt.kind {
-        StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue => true,
-        StmtKind::Semi(e) | StmtKind::Expression(e) => expr_is_jump(e),
-        StmtKind::Block(stmts) => stmts.last().is_some_and(is_jump),
+fn diverges(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::Panic(_) => true,
+        ExprKind::Block { stmts, tail } => stmts.iter().any(stmt_diverges) || diverges(tail),
+        ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => diverges(condition) || diverges(then_branch) && diverges(else_branch),
+        ExprKind::Match { scrutinee, arms, .. } => {
+            diverges(scrutinee) || !arms.is_empty() && arms.iter().all(|a| diverges(&a.body))
+        }
+        ExprKind::Call { callee, .. } => is_process_exit(callee),
+        ExprKind::Grouping(inner) | ExprKind::Unsafe(inner) => diverges(inner),
         _ => false,
     }
 }
 
-fn expr_is_jump(e: &Expr) -> bool {
-    matches!(&e.kind, ExprKind::Block { stmts, tail } if matches!(tail.kind, ExprKind::Null) && stmts.last().is_some_and(is_jump))
+fn stmt_diverges(stmt: &Stmt) -> bool {
+    match &stmt.kind {
+        StmtKind::Return(_) | StmtKind::Break | StmtKind::Continue => true,
+        StmtKind::Semi(e) | StmtKind::Expression(e) | StmtKind::Discard(e) => diverges(e),
+        StmtKind::Let { initializer, .. } | StmtKind::LetPattern { initializer, .. } => diverges(initializer),
+        StmtKind::Block(stmts) => stmts.iter().any(stmt_diverges),
+        StmtKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => diverges(condition) || else_branch.as_deref().is_some_and(|e| stmt_diverges(then_branch) && stmt_diverges(e)),
+        StmtKind::While { condition, body } => matches!(condition.kind, ExprKind::Bool(true)) && !breaks(body),
+        _ => false,
+    }
+}
+
+fn is_process_exit(callee: &Expr) -> bool {
+    let ExprKind::Member { object, member } = &callee.kind else {
+        return false;
+    };
+    member == "exit"
+        && match &object.kind {
+            ExprKind::Identifier(m) => m == "process",
+            ExprKind::Member { object, member } => {
+                member == "process" && matches!(&object.kind, ExprKind::Identifier(s) if s == "std")
+            }
+            _ => false,
+        }
+}
+
+fn breaks(stmt: &Stmt) -> bool {
+    match &stmt.kind {
+        StmtKind::Break => true,
+        StmtKind::Semi(e) | StmtKind::Expression(e) | StmtKind::Discard(e) | StmtKind::Return(Some(e)) => {
+            expr_breaks(e)
+        }
+        StmtKind::Let { initializer, .. } | StmtKind::LetPattern { initializer, .. } => expr_breaks(initializer),
+        StmtKind::Block(stmts) => stmts.iter().any(breaks),
+        StmtKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => expr_breaks(condition) || breaks(then_branch) || else_branch.as_deref().is_some_and(breaks),
+        StmtKind::While { condition, .. } => expr_breaks(condition),
+        StmtKind::For { start, end, step, .. } => {
+            expr_breaks(start) || expr_breaks(end) || step.as_ref().as_ref().is_some_and(expr_breaks)
+        }
+        StmtKind::ForEach { iterable, .. } => expr_breaks(iterable),
+        _ => false,
+    }
+}
+
+fn expr_breaks(e: &Expr) -> bool {
+    let any = |es: &[Expr]| es.iter().any(expr_breaks);
+    match &e.kind {
+        ExprKind::Int(_)
+        | ExprKind::Float(_)
+        | ExprKind::String(_)
+        | ExprKind::Char(_)
+        | ExprKind::Bool(_)
+        | ExprKind::Null
+        | ExprKind::Identifier(_)
+        | ExprKind::Panic(_)
+        | ExprKind::Lambda { .. } => false,
+        ExprKind::FmtString(parts) => parts
+            .iter()
+            .any(|p| matches!(p, aelys_syntax::FmtStringPart::Expr(e) if expr_breaks(e))),
+        ExprKind::Binary { left, right, .. }
+        | ExprKind::And { left, right }
+        | ExprKind::Or { left, right }
+        | ExprKind::Index {
+            object: left,
+            index: right,
+        }
+        | ExprKind::Slice {
+            object: left,
+            range: right,
+        }
+        | ExprKind::DerefAssign {
+            target: left,
+            value: right,
+        }
+        | ExprKind::FieldAssign {
+            object: left,
+            value: right,
+            ..
+        } => expr_breaks(left) || expr_breaks(right),
+        ExprKind::Unary { operand: inner, .. }
+        | ExprKind::Reference { operand: inner, .. }
+        | ExprKind::Assign { value: inner, .. }
+        | ExprKind::Grouping(inner)
+        | ExprKind::Member { object: inner, .. }
+        | ExprKind::Deref(inner)
+        | ExprKind::Cast { expr: inner, .. }
+        | ExprKind::Try(inner)
+        | ExprKind::Unsafe(inner) => expr_breaks(inner),
+        ExprKind::Call { callee, args } => expr_breaks(callee) || any(args),
+        ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => expr_breaks(condition) || expr_breaks(then_branch) || expr_breaks(else_branch),
+        ExprKind::ArrayLiteral { elements } | ExprKind::VecLiteral { elements, .. } | ExprKind::Tuple(elements) => {
+            any(elements)
+        }
+        ExprKind::EnumVariant { args, .. } => any(args),
+        ExprKind::ArraySized { size, fill_value } => expr_breaks(size) || fill_value.as_deref().is_some_and(expr_breaks),
+        ExprKind::IndexAssign { object, index, value } => {
+            expr_breaks(object) || expr_breaks(index) || expr_breaks(value)
+        }
+        ExprKind::Range { start, end, .. } => {
+            start.as_deref().is_some_and(expr_breaks) || end.as_deref().is_some_and(expr_breaks)
+        }
+        ExprKind::StructLiteral { fields, .. } => fields.iter().any(|f| expr_breaks(&f.value)),
+        ExprKind::Match { scrutinee, arms, .. } => {
+            expr_breaks(scrutinee)
+                || arms
+                    .iter()
+                    .any(|a| a.guard.as_deref().is_some_and(expr_breaks) || expr_breaks(&a.body))
+        }
+        ExprKind::Block { stmts, tail } => stmts.iter().any(breaks) || expr_breaks(tail),
+        ExprKind::Catch { scrutinee, .. } => expr_breaks(scrutinee),
+    }
 }
 
 impl Parser {
@@ -269,7 +399,8 @@ impl Parser {
                         });
                     }
                     self.expect_semi("this expression")?;
-                    stmts.push(self.semi_stmt(value));
+                    let span = value.span;
+                    stmts.push(Stmt::new(StmtKind::Semi(value), span));
                     continue;
                 }
                 stmts.extend(form.into_stmts(self, false)?);
@@ -284,50 +415,14 @@ impl Parser {
                 });
             }
             self.expect_semi("this expression")?;
-            stmts.push(self.semi_stmt(value));
+            let span = value.span;
+            stmts.push(Stmt::new(StmtKind::Semi(value), span));
         }
     }
 
     fn discard_ahead(&self) -> bool {
         let next = &self.peek_at(1).kind;
         !matches!(next, TokenKind::LParen) && super::expr::starts_expression(next, false)
-    }
-
-    pub(super) fn semi_stmt(&mut self, value: Expr) -> Stmt {
-        let span = value.span;
-        if self.panics.contains(&(span.start, span.end)) {
-            return self.panic_stmt(value);
-        }
-        Stmt::new(StmtKind::Semi(value), span)
-    }
-
-    // the panic expression `Err(0).expect(msg)` takes its type from the context, which a statement does not give
-    fn panic_stmt(&mut self, value: Expr) -> Stmt {
-        let span = value.span;
-        let ExprKind::Call { args, .. } = value.kind else {
-            return Stmt::new(StmtKind::Semi(value), span);
-        };
-        let slot = self.temp("panic");
-        let mut ty = TypeAnnotation::new("Result".to_string(), span);
-        ty.type_params = vec![
-            TypeAnnotation::new("i64".to_string(), span),
-            TypeAnnotation::new("i64".to_string(), span),
-        ];
-        let binding = Stmt::new(
-            StmtKind::Let {
-                name: slot.clone(),
-                mutable: false,
-                type_annotation: Some(ty),
-                initializer: err_zero(span),
-                is_pub: false,
-            },
-            span,
-        );
-        let call = method_call(ident(&slot, span), "expect", args, span);
-        Stmt::new(
-            StmtKind::Block(vec![binding, Stmt::new(StmtKind::Semi(call), span)]),
-            span,
-        )
     }
 
     pub(super) fn starts_block_like(&self) -> bool {
@@ -939,16 +1034,17 @@ impl Parser {
         otherwise: Body,
         span: Span,
     ) -> Result<Vec<Stmt>> {
-        if !body_diverges(&otherwise, &self.panics) {
-            return self.fail(
-                125,
-                "the `else` of a `let ... else` must leave the scope with `return`, `break`, `continue` or `panic!`",
-                otherwise.span,
-            );
-        }
         let mut bindings = Vec::new();
         collect_bindings(&mut pattern, &mut bindings);
+        let else_span = otherwise.span;
         let otherwise = self.body_value(otherwise, false)?;
+        if !diverges(&otherwise) {
+            return self.fail(
+                125,
+                "the `else` of a `let ... else` must leave the scope with `return`, `break`, `continue` or a panic",
+                else_span,
+            );
+        }
         let value = match bindings.len() {
             0 => expr(ExprKind::Null, span),
             1 => ident(&bindings[0].0, span),
@@ -1032,8 +1128,8 @@ impl Parser {
             None => {}
             Some(Tail::Expr(e)) => {
                 let span = e.span;
-                if !value_tail && self.panics.contains(&(span.start, span.end)) {
-                    stmts.push(self.panic_stmt(e));
+                if !value_tail && matches!(e.kind, ExprKind::Panic(_)) {
+                    stmts.push(Stmt::new(StmtKind::Semi(e), span));
                 } else {
                     stmts.push(Stmt::new(StmtKind::Expression(e), span));
                 }
@@ -1050,7 +1146,7 @@ impl Parser {
             Some(Tail::Expr(e)) => e,
             Some(Tail::Block(form)) => form.into_value(self, required)?,
             None => {
-                if required && !stmts.last().is_some_and(is_jump) {
+                if required && !stmts.iter().any(stmt_diverges) {
                     return match stmts.last() {
                         Some(last) if matches!(last.kind, StmtKind::Semi(_)) => self.fail_help(
                             114,
@@ -1321,22 +1417,6 @@ fn discard_value(stmt: &mut Stmt) {
         }
         _ => {}
     }
-}
-
-fn body_diverges(body: &Body, panics: &std::collections::HashSet<(usize, usize)>) -> bool {
-    let is_panic = |e: &Expr| panics.contains(&(e.span.start, e.span.end));
-    match &body.tail {
-        Some(Tail::Expr(e)) => expr_is_jump(e) || is_panic(e),
-        Some(Tail::Block(_)) => false,
-        None => body.stmts.last().is_some_and(|s| {
-            is_jump(s)
-                || matches!(&s.kind, StmtKind::Block(inner) if inner.last().is_some_and(|l| matches!(&l.kind, StmtKind::Semi(c) if is_panic_call(c))))
-        }),
-    }
-}
-
-fn is_panic_call(e: &Expr) -> bool {
-    matches!(&e.kind, ExprKind::Call { callee, .. } if matches!(&callee.kind, ExprKind::Member { member, .. } if member == "expect"))
 }
 
 fn collect_bindings(pattern: &mut Pattern, out: &mut Vec<(String, bool)>) {

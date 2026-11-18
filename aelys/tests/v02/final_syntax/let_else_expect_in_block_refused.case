@@ -1,0 +1,10 @@
+fn main() {
+    let r: Result<i64, i64> = Ok(1);
+    let o: Option<i64> = None;
+    let Some(x) = o else {
+        {
+            r.expect("x");
+        };
+    };
+    println!("{}", x);
+}
