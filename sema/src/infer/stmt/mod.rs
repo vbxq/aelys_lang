@@ -54,10 +54,7 @@ impl TypeInference {
                 "value discarded here",
                 span,
             );
-            err.help = Some(
-                "wrap a block-like expression in parentheses to use it, or end it with `;`"
-                    .to_string(),
-            );
+            err.help = Some("wrap it in parentheses to use it, or end it with `;`".to_string());
             self.errors.push(err);
         }
     }

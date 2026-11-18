@@ -80,7 +80,7 @@ fn numbers_with_suffixes() {
 #[test]
 fn strings_are_never_interpolated() {
     assert_eq!(
-        kinds(r#""{name} {{x}}" r"C:\dir\{n}" r#"a "q" b"#"#),
+        kinds(r##""{name} {{x}}" r"C:\dir\{n}" r#"a "q" b"#"##),
         vec![
             TokenKind::String("{name} {{x}}".to_string()),
             TokenKind::String("C:\\dir\\{n}".to_string()),
