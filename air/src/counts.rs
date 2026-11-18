@@ -18,6 +18,7 @@ pub const FN_RELEASE: &str = "__aelys_fn_release";
 pub const RC_RELEASE: &str = "__aelys_rc_release";
 pub const RC_RELEASE_SLOT: &str = "__aelys_rc_release_slot";
 pub const VEC_RELEASE: &str = "__aelys_vec_release";
+pub const VEC_RETAIN: &str = "__aelys_vec_retain";
 
 const UNROLL_LIMIT: u64 = 8;
 const INLINE_LIMIT: u64 = 4;
@@ -50,6 +51,11 @@ impl Carriers<'_> {
         matches!(ty, AirType::Str | AirType::Param(_)) || self.carries_string(ty)
     }
 
+    // a vec field is counted by its struct's glue, while a vec slot keeps its own cow share
+    pub fn field_counted(&self, ty: &AirType) -> bool {
+        self.counted(ty) || matches!(ty, AirType::Vec(_))
+    }
+
     fn carries(&self, ty: &AirType, seen: &mut HashSet<String>) -> bool {
         match ty {
             // before mono a type parameter may become a string, so a type that holds one is counted
@@ -61,7 +67,9 @@ impl Carriers<'_> {
                     return false;
                 }
                 match self.struct_fields(r) {
-                    Some(fields) => fields.iter().any(|(_, ty)| self.carries(ty, seen)),
+                    Some(fields) => fields
+                        .iter()
+                        .any(|(_, ty)| matches!(ty, AirType::Vec(_)) || self.carries(ty, seen)),
                     None => r.args.iter().any(|a| self.carries(a, seen)),
                 }
             }
@@ -154,7 +162,7 @@ impl Carriers<'_> {
                     return out;
                 };
                 for (field, field_ty) in fields {
-                    if self.counted(&field_ty) {
+                    if self.field_counted(&field_ty) {
                         out.push(Leaf::Field(field, field_ty));
                     }
                 }
@@ -774,7 +782,7 @@ impl<'a> GlueSet<'a> {
             body.call(RC_RELEASE, leaf);
             calls += 1;
         }
-        calls + self.release_vec_fields(body, ty, addr)
+        calls
     }
 
     fn release_vec(&mut self, body: &mut GlueBody, ty: &AirType, addr: LocalId) -> u64 {
@@ -787,30 +795,6 @@ impl<'a> GlueSet<'a> {
         }
         body.call(VEC_RELEASE, addr);
         1
-    }
-
-    fn release_vec_fields(&mut self, body: &mut GlueBody, ty: &AirType, addr: LocalId) -> u64 {
-        let AirType::Struct(r) = ty else {
-            return 0;
-        };
-        let fields: Vec<(String, AirType)> = self.carriers().struct_fields(r).unwrap_or_default();
-        let mut calls = 0;
-        for (field, field_ty) in fields {
-            if !struct_holds_vec(
-                &field_ty,
-                &self.carriers(),
-                &mut HashSet::from([r.symbol()]),
-            ) {
-                continue;
-            }
-            let field_addr = body.address_of(Place::Field(addr, field), &field_ty);
-            calls += if matches!(field_ty, AirType::Vec(_)) {
-                self.release_vec(body, &field_ty, field_addr)
-            } else {
-                self.release_vec_fields(body, &field_ty, field_addr)
-            };
-        }
-        calls
     }
 
     fn build(&mut self, name: &str, ty: &AirType, retain: bool) -> AirFunction {
@@ -879,25 +863,18 @@ impl<'a> GlueSet<'a> {
         if ty == &AirType::Str {
             return count_callee(ty, retain).to_string();
         }
+        if let AirType::Vec(elem) = ty {
+            if **elem != AirType::Str && self.carriers().carries_string(elem) {
+                self.glue_for(elem, true);
+                self.glue_for(elem, false);
+            }
+            return if retain { VEC_RETAIN } else { VEC_RELEASE }.to_string();
+        }
         if is_closure(ty) {
             return if retain { FN_RETAIN } else { FN_RELEASE }.to_string();
         }
         self.glue_for(ty, retain)
     }
-}
-
-fn struct_holds_vec(ty: &AirType, carriers: &Carriers<'_>, seen: &mut HashSet<String>) -> bool {
-    let AirType::Struct(r) = ty else {
-        return matches!(ty, AirType::Vec(_));
-    };
-    if !seen.insert(r.symbol()) {
-        return false;
-    }
-    carriers.struct_fields(r).is_some_and(|fields| {
-        fields
-            .iter()
-            .any(|(_, ty)| struct_holds_vec(ty, carriers, seen))
-    })
 }
 
 struct GlueBody {

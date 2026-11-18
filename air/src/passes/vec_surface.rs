@@ -311,18 +311,13 @@ impl Scan<'_> {
         match ty {
             AirType::Vec(inner) | AirType::Array(inner, _) => self.holds_vec(inner, visited),
             AirType::Struct(r) => {
-                let closure_env = self.is_closure_env(ty);
                 let (name, fields) = self.struct_fields(r)?;
                 if !visited.insert(name.clone()) {
                     return Ok(false);
                 }
                 let mut found = false;
                 for field_ty in &fields {
-                    found |= if closure_env {
-                        self.offend_slot(field_ty, visited)?
-                    } else {
-                        self.holds_vec(field_ty, visited)?
-                    };
+                    found |= self.offend_slot(field_ty, visited)?;
                 }
                 visited.remove(&name);
                 Ok(found)

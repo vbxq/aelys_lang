@@ -214,6 +214,12 @@ impl<'a> LoweringContext<'a> {
                     let op = self.lower_expr(fval);
                     let op = self.hold_operand(op, fval, &values[i + 1..], false, sp);
                     let op = match self.air_field_type_of(&struct_ref, fname) {
+                        Some(AirType::Vec(_)) => {
+                            if !self.claim_owned_str_temp(&op) {
+                                self.emit_vec_slot_acquire(true, Some(&fval.kind), &op, sp);
+                            }
+                            op
+                        }
                         Some(field_air_ty) => self.own_field_value(op, fval, &field_air_ty, sp),
                         None => {
                             self.report_ice(format!(
@@ -1424,6 +1430,31 @@ impl<'a> LoweringContext<'a> {
                 },
                 sp,
             );
+        } else if matches!(value.ty, InferType::Vec(_)) && compound_info.is_none() {
+            if !self.claim_owned_str_temp(&final_val) {
+                self.emit_vec_slot_acquire(true, Some(&value.kind), &final_val, sp);
+            }
+            let old = self.store_root_owns(object).then(|| {
+                let field_ty = self.lower_type_from_infer(&value.ty);
+                self.emit_rvalue_to_temp(
+                    field_ty,
+                    Rvalue::FieldAccess {
+                        base: Operand::Copy(base.ptr),
+                        field: field.to_string(),
+                    },
+                    sp,
+                )
+            });
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Field(base.ptr, field.to_string()),
+                    rvalue: Rvalue::Use(final_val),
+                },
+                sp,
+            );
+            if let Some(Operand::Copy(old) | Operand::Move(old)) = old {
+                self.emit_cow_release(old, sp);
+            }
         } else {
             let old_field = (self.counted(&value.ty) && self.store_root_owns(object)).then(|| {
                 let field_ty = self.lower_type_from_infer(&value.ty);

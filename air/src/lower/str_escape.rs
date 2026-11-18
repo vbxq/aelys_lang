@@ -57,6 +57,24 @@ fn vec_pop_out_slot(kind: &AirStmtKind) -> Option<LocalId> {
         .flatten()
 }
 
+// a vec runtime call keeps no address it is handed, only the element it moves into the buffer
+fn vec_call_kept(kind: &AirStmtKind) -> Option<Vec<Operand>> {
+    let AirStmtKind::CallVoid {
+        func: Callee::Named(name),
+        args,
+    } = kind
+    else {
+        return None;
+    };
+    if !name.starts_with("__aelys_vec_") {
+        return None;
+    }
+    Some(match name.as_str() {
+        "__aelys_vec_push" | "__aelys_vec_insert" => args.get(1).cloned().into_iter().collect(),
+        _ => Vec::new(),
+    })
+}
+
 fn assigned_local(kind: &AirStmtKind) -> Option<LocalId> {
     match kind {
         AirStmtKind::Assign {
@@ -250,7 +268,9 @@ impl Scan<'_> {
                 self.note_rvalue(place, rvalue);
             }
             AirStmtKind::CallVoid { func, args } => {
-                if str_slot_call(kind).is_none() && !self.callee_keeps_no_borrow(func) {
+                if let Some(kept) = vec_call_kept(kind) {
+                    self.escape_all(&kept);
+                } else if str_slot_call(kind).is_none() && !self.callee_keeps_no_borrow(func) {
                     self.escape_all(args);
                 }
             }
@@ -469,7 +489,11 @@ fn lent_addresses(function: &AirFunction, scan: &Scan<'_>) -> HashSet<LocalId> {
                     }
                 }
                 AirStmtKind::CallVoid { func, args } => {
-                    if str_slot_call(&stmt.kind).is_none() && !scan.callee_keeps_no_borrow(func) {
+                    if let Some(kept) = vec_call_kept(&stmt.kind) {
+                        kept.iter().for_each(&mut mark);
+                    } else if str_slot_call(&stmt.kind).is_none()
+                        && !scan.callee_keeps_no_borrow(func)
+                    {
                         args.iter().for_each(&mut mark);
                     }
                 }

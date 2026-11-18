@@ -214,6 +214,7 @@ impl TypeInference {
             } => enum_name == "Vec" && (variant == "new" || variant == "with_capacity"),
             TypedExprKind::VecLiteral { .. } => true,
             TypedExprKind::Identifier(_) => true,
+            TypedExprKind::Member { .. } => true,
             TypedExprKind::Call { .. } => true,
             _ => false,
         };

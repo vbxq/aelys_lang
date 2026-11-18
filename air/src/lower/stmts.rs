@@ -1145,6 +1145,7 @@ impl<'a> LoweringContext<'a> {
                 let returns_capture = val.as_ref().is_some_and(|e| {
                     matches!(&e.kind, TypedExprKind::Identifier(n)
                         if self.lookup_local(n).is_some_and(|id| self.capture_slots.contains_key(&id)))
+                        || matches!(super::pin::peel(e).kind, TypedExprKind::Member { .. })
                 });
                 let operand = match val.as_ref().map(|e| self.lower_expr(e)) {
                     Some(Operand::Copy(id)) if self.str_local_is_owned(id) => {
