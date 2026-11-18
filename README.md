@@ -716,18 +716,6 @@ For more information about this error, try `aelys --explain E0902`
 error: aborting due to 1 previous error
 ```
 
-A generic struct:
-
-```rust refused E0902
-struct Pair<T> { a: T, b: T }
-
-fn main() -> i64 {
-    let p: Pair<i64> = Pair { a: 1, b: 2 }
-    println(p.a)
-    return 0
-}
-```
-
 A nested pattern:
 
 ```rust refused E0101

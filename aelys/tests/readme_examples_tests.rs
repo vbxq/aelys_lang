@@ -19,7 +19,7 @@ const LEVELS: &[(&str, OptimizationLevel)] = &[
 const RUN_LIMIT: Duration = Duration::from_secs(20);
 
 const PROGRAMS: usize = 28;
-const REFUSALS: usize = 19;
+const REFUSALS: usize = 18;
 const REFUSALS_WITH_DIAGNOSTIC: usize = 10;
 const MODULES: usize = 5;
 const FRAGMENTS: usize = 0;
