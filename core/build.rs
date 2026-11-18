@@ -35,4 +35,6 @@ fn main() {
         .file("src/aelys_alloc_immix.c")
         .file("src/aelys_rc_cycles.c")
         .compile("aelys-core-rc-cycles");
+
+    println!("cargo:root={}", std::env::var("OUT_DIR").unwrap());
 }
