@@ -61,7 +61,6 @@ pub(super) fn declare(
     ))
 }
 
-// the effects of every user function as one least fixpoint, so a nogc call may cross a cycle
 pub(super) fn settle_effects(
     units: &[ModuleUnit],
     typed: &[Typed],
@@ -125,7 +124,6 @@ impl GroupLowering {
         group
     }
 
-    // a module proves its own functions itself, only its neighbours' are taken on trust
     pub(super) fn assumed_by(&self, index: usize) -> impl Iterator<Item = String> + '_ {
         let own = &self.own[index - self.start];
         self.assumed
@@ -165,7 +163,6 @@ impl GroupLowering {
         );
     }
 
-    // true when the group has to be lowered again without the failed assumptions
     pub(super) fn retract_unproven(&mut self) -> bool {
         if self.unproven.is_empty() {
             return false;

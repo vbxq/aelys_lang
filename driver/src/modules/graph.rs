@@ -46,7 +46,6 @@ pub(crate) struct ModuleGraph {
     pub(crate) units: Vec<ModuleUnit>,
     // the prelude is visited first, so units at or below it are its own subtree and get no prelude
     pub(crate) prelude: Option<usize>,
-    // a cycle or an impl outside its type's module: user modules see each other's declarations
     pub(crate) grouped: bool,
 }
 

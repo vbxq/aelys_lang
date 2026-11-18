@@ -148,7 +148,6 @@ fn qualify_decls(structs: &mut [AirStructDef], enums: &mut [AirEnumDef], q: &Qua
     }
 }
 
-// the root of a module cycle is qualified like any module, but the entry point keeps its name
 pub fn rename_function(program: &mut AirProgram, from: &str, to: &str) {
     let q = Qualifier {
         path: String::new(),

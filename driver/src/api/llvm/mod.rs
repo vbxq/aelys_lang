@@ -150,7 +150,6 @@ struct ModuleFront {
     functions_unreachable: bool,
 }
 
-// a declaration pass is `tolerant` of items its neighbours have not declared yet
 fn build_imports(
     unit: &crate::modules::ModuleUnit,
     unit_index: usize,
