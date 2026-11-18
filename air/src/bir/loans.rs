@@ -48,21 +48,6 @@ pub fn check(bir: &BirProgram, summaries: &Summaries) -> Vec<BirDiagnostic> {
     errors
 }
 
-fn may_hold_ref(ty: &InferType) -> bool {
-    match ty {
-        InferType::Ref { .. }
-        | InferType::Slice { .. }
-        | InferType::Function { .. }
-        | InferType::Var(_)
-        | InferType::Dynamic => true,
-        InferType::Struct(_, a) | InferType::Enum(_, a) | InferType::Tuple(a) => {
-            a.iter().any(may_hold_ref)
-        }
-        InferType::Array(i, _) | InferType::Vec(i) | InferType::Rc(i) => may_hold_ref(i),
-        _ => false,
-    }
-}
-
 fn local_is_ref(body: &BirBody, l: BirLocalId) -> bool {
     body.locals
         .get(l.0 as usize)
@@ -335,8 +320,14 @@ fn compute_holds(body: &BirBody, loans: &[Loan], summaries: &Summaries) -> Vec<H
             if !dest.proj.is_empty() {
                 continue;
             }
+            let dest_holds = body
+                .locals
+                .get(dest.local.0 as usize)
+                .is_none_or(|l| l.holds_ref);
             match callee.as_ref().and_then(|name| summaries.get(name)) {
-                Some(SummaryEntry::Unique(ro)) if !ro.escapes_local => {
+                Some(SummaryEntry::Unique(ro))
+                    if !ro.escapes_local && (ro.params.iter().any(|b| *b) || !dest_holds) =>
+                {
                     // precise: only the arguments the summary marks as borrowed
                     for (i, arg) in args.iter().enumerate() {
                         if ro.params.get(i).copied().unwrap_or(false) {
@@ -346,10 +337,7 @@ fn compute_holds(body: &BirBody, loans: &[Loan], summaries: &Summaries) -> Vec<H
                         }
                     }
                 }
-                _ if !body
-                    .locals
-                    .get(dest.local.0 as usize)
-                    .is_none_or(|l| may_hold_ref(&l.ty)) => {}
+                _ if !dest_holds => {}
                 _ => {
                     // none / ambiguous / a rejected (escapes_local) callee: over-approximate by
                     for arg in args {

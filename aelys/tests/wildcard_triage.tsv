@@ -137,7 +137,7 @@ sema/src/infer/expr/method.rs	std_function_for	1	InferType	_	&[]	correct-as-is	a
 sema/src/infer/validate.rs	projected_receiver_ok	1	InferType	_	false	correct-as-is	aggregate-only
 sema/src/infer/validate.rs	type_holds_ref	1	InferType	_	false	correct-as-is	carrier-walk
 sema/src/modules.rs	collect_exports	1	InferType	_	aelys_syntax::Receiver::Value	correct-as-is	aggregate-only
-air/src/bir/loans.rs	may_hold_ref	1	InferType	_	false	correct-as-is	carrier-walk
+air/src/bir/build.rs	may_hold_ref	1	InferType	_	false	correct-as-is	carrier-walk
 air/src/mono/mod.rs	concrete	1	AirType	_	true	correct-as-is	carrier-walk
 air/src/mono/traits.rs	match_air	1	AirType	_	pat == ty	correct-as-is	aggregate-only
 air/src/mono/traits.rs	rewrite_trait_ops	1	AirType	_	None	correct-as-is	aggregate-only

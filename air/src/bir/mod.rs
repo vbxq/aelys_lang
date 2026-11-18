@@ -326,6 +326,7 @@ pub struct BirLocal {
     pub id: BirLocalId,
     pub name: Option<String>,
     pub ty: InferType,
+    pub holds_ref: bool,
     pub category: Category,
     pub decl_span: aelys_syntax::Span,
     pub mutable: bool,

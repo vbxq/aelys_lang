@@ -668,9 +668,11 @@ impl<'a> BodyBuilder<'a> {
     fn new_temp(&mut self, ty: InferType, span: Span) -> BirLocalId {
         let id = BirLocalId(self.locals.len() as u32);
         let category = self.cat(&ty);
+        let holds_ref = may_hold_ref(&ty, self.tt);
         self.locals.push(BirLocal {
             id,
             name: None,
+            holds_ref,
             ty,
             category,
             decl_span: span,
@@ -688,9 +690,11 @@ impl<'a> BodyBuilder<'a> {
     ) -> BirLocalId {
         let id = BirLocalId(self.locals.len() as u32);
         let category = self.cat(&ty);
+        let holds_ref = may_hold_ref(&ty, self.tt);
         self.locals.push(BirLocal {
             id,
             name: Some(name.to_string()),
+            holds_ref,
             ty,
             category,
             decl_span,
@@ -1878,6 +1882,23 @@ fn index_roots_a_vec(e: &TypedExpr) -> bool {
         TypedExprKind::Member { object, .. }
         | TypedExprKind::Grouping(object)
         | TypedExprKind::Deref(object) => index_roots_a_vec(object),
+        _ => false,
+    }
+}
+
+// a type parameter can be instantiated with a reference or a view, so it holds one
+fn may_hold_ref(ty: &InferType, tt: &TypeTable) -> bool {
+    match ty {
+        InferType::Ref { .. }
+        | InferType::Slice { .. }
+        | InferType::Function { .. }
+        | InferType::Var(_)
+        | InferType::Dynamic => true,
+        InferType::Struct(n, a) | InferType::Enum(n, a) => {
+            (!tt.has_struct(n) && !tt.has_enum(n)) || a.iter().any(|t| may_hold_ref(t, tt))
+        }
+        InferType::Tuple(a) => a.iter().any(|t| may_hold_ref(t, tt)),
+        InferType::Array(i, _) | InferType::Vec(i) | InferType::Rc(i) => may_hold_ref(i, tt),
         _ => false,
     }
 }
