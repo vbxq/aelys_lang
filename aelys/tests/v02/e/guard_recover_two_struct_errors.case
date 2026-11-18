@@ -1,4 +1,0 @@
-struct S { in: i64 }
-struct T { as: i64 }
-fn main() {
-}

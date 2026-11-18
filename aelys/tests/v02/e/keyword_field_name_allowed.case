@@ -1,0 +1,5 @@
+struct S { in: i64 }
+fn main() {
+    let s = S { in: 3 }
+    println(s.in)
+}

@@ -618,7 +618,8 @@ impl Parser {
     }
 
     fn struct_literal_first_field(&self) -> bool {
-        matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
+        (matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
+            || self.peek_at(1).kind.keyword_spelling().is_some())
             && matches!(self.peek_at(2).kind, TokenKind::Colon)
     }
 
