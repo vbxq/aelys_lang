@@ -1,0 +1,9 @@
+struct C { n: i64 }
+fn two(a: &mut C, b: &mut C) { (*a).n = 1 }
+fn m(c: &mut C) {
+    let r2 = c
+    two(c, r2)
+}
+fn main() { let mut c = C { n: 5 }
+ m(&mut c)
+ println(c.n) }

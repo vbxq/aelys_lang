@@ -1,0 +1,9 @@
+struct C { n: i64 }
+fn get(c: &C) -> i64 { return (*c).n }
+fn add(c: &mut C, d: i64) { (*c).n = (*c).n + d }
+fn m(c: &mut C) { add(&mut *c, get(c)) }
+fn main() {
+    let mut c = C { n: 5 }
+    m(&mut c)
+    println(c.n)
+}

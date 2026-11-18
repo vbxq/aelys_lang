@@ -1,0 +1,2 @@
+refuse E0713
+cannot borrow `*c` as shared while it is already mutably borrowed

@@ -756,6 +756,80 @@ impl<'a> BodyBuilder<'a> {
     }
 
     // an operand nothing consumes is still a read, and a read the ir drops is a loan the escape pass never sees
+    fn build_call_args(&mut self, callee: &TypedExpr, args: &[TypedExpr]) -> Vec<BirOperand> {
+        let param_tys = match &callee.ty {
+            InferType::Function { params, .. } => params.clone(),
+            _ => Vec::new(),
+        };
+        let mut ops: Vec<Option<BirOperand>> = Vec::with_capacity(args.len());
+        let mut deferred = Vec::new();
+        for (i, a) in args.iter().enumerate() {
+            let shared = matches!(
+                param_tys.get(i),
+                Some(InferType::Ref { mutable: false, .. })
+            );
+            match self.reborrow_of_mut_binding(a, !shared) {
+                Some((rvalue, ty)) => {
+                    deferred.push((i, rvalue, ty, a.span));
+                    ops.push(None);
+                }
+                None => ops.push(Some(self.build_operand(a))),
+            }
+        }
+        // the reborrow starts at the call, so an earlier argument may still read through the binding
+        if !deferred.is_empty() {
+            for (i, op) in ops.iter_mut().enumerate() {
+                if let Some(BirOperand::Copy(place) | BirOperand::Move(place)) = op
+                    && !place.proj.is_empty()
+                {
+                    let read = op.take().expect("matched above");
+                    *op = Some(self.emit_to_temp(
+                        BirRvalue::Use(read),
+                        args[i].ty.clone(),
+                        args[i].span,
+                    ));
+                }
+            }
+        }
+        for (i, rvalue, ty, span) in deferred {
+            ops[i] = Some(self.emit_to_temp(rvalue, ty, span));
+        }
+        ops.into_iter()
+            .map(|op| op.expect("every argument is built or reborrowed"))
+            .collect()
+    }
+
+    fn reborrow_of_mut_binding(
+        &self,
+        expr: &TypedExpr,
+        mutable: bool,
+    ) -> Option<(BirRvalue, InferType)> {
+        let mut e = expr;
+        while let TypedExprKind::Grouping(inner) = &e.kind {
+            e = inner;
+        }
+        let TypedExprKind::Identifier(name) = &e.kind else {
+            return None;
+        };
+        let local = self.lookup(name)?;
+        let InferType::Ref {
+            mutable: true,
+            referent,
+        } = &self.locals[local.0 as usize].ty
+        else {
+            return None;
+        };
+        let ty = InferType::Ref {
+            mutable,
+            referent: referent.clone(),
+        };
+        let place = BirPlace {
+            local,
+            proj: vec![BirProjection::Deref],
+        };
+        Some((BirRvalue::Ref { place, mutable }, ty))
+    }
+
     fn read_operand(&mut self, expr: &TypedExpr) {
         let op = self.build_operand(expr);
         self.observe(op, expr.ty.clone(), expr.span);
@@ -943,7 +1017,7 @@ impl<'a> BodyBuilder<'a> {
                 if recovered.is_none() {
                     self.read_operand(callee);
                 }
-                let ops: Vec<BirOperand> = args.iter().map(|a| self.build_operand(a)).collect();
+                let ops = self.build_call_args(callee, args);
                 self.emit_to_temp(
                     BirRvalue::Call {
                         callee: recovered,
@@ -1341,7 +1415,10 @@ impl<'a> BodyBuilder<'a> {
     }
 
     fn build_assign(&mut self, name: &str, value: &TypedExpr, span: Span) {
-        let v = self.build_operand(value);
+        let v = match self.reborrow_of_mut_binding(value, true) {
+            Some((rvalue, ty)) => self.emit_to_temp(rvalue, ty, value.span),
+            None => self.build_operand(value),
+        };
         if let Some(local) = self.lookup(name) {
             let is_affine = self.locals[local.0 as usize].category.is_affine();
             if is_affine && self.cur_open {
@@ -1399,7 +1476,10 @@ impl<'a> BodyBuilder<'a> {
                 var_type,
                 ..
             } => {
-                let v = self.build_operand(initializer);
+                let rvalue = match self.reborrow_of_mut_binding(initializer, true) {
+                    Some((rvalue, _)) if matches!(var_type, InferType::Ref { .. }) => rvalue,
+                    _ => BirRvalue::Use(self.build_operand(initializer)),
+                };
                 let local = self.new_named(name, var_type.clone(), span, *mutable);
                 self.push(BirStmtKind::StorageLive(local), span);
                 self.push(
@@ -1408,7 +1488,7 @@ impl<'a> BodyBuilder<'a> {
                             local,
                             proj: Vec::new(),
                         },
-                        rvalue: BirRvalue::Use(v),
+                        rvalue,
                     },
                     span,
                 );
@@ -1489,7 +1569,7 @@ impl<'a> BodyBuilder<'a> {
                 if recovered.is_none() {
                     self.read_operand(callee);
                 }
-                let ops: Vec<BirOperand> = args.iter().map(|a| self.build_operand(a)).collect();
+                let ops = self.build_call_args(callee, args);
                 let temp = self.new_temp(expr.ty.clone(), span);
                 self.push(
                     BirStmtKind::Assign {
