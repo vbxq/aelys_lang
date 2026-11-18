@@ -150,6 +150,11 @@ struct ModuleFront {
     functions_unreachable: bool,
 }
 
+fn import_chains_and_externs(bir_imports: &mut aelys_air::bir::Imports, front: &ModuleFront) {
+    bir_imports.chains.extend(front.chains.clone());
+    bir_imports.externs.extend(front.externs.clone());
+}
+
 fn build_imports(
     unit: &crate::modules::ModuleUnit,
     unit_index: usize,
@@ -569,17 +574,18 @@ fn air_stage(
     let mut fresh_returns: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut retaining_fns: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    let mut group: Option<group::GroupLowering> = None;
+    let mut group = group_start.map(|start| group::GroupLowering::new(fronts, typed, start));
     let mut before_group = None;
     let mut file = 0;
     while file < fronts.len() {
         let (front, typed_program) = (&fronts[file], typed[file]);
-        if Some(file) == group_start {
-            let lowering = group.get_or_insert_with(|| {
-                group::GroupLowering::new(fronts, typed, file)
-            });
+        if let Some(lowering) = group.as_ref().filter(|g| g.start == file) {
             let snapshot = before_group.get_or_insert_with(|| {
-                (fresh_returns.clone(), retaining_fns.clone(), bir_imports.clone())
+                (
+                    fresh_returns.clone(),
+                    retaining_fns.clone(),
+                    bir_imports.clone(),
+                )
             });
             (fresh_returns, retaining_fns, bir_imports) = snapshot.clone();
             programs.truncate(file);
@@ -887,12 +893,7 @@ fn lower_file_to_air_with_source(
         for (name, set) in &front.effects {
             bir_imports.effects.insert(name.clone(), *set);
         }
-        for (name, steps) in &front.chains {
-            bir_imports.chains.insert(name.clone(), steps.clone());
-        }
-        for (name, sig) in &front.externs {
-            bir_imports.externs.insert(name.clone(), sig.clone());
-        }
+        import_chains_and_externs(&mut bir_imports, &front);
         exports.push(front.exports.clone());
         fronts.push(front);
         checked.push(unit_checked);
@@ -902,12 +903,7 @@ fn lower_file_to_air_with_source(
         group::settle_effects(units, &grouped, &mut bir_imports);
         for (unit, typed) in units.iter().zip(grouped) {
             let (front, unit_checked) = front_stage(unit, typed, &bir_imports)?;
-            for (name, steps) in &front.chains {
-                bir_imports.chains.insert(name.clone(), steps.clone());
-            }
-            for (name, sig) in &front.externs {
-                bir_imports.externs.insert(name.clone(), sig.clone());
-            }
+            import_chains_and_externs(&mut bir_imports, &front);
             fronts.push(front);
             checked.push(unit_checked);
         }
