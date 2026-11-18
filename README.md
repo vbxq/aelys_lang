@@ -166,9 +166,8 @@ fn main() -> i64 {
 - Under the default runtime `rc`, a cycle of `Rc` values is never freed, as the run above shows. Use `--runtime rc+cycles` for a program that builds cycles.
 - Inside an `unsafe { }` block and through an `extern` function, memory is the programmer's responsibility: a pointer handed to C can be freed twice, or read after C freed it, and nothing checks it. Outside `unsafe`, calling an `extern` function is refused (`E0617`, see [External functions](#external-functions)).
 - `+`, `-`, `*` and negation wrap on overflow, silently, in every integer type. A shift amount is taken modulo the width of the left operand, and the result has the type of the left operand.
-- `as` between integer types truncates; `as` from a float to an integer saturates, and a NaN converts to 0. An integer literal above `i64::MAX` is refused (`E0003`), even for a `u64`.
+- `as` between integer types truncates; `as` from a float to an integer saturates, and a NaN converts to 0. An integer literal above `i64::MAX` is a `u64`, and one above `u64::MAX` is refused (`E0003`).
 - A global holding a `string`, directly or in a struct field, that the program assigns at run time is not released at exit. The memory goes back with the process, and LeakSanitizer reports nothing; `AELYS_RC_STATS` counts one allocation more than frees per such string.
-- A `u64` above `i64::MAX` prints as a negative number, through `println` and through interpolation. The stored value is right modulo 2^64.
 - A slice must start at 0: `v[1..3]` is refused with `E0425` (see [Lengths and indexing](#lengths-and-indexing)).
 - The object file is left beside the source, as shown above.
 - A closure works on its own copy of a variable it captures. An assignment inside the closure changes that copy, which persists from one call to the next; the variable outside keeps its value.
@@ -198,8 +197,8 @@ fn main() -> i64 {
 -9223372036854775808
 4
 2
--9223372036854775808
--9223372036854775808
+9223372036854775808
+9223372036854775808
 -9223372036854775808
 ```
 
@@ -241,7 +240,7 @@ fn main() -> i64 {
 
 ```rust refused E0003
 fn main() -> i64 {
-    let x: u64 = 18446744073709551615
+    let x: u64 = 18446744073709551616
     return 0
 }
 ```

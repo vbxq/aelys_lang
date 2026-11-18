@@ -598,6 +598,10 @@ impl<'a> FunctionCodegen<'a> {
         self.declare_string_returning_fn("__aelys_to_string_i64", &[self.context.i64_type().into()])
     }
 
+    pub(crate) fn ensure_to_string_u64_function(&self) -> FunctionValue<'static> {
+        self.declare_string_returning_fn("__aelys_to_string_u64", &[self.context.i64_type().into()])
+    }
+
     pub(crate) fn ensure_to_string_f64_function(&self) -> FunctionValue<'static> {
         self.declare_string_returning_fn("__aelys_to_string_f64", &[self.context.f64_type().into()])
     }
@@ -606,6 +610,14 @@ impl<'a> FunctionCodegen<'a> {
         let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
         self.declare_string_returning_fn(
             "__aelys_to_string_i64_into",
+            &[ptr_ty, self.context.i64_type().into()],
+        )
+    }
+
+    pub(crate) fn ensure_to_string_u64_into_function(&self) -> FunctionValue<'static> {
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        self.declare_string_returning_fn(
+            "__aelys_to_string_u64_into",
             &[ptr_ty, self.context.i64_type().into()],
         )
     }

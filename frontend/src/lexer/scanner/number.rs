@@ -73,6 +73,7 @@ impl Lexer {
                     ));
                     self.pending_semicolon = true;
                 }
+                Err(_) if self.unsigned_only(&text, 10) => {}
                 Err(_) => {
                     return Err(AelysError::Compile(
                         self.error(CompileErrorKind::InvalidNumber(text)),
@@ -93,6 +94,16 @@ impl Lexer {
         !back.next().is_some_and(|t| ends_an_expression(&t.kind))
     }
 
+    fn unsigned_only(&mut self, digits: &str, radix: u32) -> bool {
+        match u64::from_str_radix(digits, radix) {
+            Ok(n) if !self.negates_what_follows() => {
+                self.add_token(TokenKind::UInt(n));
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn hex_number(&mut self) -> Result<()> {
         while self.peek().is_ascii_hexdigit() || self.peek() == '_' {
             self.advance();
@@ -105,6 +116,7 @@ impl Lexer {
 
         match i64::from_str_radix(&text, 16) {
             Ok(n) => self.add_token(TokenKind::Int(n)),
+            Err(_) if self.unsigned_only(&text, 16) => {}
             Err(_) => {
                 let full: String = self.chars[self.start..self.current].iter().collect();
                 return Err(AelysError::Compile(
@@ -128,6 +140,7 @@ impl Lexer {
 
         match i64::from_str_radix(&text, 2) {
             Ok(n) => self.add_token(TokenKind::Int(n)),
+            Err(_) if self.unsigned_only(&text, 2) => {}
             Err(_) => {
                 let full: String = self.chars[self.start..self.current].iter().collect();
                 return Err(AelysError::Compile(
@@ -151,6 +164,7 @@ impl Lexer {
 
         match i64::from_str_radix(&text, 8) {
             Ok(n) => self.add_token(TokenKind::Int(n)),
+            Err(_) if self.unsigned_only(&text, 8) => {}
             Err(_) => {
                 let full: String = self.chars[self.start..self.current].iter().collect();
                 return Err(AelysError::Compile(
@@ -170,6 +184,7 @@ fn ends_an_expression(kind: &TokenKind) -> bool {
         kind,
         TokenKind::Identifier(_)
             | TokenKind::Int(_)
+            | TokenKind::UInt(_)
             | TokenKind::Float(_)
             | TokenKind::String(_)
             | TokenKind::FmtString(_)

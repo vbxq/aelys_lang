@@ -1,0 +1,15 @@
+fn main() {
+    let a: u64 = 18446744073709551615
+    let b: u64 = 9223372036854775808
+    let c: u64 = 0xFFFFFFFFFFFFFFFF
+    let d: u64 = 0x8000000000000001
+    let e = 18446744073709551614
+    println("{a} {b}")
+    println(c)
+    println(d)
+    println(e)
+    println(a - b)
+    println(18446744073709551615 / 5)
+    let i: i64 = -9223372036854775808
+    println(i)
+}

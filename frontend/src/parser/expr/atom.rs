@@ -4,7 +4,7 @@ use aelys_common::Result;
 use aelys_common::error::{CompileError, CompileErrorKind};
 use aelys_syntax::{
     Expr, ExprKind, FmtPart, FmtStringPart, MatchArm, Pattern, Source, Stmt, StmtKind,
-    StructFieldInit, TokenKind,
+    StructFieldInit, TokenKind, TypeAnnotation,
 };
 use std::sync::Arc;
 
@@ -356,6 +356,7 @@ impl Parser {
         matches!(
             self.peek().kind,
             TokenKind::Int(_)
+                | TokenKind::UInt(_)
                 | TokenKind::Float(_)
                 | TokenKind::String(_)
                 | TokenKind::Char(_)
@@ -383,6 +384,10 @@ impl Parser {
 
         let kind = match token_kind {
             TokenKind::Int(n) => ExprKind::Int(n),
+            TokenKind::UInt(n) => ExprKind::Cast {
+                expr: Box::new(Expr::new(ExprKind::Int(n as i64), span)),
+                target: TypeAnnotation::new("u64".to_string(), span),
+            },
             TokenKind::Float(n) => ExprKind::Float(n),
             TokenKind::String(s) => ExprKind::String(s),
             TokenKind::Char(cp) => ExprKind::Char(cp),

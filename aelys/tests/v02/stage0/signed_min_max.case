@@ -1,0 +1,20 @@
+fn show<T>(x: T) {
+    println("<{x}>")
+}
+
+fn main() {
+    let a: i8 = -128
+    let b: i16 = -32768
+    let c: i32 = -2147483648
+    let d: i64 = -9223372036854775808
+    let e: i8 = 127
+    let f: i64 = 9223372036854775807
+    println("{a} {b} {c} {d}")
+    println(a)
+    println(c)
+    println(e)
+    println(f)
+    show(a)
+    show(b)
+    show(d)
+}

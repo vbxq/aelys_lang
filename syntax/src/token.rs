@@ -22,6 +22,7 @@ pub enum FmtPart {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     Int(i64),
+    UInt(u64),
     Float(f64),
     String(String),
     Char(u32),
@@ -114,6 +115,7 @@ impl TokenKind {
         matches!(
             self,
             Self::Int(_)
+                | Self::UInt(_)
                 | Self::Float(_)
                 | Self::String(_)
                 | Self::Char(_)
@@ -129,6 +131,7 @@ impl TokenKind {
             self,
             Self::Identifier(_)
                 | Self::Int(_)
+                | Self::UInt(_)
                 | Self::Float(_)
                 | Self::String(_)
                 | Self::Char(_)
@@ -154,6 +157,7 @@ impl std::fmt::Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Int(n) => write!(f, "{}", n),
+            Self::UInt(n) => write!(f, "{}", n),
             Self::Float(n) => write!(f, "{}", n),
             Self::String(s) => write!(f, "\"{}\"", s),
             Self::Char(cp) => match char::from_u32(*cp) {

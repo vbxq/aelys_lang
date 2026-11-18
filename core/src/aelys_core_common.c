@@ -640,6 +640,32 @@ AelysString __aelys_to_string_i64_into(char *buffer, long long value) {
     return result;
 }
 
+AelysString __aelys_to_string_u64(unsigned long long value) {
+    char *buffer = aelys_str_alloc(AELYS_I64_STR_BUF);
+
+    int len = snprintf(buffer, AELYS_I64_STR_BUF, "%llu", value);
+    if (len < 0) {
+        __aelys_panic("snprintf failed in to_string_u64", 33);
+    }
+
+    AelysString result;
+    result.ptr = buffer;
+    result.len = (long long)len;
+    return result;
+}
+
+AelysString __aelys_to_string_u64_into(char *buffer, unsigned long long value) {
+    int len = snprintf(buffer, AELYS_I64_STR_BUF, "%llu", value);
+    if (len < 0) {
+        __aelys_panic("snprintf failed in to_string_u64", 33);
+    }
+
+    AelysString result;
+    result.ptr = buffer;
+    result.len = (long long)len;
+    return result;
+}
+
 /* the sign of a nan is whatever produced it, and llvm's constant folder and the hardware disagree */
 static double aelys_unsigned_nan(double value) {
     return value != value ? __builtin_nan("") : value;

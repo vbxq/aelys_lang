@@ -604,7 +604,7 @@ impl<'a> FunctionCodegen<'a> {
                         .build_int_z_extend(int_val, self.context.i64_type(), "zext_i64")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?
                 };
-                let fn_val = self.ensure_to_string_i64_function();
+                let fn_val = self.ensure_to_string_u64_function();
                 self.call_sret_returning_fn(fn_val, &[i64_val.into()], "to_str")
             }
             AirType::F64 | AirType::F32 => {
@@ -668,7 +668,7 @@ impl<'a> FunctionCodegen<'a> {
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?
                 };
                 let buffer = self.ensure_interp_buffer()?;
-                let fn_val = self.ensure_to_string_i64_into_function();
+                let fn_val = self.ensure_to_string_u64_into_function();
                 self.call_sret_returning_fn(fn_val, &[buffer.into(), i64_val.into()], "to_str")
             }
             AirType::F64 | AirType::F32 => {
