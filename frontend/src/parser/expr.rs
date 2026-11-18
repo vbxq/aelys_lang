@@ -1109,7 +1109,9 @@ impl Parser {
             self.closure_body()?
         } else {
             let saved = std::mem::take(&mut self.loops);
+            let saved_closure = std::mem::replace(&mut self.in_closure, true);
             let value = self.expr_bp(0);
+            self.in_closure = saved_closure;
             self.loops = saved;
             let value = value?;
             let span = value.span;

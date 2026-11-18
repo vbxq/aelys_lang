@@ -1,0 +1,7 @@
+fn main() {
+    for i in 0..3 {
+        let f = || continue;
+        f();
+        println!("{}", i);
+    }
+}

@@ -1,0 +1,16 @@
+fn main() {
+    let mut n = 0;
+    loop {
+        let f = |x: i64| {
+            if x > 2 {
+                break;
+            }
+            x
+        };
+        n += f(n);
+        if n > 10 {
+            break;
+        }
+    }
+    println!("{}", n);
+}

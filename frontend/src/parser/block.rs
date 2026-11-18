@@ -274,9 +274,11 @@ impl Parser {
     pub(super) fn function_body(&mut self, returns: bool) -> Result<Vec<Stmt>> {
         self.consume(&TokenKind::LBrace, "`{`")?;
         let saved = std::mem::take(&mut self.loops);
+        let saved_closure = std::mem::replace(&mut self.in_closure, false);
         self.fn_returns.push(returns);
         let body = self.block_body();
         self.fn_returns.pop();
+        self.in_closure = saved_closure;
         self.loops = saved;
         let body = body?;
         self.body_stmts(body, returns)
@@ -285,9 +287,11 @@ impl Parser {
     pub(super) fn closure_body(&mut self) -> Result<Vec<Stmt>> {
         let saved = std::mem::take(&mut self.loops);
         let saved_struct = std::mem::replace(&mut self.no_struct, false);
+        let saved_closure = std::mem::replace(&mut self.in_closure, true);
         self.fn_returns.push(true);
         let body = self.block_body();
         self.fn_returns.pop();
+        self.in_closure = saved_closure;
         self.no_struct = saved_struct;
         self.loops = saved;
         let body = body?;
@@ -429,7 +433,7 @@ impl Parser {
                 self.advance();
                 self.advance();
                 if !matches!(self.peek().kind, TokenKind::Loop | TokenKind::While | TokenKind::For) {
-                    return self.fail(123, "a label is only allowed on a loop", start);
+                    return self.fail(126, "a label is only allowed on a loop", start);
                 }
                 self.loop_like(Some(label))
             }
@@ -860,14 +864,14 @@ impl Parser {
         };
         match self.loops.iter().rposition(|l| l.label.as_deref() == Some(name.as_str())) {
             Some(i) => Ok(Some(i)),
-            None => self.fail(123, &format!("use of undeclared label `'{name}`"), *span),
+            None => self.fail(126, &format!("use of undeclared label `'{name}`"), *span),
         }
     }
 
     fn break_stmts(&mut self, label: Option<(String, Span)>, value: Option<Expr>, start: Span) -> Result<Vec<Stmt>> {
         let span = start.merge(self.previous().span);
         let Some(target) = self.jump_target(&label)? else {
-            return Ok(vec![Stmt::new(StmtKind::Break(None), span)]);
+            return self.jump_outside_loop("break", span);
         };
         let mut out = Vec::new();
         if value.is_none() && self.loops[target].plain_break.is_none() {
@@ -899,7 +903,7 @@ impl Parser {
     fn continue_stmts(&mut self, label: Option<(String, Span)>, start: Span) -> Result<Vec<Stmt>> {
         let span = start.merge(self.previous().span);
         let Some(target) = self.jump_target(&label)? else {
-            return Ok(vec![Stmt::new(StmtKind::Continue, span)]);
+            return self.jump_outside_loop("continue", span);
         };
         let mut out = Vec::new();
         if target + 1 == self.loops.len() {
@@ -909,6 +913,18 @@ impl Parser {
         self.route_outer(target, false, span, &mut out);
         out.push(Stmt::new(StmtKind::Break(None), span));
         Ok(out)
+    }
+
+    fn jump_outside_loop(&self, keyword: &str, span: Span) -> Result<Vec<Stmt>> {
+        if self.in_closure {
+            return self.fail_help(
+                124,
+                &format!("`{keyword}` inside a closure"),
+                "a closure cannot jump out of the loop around it; return from the closure instead",
+                span,
+            );
+        }
+        self.fail(124, &format!("`{keyword}` outside of a loop"), span)
     }
 
     // a labeled jump past inner loops sets the target's flag and breaks; each loop it crosses re-tests the flag
