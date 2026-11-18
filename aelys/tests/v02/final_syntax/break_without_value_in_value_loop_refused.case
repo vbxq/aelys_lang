@@ -1,0 +1,10 @@
+fn main() {
+    let n = 3;
+    let x = loop {
+        if n > 5 {
+            break;
+        }
+        break n;
+    };
+    println!("{}", x);
+}

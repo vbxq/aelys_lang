@@ -11,6 +11,7 @@ pub(super) struct LoopCtx {
     slot: Option<String>,
     ctl: Option<String>,
     passing: Vec<(usize, bool, bool)>,
+    plain_break: Option<Span>,
 }
 
 pub(super) struct Body {
@@ -565,6 +566,14 @@ impl Parser {
             _ => self.for_loop(start, label)?,
         };
         let ctx = self.loops.pop().expect("pushed by the loop parser");
+        if let (Some(_), Some(at)) = (&ctx.slot, ctx.plain_break) {
+            return self.fail_help(
+                124,
+                "`break` without a value inside a `loop` that breaks with a value",
+                "every `break` of this loop gives its value: write `break value;`",
+                at,
+            );
+        }
         let span = start.merge(self.previous().span);
         let mut pre = Vec::new();
         if let Some(ctl) = &ctx.ctl {
@@ -619,6 +628,7 @@ impl Parser {
             slot: None,
             ctl: None,
             passing: Vec::new(),
+            plain_break: None,
         });
     }
 
@@ -784,6 +794,9 @@ impl Parser {
             return Ok(vec![Stmt::new(StmtKind::Break, span)]);
         };
         let mut out = Vec::new();
+        if value.is_none() && self.loops[target].plain_break.is_none() {
+            self.loops[target].plain_break = Some(span);
+        }
         if let Some(value) = value {
             if !self.loops[target].is_loop {
                 return self.fail(

@@ -1,0 +1,2 @@
+refuse E0124
+`break` without a value inside a `loop` that breaks with a value
