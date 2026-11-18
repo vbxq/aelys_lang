@@ -1700,8 +1700,8 @@ const GROUP_C: &[Row] = &[
     },
     Row {
         id: "C35",
-        position: "F3 callable, a generic struct over a managed carrier, refused by the effects",
-        class: Class::MustNotMoveRejected("E0727"),
+        position: "F3 callable, a generic struct over a managed carrier, refused at its field",
+        class: Class::MustNotMoveRejected("E0412"),
         src: "struct G<T> { n: Vec<T> }\n\
               nogc fn f(g: G<i64>) -> i64 { return 0 }\n\
               fn main() -> i64 { return 0 }\n",
@@ -1709,8 +1709,8 @@ const GROUP_C: &[Row] = &[
     },
     Row {
         id: "C36",
-        position: "F3 callable, the declaration of a carrier holding a Vec",
-        class: Class::MustNotMoveRejected("E0902"),
+        position: "F3 callable, a carrier holding a Vec taken by value, refused by the effects",
+        class: Class::MustNotMoveRejected("E0727"),
         src: "struct G { n: Vec<i64> }\n\
               nogc fn f(g: G) -> i64 { return 0 }\n\
               fn main() -> i64 { return 0 }\n",
@@ -3640,14 +3640,14 @@ fn the_fail_open_category_boundary_is_where_the_scans_stop() {
             "{scan} is what `category` consults; if it is gone, say what decides the category now"
         );
     }
-    for (code, row) in [("E0902", "C36")] {
+    for (code, row) in [("E0727", "C36")] {
         let held = GROUP_C
             .iter()
             .find(|r| r.id == row)
             .unwrap_or_else(|| panic!("{row} must exist"));
         assert!(
             matches!(held.class, Class::MustNotMoveRejected(c) if c == code),
-            "{row} must still be the {code} route into the fail-open category"
+            "{row} must read its Vec field as managed and be refused by the effects with {code}"
         );
     }
     for code in ["E0902"] {
