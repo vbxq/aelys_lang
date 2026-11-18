@@ -1,0 +1,3 @@
+refuse E0301
+try `aelys-cli --explain E0301`
+!`aelys --explain

@@ -1,0 +1,3 @@
+refuse E0304
+`Never` may only appear as the error type of a `Result`
+!stage3

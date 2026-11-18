@@ -1,0 +1,4 @@
+fn main() {
+    let o: Option<i64> = Option::Some(1)
+    let r: Result<i64, i64> = o
+}

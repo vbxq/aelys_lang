@@ -1,0 +1,4 @@
+refuse E0410
+which embeds an `Rc<T>`
+!stage1
+!Stage 1

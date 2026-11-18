@@ -1,0 +1,13 @@
+fn f(x: i64,, y: i64) -> i64 {
+    let z = x
+    if z > 0 {
+        return z
+    }
+    while z < 0 {
+        return 0
+    }
+    return y
+}
+fn main() {
+    println("{f(1, 2)}")
+}

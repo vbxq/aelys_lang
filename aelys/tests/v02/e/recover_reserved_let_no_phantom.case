@@ -1,0 +1,4 @@
+fn main() {
+    let from = 3
+    println("{from}")
+}

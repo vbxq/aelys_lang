@@ -1,0 +1,3 @@
+struct S { in: i64 }
+fn main() {
+}

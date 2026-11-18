@@ -1,0 +1,7 @@
+fn main() {
+    let a = [1, 2
+    println("{a[0]}")
+}
+fn other() -> i64 {
+    return 4
+}
