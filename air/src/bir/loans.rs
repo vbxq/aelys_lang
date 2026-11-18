@@ -48,6 +48,20 @@ pub fn check(bir: &BirProgram, summaries: &Summaries) -> Vec<BirDiagnostic> {
     errors
 }
 
+// a result of type `T` built from a `&T` argument is a value, not a borrow of that argument
+fn refers_to_result_value(body: &BirBody, arg: BirLocalId, dest: Option<&InferType>) -> bool {
+    let Some(dest) = dest else {
+        return false;
+    };
+    if is_ref_ty(dest) {
+        return false;
+    }
+    matches!(
+        body.locals.get(arg.0 as usize).map(|l| &l.ty),
+        Some(InferType::Ref { referent, .. }) if referent.as_ref() == dest
+    )
+}
+
 fn local_is_ref(body: &BirBody, l: BirLocalId) -> bool {
     body.locals
         .get(l.0 as usize)
@@ -340,9 +354,12 @@ fn compute_holds(body: &BirBody, loans: &[Loan], summaries: &Summaries) -> Vec<H
                 _ if !dest_holds => {}
                 _ => {
                     // none / ambiguous / a rejected (escapes_local) callee: over-approximate by
+                    let dest_ty = body.locals.get(dest.local.0 as usize).map(|l| &l.ty);
                     for arg in args {
                         if let BirOperand::Copy(p) | BirOperand::Move(p) = arg {
-                            if local_is_ref(body, p.local) {
+                            if local_is_ref(body, p.local)
+                                && !refers_to_result_value(body, p.local, dest_ty)
+                            {
                                 edges.push((dest.local.0 as usize, p.local.0 as usize));
                             }
                         }
