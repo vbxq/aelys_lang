@@ -444,7 +444,7 @@ const TWINS: &[(&str, &str, &str)] = &[
     ("S6-T3", S6_T3, "cn -> helper -> a vec literal"),
     ("S6-T4", S6_T4, "cn -> <indirect call>"),
     ("S6-T5", S6_T5, "cn -> the managed parameter `src`"),
-    ("S6-T6", S6_T6, "cn -> <indirect call>"),
+    ("S6-T6", S6_T6, "cn -> println"),
 ];
 
 #[test]

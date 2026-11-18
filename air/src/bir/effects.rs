@@ -556,6 +556,7 @@ pub enum StepKind {
     Operation,
     Ambiguous,
     Indirect,
+    Builtin,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -590,16 +591,27 @@ pub fn managed_chain_with<'a>(
     let mut body = start;
 
     loop {
-        let Some((span, callee)) = next_managed_call(body, eff, &visited) else {
+        let Some((span, hop)) = next_managed_call(body, eff, &visited) else {
             return close_on_witness(steps, &frames, None);
         };
-        let Some(name) = callee else {
-            steps.push(Step {
-                name: "<indirect call>".to_string(),
-                span: Some(span),
-                kind: StepKind::Indirect,
-            });
-            return steps;
+        let name = match hop {
+            Hop::Named(name) => name,
+            Hop::Builtin(name) => {
+                steps.push(Step {
+                    name: name.to_string(),
+                    span: Some(span),
+                    kind: StepKind::Builtin,
+                });
+                return steps;
+            }
+            Hop::Indirect => {
+                steps.push(Step {
+                    name: "<indirect call>".to_string(),
+                    span: Some(span),
+                    kind: StepKind::Indirect,
+                });
+                return steps;
+            }
         };
         let mut matching = bir.bodies.iter().filter(|b| b.name == name);
         match (matching.next(), matching.next().is_some()) {
@@ -657,12 +669,19 @@ fn close_on_witness(
     steps
 }
 
+#[derive(Clone, Copy)]
+enum Hop<'a> {
+    Named(&'a str),
+    Builtin(&'a str),
+    Indirect,
+}
+
 fn next_managed_call<'a>(
     body: &'a BirBody,
     eff: &HashMap<String, EffectSet>,
     visited: &HashSet<String>,
-) -> Option<(Span, Option<&'a str>)> {
-    let mut best: Option<(Span, Option<&'a str>)> = None;
+) -> Option<(Span, Hop<'a>)> {
+    let mut best: Option<(Span, Hop<'a>)> = None;
     for block in &body.blocks {
         for stmt in &block.stmts {
             let BirStmtKind::Assign {
@@ -670,6 +689,7 @@ fn next_managed_call<'a>(
                     BirRvalue::Call {
                         callee,
                         indirect_nogc,
+                        builtin,
                         ..
                     },
                 ..
@@ -685,10 +705,13 @@ fn next_managed_call<'a>(
                     if !eff.get(n).copied().unwrap_or(TOP).contains(Effect::Managed) {
                         continue;
                     }
-                    Some(n.as_str())
+                    Hop::Named(n.as_str())
                 }
                 None if *indirect_nogc => continue,
-                None => None,
+                None => match builtin {
+                    Some(b) => Hop::Builtin(b.as_str()),
+                    None => Hop::Indirect,
+                },
             };
             if best.map_or(true, |(s, _)| {
                 (stmt.span.start, stmt.span.end) < (s.start, s.end)

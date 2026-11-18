@@ -568,6 +568,21 @@ impl<'a> BodyBuilder<'a> {
         None
     }
 
+    fn recover_builtin(&self, recovered: &Option<String>, callee: &TypedExpr) -> Option<String> {
+        if recovered.is_some() {
+            return None;
+        }
+        match &callee.kind {
+            TypedExprKind::Identifier(name)
+                if self.lookup(name).is_none()
+                    && crate::symbols::BOOTSTRAP_BUILTIN_SYMBOLS.contains(&name.as_str()) =>
+            {
+                Some(name.clone())
+            }
+            _ => None,
+        }
+    }
+
     fn indirect_nogc_callee(&self, recovered: &Option<String>, callee: &TypedExpr) -> bool {
         if recovered.is_some() {
             return false;
@@ -1014,6 +1029,7 @@ impl<'a> BodyBuilder<'a> {
             TypedExprKind::Call { callee, args } => {
                 let recovered = self.recover_callee(callee);
                 let indirect_nogc = self.indirect_nogc_callee(&recovered, callee);
+                let builtin = self.recover_builtin(&recovered, callee);
                 if recovered.is_none() {
                     self.read_operand(callee);
                 }
@@ -1023,6 +1039,7 @@ impl<'a> BodyBuilder<'a> {
                         callee: recovered,
                         args: ops,
                         indirect_nogc,
+                        builtin,
                     },
                     expr.ty.clone(),
                     span,
@@ -1566,6 +1583,7 @@ impl<'a> BodyBuilder<'a> {
             TypedExprKind::Call { callee, args } => {
                 let recovered = self.recover_callee(callee);
                 let indirect_nogc = self.indirect_nogc_callee(&recovered, callee);
+                let builtin = self.recover_builtin(&recovered, callee);
                 if recovered.is_none() {
                     self.read_operand(callee);
                 }
@@ -1581,6 +1599,7 @@ impl<'a> BodyBuilder<'a> {
                             callee: recovered,
                             args: ops,
                             indirect_nogc,
+                            builtin,
                         },
                     },
                     span,

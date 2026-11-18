@@ -111,9 +111,13 @@ fn nogc_diagnostic(
         chain[i].span.expect("rposition found a span")
     });
     let indirect = chain.iter().any(|s| s.kind == StepKind::Indirect);
+    let builtin = chain
+        .iter()
+        .position(|s| s.kind == StepKind::Builtin)
+        .map(|i| (chain[i].name.as_str(), chain[i - 1].name.as_str()));
 
     let mut diag = BirDiagnostic::new("E0727", "[nogc]", primary, message);
-    if indirect {
+    if indirect || builtin.is_some() {
         diag = diag.with_hint("effects assumed to reach managed memory here".to_string());
     }
     for step in capped_labels(&chain[..anchor.unwrap_or(0)]) {
@@ -128,6 +132,11 @@ fn nogc_diagnostic(
                 .to_string(),
         );
     }
+    if let Some((name, _)) = builtin {
+        diag = diag.with_note(format!(
+            "`{name}` is a built-in, so its effects are assumed to reach managed memory"
+        ));
+    }
     if chain.len() == 1 && bir.bodies.iter().filter(|b| b.name == body.name).count() > 1 {
         diag = diag.with_note(format!(
             "several functions in this program are named `{}`, and the nogc check merges their \
@@ -138,6 +147,12 @@ fn nogc_diagnostic(
     if indirect {
         return diag.with_help(format!(
             "call a function by name so its effects can be checked, or drop `nogc` from `{}`",
+            body.name
+        ));
+    }
+    if let Some((name, caller)) = builtin {
+        return diag.with_help(format!(
+            "move the `{name}` out of `{caller}`, or drop `nogc` from `{}`",
             body.name
         ));
     }
@@ -177,6 +192,7 @@ fn step_label(step: &super::effects::Step) -> String {
         StepKind::Operation => format!("`{}` reaches managed memory here", step.name),
         StepKind::Ambiguous => format!("`{}` is not a single function", step.name),
         StepKind::Indirect => "the callee here is unknown".to_string(),
+        StepKind::Builtin => format!("calls the built-in `{}` here", step.name),
     }
 }
 

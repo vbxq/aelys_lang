@@ -41,6 +41,7 @@ fn call_stmt(callee: Option<&str>, indirect_nogc: bool) -> BirStmt {
                 callee: callee.map(str::to_string),
                 args: vec![BirOperand::Const],
                 indirect_nogc,
+                builtin: None,
             },
         },
         span: Span::dummy(),

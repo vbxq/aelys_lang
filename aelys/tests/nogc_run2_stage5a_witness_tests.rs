@@ -246,15 +246,15 @@ fn main() -> i64 { return f() }
 ",
     );
     assert_e0727(&err);
-    has(&err, "via `f -> <indirect call>`");
+    has(&err, "via `f -> println`");
+    lacks(&err, "<indirect call>");
     has(
         &err,
-        "note: the call target here is not statically known, so its effects are conservatively \
-         assumed to reach managed memory",
+        "note: `println` is a built-in, so its effects are assumed to reach managed memory",
     );
     has(
         &err,
-        "help: call a function by name so its effects can be checked, or drop `nogc` from `f`",
+        "help: move the `println` out of `f`, or drop `nogc` from `f`",
     );
     // the caret must not assert an allocation the compiler never observed
     lacks(&err, "managed memory reached here");

@@ -8173,6 +8173,7 @@ fn ffi_call(callee: Option<&str>) -> BirStmt {
                 callee: callee.map(str::to_string),
                 args: vec![BirOperand::Const],
                 indirect_nogc: false,
+                builtin: None,
             },
         },
         span: Span::dummy(),

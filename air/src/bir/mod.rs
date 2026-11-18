@@ -369,6 +369,7 @@ pub enum BirRvalue {
         callee: Option<String>,
         args: Vec<BirOperand>,
         indirect_nogc: bool,
+        builtin: Option<String>,
     },
     Ref {
         place: BirPlace,
