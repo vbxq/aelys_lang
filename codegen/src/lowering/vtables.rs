@@ -109,6 +109,7 @@ impl<'a> FunctionCodegen<'a> {
             }
             (AirType::Rc(inner), AirType::Ptr(_)) if dyn_trait(inner).is_some() => {
                 let data = value.into_pointer_value();
+                self.emit_null_check(data)?;
                 let i8_ty = self.context.i8_type();
                 let i32_ty = self.context.i32_type();
                 let back = self
