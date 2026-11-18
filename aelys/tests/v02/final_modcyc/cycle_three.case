@@ -1,0 +1,4 @@
+needs a
+fn main() {
+    println(a.start(10))
+}

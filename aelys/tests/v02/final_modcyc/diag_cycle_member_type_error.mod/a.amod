@@ -1,0 +1,6 @@
+needs prog
+
+pub fn f() -> i64 {
+    let s: string = prog.seed()
+    return 0
+}

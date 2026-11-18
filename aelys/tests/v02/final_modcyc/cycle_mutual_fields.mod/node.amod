@@ -1,0 +1,8 @@
+needs tree
+pub struct Node { pub leaf: i64, pub kind: tree.Kind }
+pub fn weigh(n: Node) -> i64 {
+    return match n.kind {
+        tree.Kind::Big => n.leaf * 10,
+        tree.Kind::Small => n.leaf
+    }
+}

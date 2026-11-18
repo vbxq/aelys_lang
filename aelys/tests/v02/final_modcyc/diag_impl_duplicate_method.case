@@ -1,0 +1,5 @@
+needs geom
+needs ext
+fn main() {
+    println(geom.Pt { v: 1 }.get())
+}

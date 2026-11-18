@@ -1,0 +1,3 @@
+needs prog
+pub fn twice_box(x: i64) -> prog.Box<i64> { return prog.wrap(x * 2) }
+pub fn wrap_str(s: string) -> prog.Box<string> { return prog.wrap(s + "!") }

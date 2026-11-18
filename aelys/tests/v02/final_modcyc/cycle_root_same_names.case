@@ -1,0 +1,7 @@
+needs a
+pub struct Cfg { pub n: i64 }
+pub fn base() -> i64 { return 1 }
+fn main() {
+    println(a.check())
+    println(base())
+}

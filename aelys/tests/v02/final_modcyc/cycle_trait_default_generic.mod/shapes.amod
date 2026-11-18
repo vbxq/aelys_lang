@@ -1,0 +1,6 @@
+needs geo
+pub trait Shape {
+    fn area(&self) -> i64
+    fn describe(&self) -> string { return "area {self.area()}" }
+}
+pub fn total<T: Shape>(x: T) -> i64 { return x.area() + geo.BONUS }

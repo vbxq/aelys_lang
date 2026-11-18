@@ -1,0 +1,2 @@
+needs prog
+pub nogc fn inc(x: i64) -> i64 { return prog.twice(x) + 1 }

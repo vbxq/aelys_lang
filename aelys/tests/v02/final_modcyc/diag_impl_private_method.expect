@@ -1,0 +1,3 @@
+refuse E0610
+method `secret` of `geom.Pt` is not public
+prog.aelys:6:

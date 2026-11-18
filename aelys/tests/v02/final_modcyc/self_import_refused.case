@@ -1,0 +1,5 @@
+needs prog
+pub fn f() -> i64 { return 1 }
+fn main() {
+    println(prog.f())
+}

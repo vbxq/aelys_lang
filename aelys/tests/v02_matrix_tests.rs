@@ -308,3 +308,8 @@ fn track_cross() {
 fn track_std() {
     run_track("std");
 }
+
+#[test]
+fn track_final_modcyc() {
+    run_track("final_modcyc");
+}

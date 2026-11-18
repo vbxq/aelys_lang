@@ -553,29 +553,6 @@ fn group_mod_r1_a_missing_module_names_the_file_it_looked_for() {
 }
 
 #[test]
-fn group_mod_r2_a_cycle_names_its_chain() {
-    reject_row(
-        "R-2",
-        &[
-            (
-                "root.aelys",
-                "needs a\n\nfn main() -> i64 {\n    return 0\n}\n",
-            ),
-            (
-                "a.aelys",
-                "needs b\n\npub fn f() -> i64 {\n    return 1\n}\n",
-            ),
-            (
-                "b.aelys",
-                "needs a\n\npub fn g() -> i64 {\n    return 2\n}\n",
-            ),
-        ],
-        "[E0602]",
-        "a -> b -> a",
-    );
-}
-
-#[test]
 fn group_mod_r3_two_imports_may_not_introduce_one_name() {
     reject_row(
         "R-3",

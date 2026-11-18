@@ -1,0 +1,8 @@
+needs boxes
+impl<T> boxes.Box<T> {
+    pub fn get(&self) -> T { return self.v }
+    pub fn make(v: T) -> Self { return boxes.Box { v: v } }
+}
+impl boxes.Box<i64> {
+    pub fn twice_with(&self, k: i64) -> i64 { return self.v * 2 * k }
+}

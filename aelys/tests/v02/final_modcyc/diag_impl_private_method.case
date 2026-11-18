@@ -1,0 +1,7 @@
+needs geom
+needs ext
+fn main() {
+    let p = geom.Pt { v: 2 }
+
+    println(p.secret())
+}

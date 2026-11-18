@@ -7455,6 +7455,24 @@ const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
         ModOracle::Stats(40, "", 0, 0),
     ),
     (
+        "SI-MOD-cycle",
+        &[
+            (
+                "root.aelys",
+                "needs a\n\nfn main() -> i64 {\n    return a.f()\n}\n",
+            ),
+            (
+                "a.aelys",
+                "needs b\n\npub fn f() -> i64 {\n    return b.g() + 1\n}\n\npub fn one() -> i64 {\n    return 1\n}\n",
+            ),
+            (
+                "b.aelys",
+                "needs a\n\npub fn g() -> i64 {\n    return a.one() + 2\n}\n",
+            ),
+        ],
+        ModOracle::Stats(4, "", 0, 0),
+    ),
+    (
         "SI-MOD-transitive",
         &[
             (
@@ -7482,24 +7500,6 @@ const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
             "root.aelys",
             "needs nope\n\nfn main() -> i64 {\n    return 0\n}\n",
         )],
-    ),
-    (
-        "SI-MOD-E0602",
-        "E0602",
-        &[
-            (
-                "root.aelys",
-                "needs a\n\nfn main() -> i64 {\n    return 0\n}\n",
-            ),
-            (
-                "a.aelys",
-                "needs b\n\npub fn f() -> i64 {\n    return 1\n}\n",
-            ),
-            (
-                "b.aelys",
-                "needs a\n\npub fn g() -> i64 {\n    return 2\n}\n",
-            ),
-        ],
     ),
     (
         "SI-MOD-E0603",

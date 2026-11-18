@@ -1,0 +1,3 @@
+needs b
+pub fn f() -> i64 { return b.g() }
+fn hidden() -> i64 { return 1 }

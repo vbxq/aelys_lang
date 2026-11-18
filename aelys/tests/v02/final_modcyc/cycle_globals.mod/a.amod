@@ -1,0 +1,3 @@
+needs prog
+pub let K = prog.M * 2
+pub fn total() -> i64 { return prog.N + K }

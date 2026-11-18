@@ -1,0 +1,6 @@
+needs geo
+needs ext
+fn main() {
+    let p = geo.mk(3)
+    println(p.total())
+}

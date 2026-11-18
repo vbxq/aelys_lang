@@ -1,0 +1,14 @@
+needs a
+pub struct Cfg { pub n: i64 }
+pub const BASE: i64 = 40
+impl Cfg {
+    pub fn doubled(&self) -> i64 { return self.n * 2 }
+}
+pub fn base() -> i64 { return BASE + 2 }
+fn main() {
+    let c = Cfg { n: 21 }
+    println(a.twice(c))
+    let w = a.make(5)
+    println(w.size())
+    println(a.LIMIT + BASE)
+}

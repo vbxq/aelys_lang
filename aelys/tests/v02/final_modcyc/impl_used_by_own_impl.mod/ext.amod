@@ -1,0 +1,4 @@
+needs geo
+impl geo.Pt {
+    pub fn dbl(&self) -> i64 { return self.v * 2 }
+}
