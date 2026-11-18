@@ -11,42 +11,41 @@ Most languages force a single memory model on the entire program. GC'd languages
 Aelys starts from managed memory, reference counting with an optional cycle collector, and lets you leave it behind one function at a time. Default mode gives you heap allocation, type inference, and minimal annotation. `nogc` gives you compiler-enforced freedom from *additional* allocation: the caller's buffers are still the caller's, but nothing inside the function allocates, with statically checked references and no user-written lifetime annotations.
 
 ```rust run
-fn half(n: i64) -> Result<i64, string> {
-    if n % 2 != 0 { return Err("odd") }
-    return Ok(n / 2)
+fn half(n: i64) -> Result<i64, String> {
+    if n % 2 != 0 { return Err("odd"); }
+    Ok(n / 2)
 }
 
-fn quarter(n: i64) -> Result<i64, string> {
-    let h = half(n)?
-    return half(h)
+fn quarter(n: i64) -> Result<i64, String> {
+    let h = half(n)?;
+    half(h)
 }
 
 nogc fn scale(src: &[i64], dst: &mut [i64]) -> i64 {
-    let mut i: i64 = 0
-    while i < src.len {
-        dst[i] = src[i] * 2
-        i = i + 1
+    let mut i: i64 = 0;
+    while i < src.len() {
+        dst[i] = src[i] * 2;
+        i = i + 1;
     }
-    return src.len
+    src.len()
 }
 
-fn main() -> i64 {
+fn main() {
     match quarter(12) {
-        Ok(v) => println(v),
-        Err(e) => println(e)
+        Ok(v) => println!("{}", v),
+        Err(e) => println!("{}", e),
     }
     match quarter(6) {
-        Ok(v) => println(v),
-        Err(e) => println(e)
+        Ok(v) => println!("{}", v),
+        Err(e) => println!("{}", e),
     }
-    let q = quarter(10) catch |e| -1
-    println(q)
+    let q = match quarter(10) { Ok(v) => v, Err(e) => -1 };
+    println!("{}", q);
 
-    let mut input: Vec<i64> = vec[1, 2, 3]
-    let mut output: Vec<i64> = vec[0, 0, 0]
-    let n = scale(input[0..3], output[0..3])
-    println(output[2])
-    return 0
+    let mut input: Vec<i64> = vec![1, 2, 3];
+    let mut output: Vec<i64> = vec![0, 0, 0];
+    let n = scale(input[0..3], output[0..3]);
+    println!("{}", output[2]);
 }
 ```
 
@@ -79,9 +78,8 @@ The test counts the blocks of each kind, so a block cannot be added without bein
 `cargo build --release` builds the compiler as `target/release/aelys-cli`, and this file calls it `aelys-cli`. Its messages name the binary as it was invoked ("try `aelys-cli --explain E0433`"). It links programs with the system `cc`.
 
 ```rust run file=hello.aelys
-fn main() -> i64 {
-    println("hello, world")
-    return 0
+fn main() {
+    println!("hello, world");
 }
 ```
 
@@ -127,21 +125,20 @@ Each run below allocates 200000 `Rc` nodes in 100000 two-node cycles. `[rc]` cou
 struct Node { val: i64, next: Rc<Node> }
 
 fn churn(i: i64) -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: a })
-    a.next = b
-    return Rc::get(Rc::get(a).next).val
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: a });
+    a.next = b;
+    Rc::get(Rc::get(a).next).val
 }
 
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 100000 {
-        n = n + churn(i)
-        i = i + 1
+        n = n + churn(i);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 ```
 
@@ -171,23 +168,22 @@ fn main() -> i64 {
 - A closure works on its own copy of a variable it captures. An assignment inside the closure changes that copy, which persists from one call to the next; the variable outside keeps its value.
 
 ```rust run
-fn main() -> i64 {
-    let mut big: i64 = 9223372036854775807
-    big = big + 1
-    println(big)
-    let mut b: u8 = 250
-    b = b + 10
-    println(b)
-    let one: u8 = 1
-    let k: u8 = 9
-    println(one << k)
-    let mut u: u64 = 9223372036854775807
-    u = u + 1
-    println(u)
-    println("{u}")
-    let min: i64 = -9223372036854775807 - 1
-    println(-min)
-    return 0
+fn main() {
+    let mut big: i64 = 9223372036854775807;
+    big = big + 1;
+    println!("{}", big);
+    let mut b: u8 = 250;
+    b = b + 10;
+    println!("{}", b);
+    let one: u8 = 1;
+    let k: u8 = 9;
+    println!("{}", one << k);
+    let mut u: u64 = 9223372036854775807;
+    u = u + 1;
+    println!("{}", u);
+    println!("{u}");
+    let min: i64 = -9223372036854775807 - 1;
+    println!("{}", -min);
 }
 ```
 
@@ -201,14 +197,13 @@ fn main() -> i64 {
 ```
 
 ```rust run
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let bump = fn() -> i64 {
-        n = n + 1
-        return n
-    }
-    println("{bump()} {bump()} {n}")
-    return 0
+fn main() {
+    let mut n: i64 = 0;
+    let bump = move || -> i64 {
+        n = n + 1;
+        n
+    };
+    println!("{} {} {n}", bump(), bump());
 }
 ```
 
@@ -217,15 +212,14 @@ fn main() -> i64 {
 ```
 
 ```rust run
-fn main() -> i64 {
-    let x: i64 = 300
-    println(x as u8)
-    let big: f64 = 1.0e30
-    println(big as i64)
-    let z: f64 = 0.0
-    println((z / z) as i64)
-    println(-2.7 as i64)
-    return 0
+fn main() {
+    let x: i64 = 300;
+    println!("{}", x as u8);
+    let big: f64 = 1.0e30;
+    println!("{}", big as i64);
+    let z: f64 = 0.0;
+    println!("{}", (z / z) as i64);
+    println!("{}", -(2.7 as i64));
 }
 ```
 
@@ -244,13 +238,12 @@ fn main() -> i64 {
 ```
 
 ```rust run stats
-let mut last: string = ""
+static mut last: String = "";
 
-fn main() -> i64 {
-    let i: i64 = 3
-    last = "run {i}"
-    println(last)
-    return 0
+fn main() {
+    let i: i64 = 3;
+    last = format!("run {i}");
+    println!("{}", last);
 }
 ```
 
@@ -266,17 +259,16 @@ run 3
 Floating point follows IEEE 754: `NaN != NaN` is `true`, a NaN prints as `nan` whatever its sign bit, and `%` works on floats.
 
 ```rust run
-fn main() -> i64 {
-    let z: f64 = 0.0
-    let n: f64 = z / z
-    println(n)
-    println(n != n)
-    println(n == n)
-    println(1.0 / z)
-    let x: f64 = 7.5
-    let y: f64 = 2.0
-    println(x % y)
-    return 0
+fn main() {
+    let z: f64 = 0.0;
+    let n: f64 = z / z;
+    println!("{}", n);
+    println!("{}", n != n);
+    println!("{}", n == n);
+    println!("{}", 1.0 / z);
+    let x: f64 = 7.5;
+    let y: f64 = 2.0;
+    println!("{}", x % y);
 }
 ```
 
@@ -293,20 +285,19 @@ inf
 `.len` is a field, not a call. On a `string` (also spelled `str`) it counts **bytes**. On an array, a `Vec` and a slice it counts elements. `s.bytes` is the byte view of a string, a `&[u8]`. On a `&string` it is refused: pass the `string` itself.
 
 ```rust run
-fn main() -> i64 {
-    let s: string = "héllo"
-    let t: str = "héllo"
-    let a: [i64; 4] = [1, 2, 3, 4]
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    Vec::push(v, 4)
-    let view = v[0..2]
-    println(s.len)
-    println(t.len)
-    println(s.bytes.len)
-    println(a.len)
-    println(view.len)
-    println(v.len)
-    return 0
+fn main() {
+    let s: String = "héllo";
+    let t: String = "héllo";
+    let a: [i64; 4] = [1, 2, 3, 4];
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    Vec::push(v, 4);
+    let view = v[0..2];
+    println!("{}", s.len());
+    println!("{}", t.len());
+    println!("{}", s.as_bytes().len());
+    println!("{}", a.len());
+    println!("{}", view.len());
+    println!("{}", v.len());
 }
 ```
 
@@ -320,28 +311,26 @@ fn main() -> i64 {
 ```
 
 ```rust refused E0304
-fn size(s: &string) -> i64 {
-    return s.len
+fn size(s: &String) -> i64 {
+    s.len()
 }
 
-fn main() -> i64 {
-    let t: string = "abc"
-    println(size(&t))
-    return 0
+fn main() {
+    let t: String = "abc";
+    println!("{}", size(&t));
 }
 ```
 
 `v[i]` on a `Vec`, an array or a slice is the element at position `i`, counted from 0. Every index is checked. An index outside the elements, negative included, stops the program with `index out of bounds` and status 134:
 
 ```rust run exit=134
-fn main() -> i64 {
-    let v: Vec<i64> = vec[10, 20, 30]
-    let mut i: i64 = 0
-    while i <= v.len {
-        println(v[i])
-        i = i + 1
+fn main() {
+    let v: Vec<i64> = vec![10, 20, 30];
+    let mut i: i64 = 0;
+    while i <= v.len() {
+        println!("{}", v[i]);
+        i = i + 1;
     }
-    return 0
 }
 ```
 
@@ -358,10 +347,9 @@ index out of bounds
 A constant index into a fixed array is checked when the program is compiled:
 
 ```rust refused E0433
-fn main() -> i64 {
-    let a: [i64; 3] = [1, 2, 3]
-    println(a[3])
-    return 0
+fn main() {
+    let a: [i64; 3] = [1, 2, 3];
+    println!("{}", a[3]);
 }
 ```
 
@@ -379,12 +367,11 @@ error: aborting due to 1 previous error
 `v[0..n]` is a slice of the first `n` elements. A range past the end stops the program:
 
 ```rust run exit=134
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let n: i64 = 5
-    let s = v[0..n]
-    println(s.len)
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let n: i64 = 5;
+    let s = v[0..n];
+    println!("{}", s.len());
 }
 ```
 
@@ -398,10 +385,9 @@ slice range out of bounds
 A range that does not start at 0 is refused:
 
 ```rust refused E0425
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let tail = v[1..3]
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let tail = v[1..3];
 }
 ```
 
@@ -410,17 +396,16 @@ fn main() -> i64 {
 ```rust run
 fn show(o: Option<i64>) {
     match o {
-        Some(x) => { println(x) }
-        None => { println("none") }
+        Some(x) => { println!("{}", x); }
+        None => { println!("none"); }
     }
 }
 
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1]
-    show(Vec::get(v, 1))
-    show(Vec::pop(v))
-    show(Vec::pop(v))
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1];
+    show(Vec::get(v, 1));
+    show(Vec::pop(v));
+    show(Vec::pop(v));
 }
 ```
 
@@ -433,11 +418,10 @@ none
 `Vec::remove` past the end stops the program:
 
 ```rust run exit=134
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1]
-    println(Vec::remove(v, 0))
-    println(Vec::remove(v, 0))
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1];
+    println!("{}", Vec::remove(v, 0));
+    println!("{}", Vec::remove(v, 0));
 }
 ```
 
@@ -452,11 +436,10 @@ remove index out of bounds
 `i64::MIN / -1` has no `i64` answer and stops the program:
 
 ```rust run exit=134
-fn main() -> i64 {
-    let a: i64 = -9223372036854775807 - 1
-    let b: i64 = -1
-    println(a / b)
-    return 0
+fn main() {
+    let a: i64 = -9223372036854775807 - 1;
+    let b: i64 = -1;
+    println!("{}", a / b);
 }
 ```
 
@@ -470,11 +453,10 @@ division overflow
 The minimum of a signed type modulo `-1` stops the program in every signed type, here an `i32`:
 
 ```rust run exit=134
-fn main() -> i64 {
-    let a: i32 = -2147483647 - 1
-    let b: i32 = -1
-    println(a % b)
-    return 0
+fn main() {
+    let a: i32 = -2147483647 - 1;
+    let b: i32 = -1;
+    println!("{}", a % b);
 }
 ```
 
@@ -488,11 +470,10 @@ division overflow
 `char::from_i64` of a value that is not a Unicode scalar value stops the program:
 
 ```rust run exit=134
-fn main() -> i64 {
-    println(char::from_i64(233) as i64)
-    let c = char::from_i64(55296)
-    println(c as i64)
-    return 0
+fn main() {
+    println!("{}", char::from_i64(233) as i64);
+    let c = char::from_i64(55296);
+    println!("{}", c as i64);
 }
 ```
 
@@ -507,12 +488,11 @@ char::from_i64: 55296 is not a unicode scalar value, the valid ranges are 0..=11
 Division and remainder by zero stop the program the same way:
 
 ```rust run exit=134
-fn main() -> i64 {
-    let d: i64 = 0
-    println(1)
-    println(7 / d)
-    println(2)
-    return 0
+fn main() {
+    let d: i64 = 0;
+    println!("{}", 1);
+    println!("{}", 7 / d);
+    println!("{}", 2);
 }
 ```
 
@@ -529,10 +509,9 @@ division by zero
 `string` is UTF-8. `.len` counts bytes. `s[i]` does not exist: it was removed rather than fixed, because `.len` counted bytes while `s[i]` counted characters, and the two could not both be right.
 
 ```rust refused E0304
-fn main() -> i64 {
-    let s: string = "abc"
-    println(s[0])
-    return 0
+fn main() {
+    let s: String = "abc";
+    println!("{}", s[0]);
 }
 ```
 
@@ -553,26 +532,25 @@ Character access is `for c in s`, which yields a `char`, or `str.char_at(s, i)`,
 A `char` is a Unicode scalar value. Literals are written `'x'`. `c as i64` converts out, and `char::from_i64` converts in.
 
 ```rust run
-needs std.str
+use std::str;
 
-fn main() -> i64 {
-    let s: string = "héllo"
-    println(s.len)
-    let mut chars: i64 = 0
+fn main() {
+    let s: String = "héllo";
+    println!("{}", s.len());
+    let mut chars: i64 = 0;
     for c in s {
-        chars = chars + 1
-        if c == 'é' { println(c as i64) }
+        chars = chars + 1;
+        if c == 'é' { println!("{}", c as i64); }
     }
-    println(chars)
-    match str.char_at(s, 1) {
-        Some(c) => println(c as i64),
-        None => println(-1)
+    println!("{}", chars);
+    match str::char_at(s, 1) {
+        Some(c) => println!("{}", c as i64),
+        None => println!("{}", -1),
     }
-    match str.char_at(s, 9) {
-        Some(c) => println(c as i64),
-        None => println(-1)
+    match str::char_at(s, 9) {
+        Some(c) => println!("{}", c as i64),
+        None => println!("{}", -1),
     }
-    return 0
 }
 ```
 
@@ -589,19 +567,18 @@ Six bytes, five characters.
 A scalar value is not a user-perceived character. One thing a reader sees as a single letter can be several scalar values, and `for c in s` hands back every one of them separately.
 
 ```rust run
-fn main() -> i64 {
-    let composed: string = "é"
-    let decomposed: string = "e" + string::from_char(char::from_i64(769))
-    println(composed.len)
-    println(decomposed.len)
-    let mut a: i64 = 0
-    for c in composed { a = a + 1 }
-    let mut b: i64 = 0
-    for c in decomposed { b = b + 1 }
-    println(a)
-    println(b)
-    println(composed == decomposed)
-    return 0
+fn main() {
+    let composed: String = "é";
+    let decomposed: String = "e" + char::from_i64(769).to_string();
+    println!("{}", composed.len());
+    println!("{}", decomposed.len());
+    let mut a: i64 = 0;
+    for c in composed { a = a + 1; }
+    let mut b: i64 = 0;
+    for c in decomposed { b = b + 1; }
+    println!("{}", a);
+    println!("{}", b);
+    println!("{}", composed == decomposed);
 }
 ```
 
@@ -627,20 +604,19 @@ The boundary is a `nogc` function taking `&[T]` and `&mut [T]` cut from managed 
 
 ```rust run
 nogc fn scale(src: &[i64], dst: &mut [i64]) -> i64 {
-    let mut i: i64 = 0
+    let mut i: i64 = 0;
     while i < 3 {
-        dst[i] = src[i] * 2
-        i = i + 1
+        dst[i] = src[i] * 2;
+        i = i + 1;
     }
-    return 0
+    0
 }
 
-fn main() -> i64 {
-    let mut input: Vec<i64> = vec[1, 2, 3]
-    let mut output: Vec<i64> = vec[0, 0, 0]
-    let q = scale(input[0..3], output[0..3])
-    println(output[2])
-    return 0
+fn main() {
+    let mut input: Vec<i64> = vec![1, 2, 3];
+    let mut output: Vec<i64> = vec![0, 0, 0];
+    let q = scale(input[0..3], output[0..3]);
+    println!("{}", output[2]);
 }
 ```
 
@@ -651,12 +627,11 @@ fn main() -> i64 {
 **References.** In every function, references and slices are checked when the program is compiled, with no user-written lifetime annotations. A `Vec` cannot be written while a slice of it is still used:
 
 ```rust refused E0711
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let view = v[0..2]
-    Vec::push(v, 4)
-    println(view[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let view = v[0..2];
+    Vec::push(v, 4);
+    println!("{}", view[0]);
 }
 ```
 
@@ -681,17 +656,16 @@ error: aborting due to 1 previous error
 
 ```rust refused E0727
 fn total(n: i64) -> i64 {
-    let v: Vec<i64> = vec[n, n]
-    return v.len
+    let v: Vec<i64> = vec![n, n];
+    v.len()
 }
 
 nogc fn report(n: i64) -> i64 {
-    return total(n)
+    total(n)
 }
 
-fn main() -> i64 {
-    println(report(3))
-    return 0
+fn main() {
+    println!("{}", report(3));
 }
 ```
 
@@ -719,12 +693,12 @@ The first line is the error code, the area of the compiler in brackets, and what
 A form outside the 0.1 surface is refused where it is written, with a code, never compiled into something else. A closure that captures an `Rc`:
 
 ```rust refused E0902
-struct Node { v: i64 }
+use std::process::ExitCode; struct Node { v: i64 }
 
-fn main() -> i64 {
-    let n = Rc::new(Node { v: 1 })
-    let f = fn() -> i64 { return Rc::get(n).v }
-    return f()
+fn main() -> ExitCode {
+    let n = Rc::new(Node { v: 1 });
+    let f = move || -> i64 { Rc::get(n).v };
+    return ExitCode::from(f() as u8);
 }
 ```
 
@@ -742,10 +716,9 @@ error: aborting due to 1 previous error
 A `Vec` function other than the eleven builtins. The whole builtin `Vec` surface is `new`, `push`, `pop`, `get`, `insert`, `remove`, `clear`, `with_capacity`, `len`, `as_slice` and `try_as_unique_mut_slice`, and the compiler says so:
 
 ```rust refused E0301
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    Vec::truncate(v, 0)
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    Vec::truncate(v, 0);
 }
 ```
 
@@ -768,16 +741,15 @@ A `needs` names a module path. `needs std.io` binds the name `io`, and the modul
 
 ```rust module file=geom/area.aelys
 pub fn area(w: i64, h: i64) -> i64 {
-    return w * h
+    w * h
 }
 ```
 
 ```rust run
-needs geom.area
+use geom::area;
 
-fn main() -> i64 {
-    println(area.area(6, 7))
-    return 0
+fn main() {
+    println!("{}", area::area(6, 7));
 }
 ```
 
@@ -789,22 +761,21 @@ A module beside the root file wins over one under an `-I` root, silently:
 
 ```rust module file=util.aelys
 pub fn twice(n: i64) -> i64 {
-    return n * 3
+    n * 3
 }
 ```
 
 ```rust module file=a/util.aelys
 pub fn twice(n: i64) -> i64 {
-    return n * 2
+    n * 2
 }
 ```
 
 ```rust run include=a
-needs util
+mod util;
 
-fn main() -> i64 {
-    println(util.twice(21))
-    return 0
+fn main() {
+    println!("{}", util::twice(21));
 }
 ```
 
@@ -816,22 +787,21 @@ If one module path resolves under two `-I` roots and not beside the root file, t
 
 ```rust module file=a/util.aelys
 pub fn twice(n: i64) -> i64 {
-    return n * 2
+    n * 2
 }
 ```
 
 ```rust module file=b/util.aelys
 pub fn twice(n: i64) -> i64 {
-    return n + n
+    n + n
 }
 ```
 
 ```rust refused E0622 include=a,b
-needs util
+mod util;
 
-fn main() -> i64 {
-    println(util.twice(21))
-    return 0
+fn main() {
+    println!("{}", util::twice(21));
 }
 ```
 
@@ -851,20 +821,19 @@ error: aborting due to 1 previous error
 The prelude is the module `std.prelude`. It brings `Option` and `Result` into scope, which is why `?` and `catch` work in a program that imports nothing, and why `Some`, `None`, `Ok` and `Err` name their variants without the enum in front.
 
 ```rust run
-needs std.io
-needs std.str
+use std::io;
+use std::str;
 
-fn main() -> i64 {
-    let parts = str.split("a,b,c", ",")
+fn main() {
+    let parts = str::split("a,b,c", ",");
     for p in Vec::as_slice(parts) {
-        io.print_out(p)
-        io.print_out("\n")
+        io::print_out(p);
+        io::print_out("\n");
     }
-    match str.parse_int("41") {
-        Ok(v) => println(v + 1),
-        Err(_) => println(-1)
+    match str::parse_int("41") {
+        Ok(v) => println!("{}", v + 1),
+        Err(_) => println!("{}", -1),
     }
-    return 0
 }
 ```
 
@@ -880,14 +849,13 @@ A prelude type loses to a type the file declares or imports itself, **silently a
 ```rust run
 enum Option<T> { Some(T), None, Unknown }
 
-fn main() -> i64 {
-    let o: Option<i64> = Option::Unknown
+fn main() {
+    let o: Option<i64> = Option::Unknown;
     match o {
-        Some(v) => println(v),
-        None => println(0),
-        Option::Unknown => println(-1)
+        Some(v) => println!("{}", v),
+        None => println!("{}", 0),
+        Option::Unknown => println!("{}", -1),
     }
-    return 0
 }
 ```
 
@@ -898,33 +866,30 @@ fn main() -> i64 {
 The four variant names are reserved: no function, global, variable, parameter or import may take one.
 
 ```rust refused E0205
-fn main() -> i64 {
-    let None: i64 = 3
-    return 0
+fn main() {
+    let None: i64 = 3;
 }
 ```
 
 `--no-prelude` turns the prelude off, and then `Option` is unknown and `Some` names nothing, two errors:
 
 ```rust refused E0301 E0301 no-prelude
-fn main() -> i64 {
-    let o: Option<i64> = Some(4)
-    return 0
+fn main() {
+    let o: Option<i64> = Some(4);
 }
 ```
 
 `io.print_out(s)` writes a `string` to standard output and answers the number of bytes written. Every function of `std.io` is `nogc`, so a `nogc` function can print. The `println` builtin is the shortest way to print a number.
 
 ```rust run
-needs std.io
+use std::io;
 
 nogc fn greet() -> i64 {
-    return io.print_out("from nogc\n")
+    io::print_out("from nogc\n")
 }
 
-fn main() -> i64 {
-    println(greet())
-    return 0
+fn main() {
+    println!("{}", greet());
 }
 ```
 
@@ -938,19 +903,18 @@ from nogc
 A std module gives methods to the builtin types it serves: `std.str` to `string` and `char`, `std.slice` to slices and arrays, `std.vec` to `Vec`, `std.math` to `i64` and `f64`. A method is visible where its module is imported, and it is a second spelling of the module's function: `s.trim()` is `str.trim(s)`, and every function stays. `Option` and `Result` carry their methods through the prelude.
 
 ```rust run
-needs std.str
-needs std.vec
+use std::str;
+use std::vec;
 
-fn double(x: i64) -> i64 { return x * 2 }
+fn double(x: i64) -> i64 { x * 2 }
 
-fn main() -> i64 {
-    let words = "  pear fig  apple ".trim().split_whitespace()
-    println(words.sorted().join(","))
-    let v: Vec<i64> = vec[3, 1, 2]
-    println(v.map(double).sum())
-    println("héllo".char_count())
-    println(v.first().unwrap_or(0))
-    return 0
+fn main() {
+    let words = "  pear fig  apple ".trim().split_whitespace();
+    println!("{}", words.sorted().join(","));
+    let v: Vec<i64> = vec![3, 1, 2];
+    println!("{}", v.map(double).sum());
+    println!("{}", "héllo".char_count());
+    println!("{}", v.first().unwrap_or(0));
 }
 ```
 
@@ -964,20 +928,18 @@ apple,fig,pear
 Without the import the method is refused, and the diagnostic names the module that holds it.
 
 ```rust refused E0304
-fn main() -> i64 {
-    println("abc".char_count())
-    return 0
+fn main() {
+    println!("{}", "abc".char_count());
 }
 ```
 
 A placeholder takes a format spec after a colon, `[[fill]align][0][width][.precision]`. The width counts characters, a number aligns right and anything else left unless the spec says otherwise, `0` pads a number after its sign, and the precision applies to floats.
 
 ```rust run
-fn main() -> i64 {
-    let n = -42
-    let x: f64 = 3.14159
-    println("[{n:>6}][{n:<6}][{"ab":^6}][{n:06}][{x:.2}][{x:*>8.3}]")
-    return 0
+fn main() {
+    let n = -42;
+    let x: f64 = 3.14159;
+    println!("[{n:>6}][{n:<6}][{:^6}][{n:06}][{x:.2}][{x:*>8.3}]", "ab");
 }
 ```
 
@@ -995,16 +957,15 @@ A struct takes type parameters, and an `impl` block gives it methods. `swap` tak
 struct Pair<A, B> { first: A, second: B }
 
 impl<A, B> Pair<A, B> {
-    fn swap(self) -> Pair<B, A> { return Pair { first: self.second, second: self.first } }
+    fn swap(self) -> Pair<B, A> { Pair { first: self.second, second: self.first } }
 }
 
-fn main() -> i64 {
-    let p = Pair { first: 1, second: "one" }
-    let q = p.swap()
-    println("{q.first} {q.second}")
-    let r: Pair<string, Vec<i64>> = Pair { first: "xs", second: vec[1, 2, 3] }
-    println("{r.first} {r.second.len}")
-    return 0
+fn main() {
+    let p = Pair { first: 1, second: "one" };
+    let q = p.swap();
+    println!("{} {}", q.first, q.second);
+    let r: Pair<String, Vec<i64>> = Pair { first: "xs", second: vec![1, 2, 3] };
+    println!("{} {}", r.first, r.second.len());
 }
 ```
 
@@ -1019,22 +980,21 @@ Inside an `impl`, `Self` names the type. A method takes `self` by value, `&self`
 struct Counter { n: i64, step: i64 }
 
 impl Counter {
-    fn new(step: i64) -> Self { return Self { n: 0, step: step } }
-    fn tick(&mut self) { self.n = self.n + self.step }
-    fn value(&self) -> i64 { return self.n }
-    fn doubled(self) -> Self { return Counter { n: self.n * 2, step: self.step * 2 } }
+    fn new(step: i64) -> Self { Self { n: 0, step: step } }
+    fn tick(&mut self) { self.n = self.n + self.step; }
+    fn value(&self) -> i64 { self.n }
+    fn doubled(self) -> Self { Counter { n: self.n * 2, step: self.step * 2 } }
 }
 
-fn main() -> i64 {
-    let mut c = Counter::new(3)
-    c.tick()
-    c.tick()
-    println(c.value())
-    println(Counter::new(5).doubled().doubled().step)
-    let mut d = c.doubled()
-    d.tick()
-    println(d.value())
-    return 0
+fn main() {
+    let mut c = Counter::new(3);
+    c.tick();
+    c.tick();
+    println!("{}", c.value());
+    println!("{}", Counter::new(5).doubled().doubled().step);
+    let mut d = c.doubled();
+    d.tick();
+    println!("{}", d.value());
 }
 ```
 
@@ -1047,22 +1007,21 @@ fn main() -> i64 {
 A `match` arm takes literals, ranges `a..=b`, alternatives joined by `|`, a guard after `if`, and `name @ pattern`, which binds the value the pattern matched. Arms are tried in order.
 
 ```rust run
-fn describe(n: i64) -> string {
-    return match n {
+fn describe(n: i64) -> String {
+    match n {
         0 => "zero",
         1 | 2 | 3 => "small",
         x @ 4..=9 if x % 2 == 0 => "even digit",
         4..=9 => "odd digit",
         x if x < 0 => "negative",
-        _ => "large"
+        _ => "large",
     }
 }
 
-fn main() -> i64 {
+fn main() {
     for n in [0, 2, 6, 7, -5, 40] {
-        println("{n:>3} {describe(n)}")
+        println!("{n:>3} {}", describe(n));
     }
-    return 0
 }
 ```
 
@@ -1079,27 +1038,26 @@ A tuple groups values of different types. `t.0` reads a field, `let (a, b) = ...
 
 ```rust run
 fn min_max(xs: &[i64]) -> (i64, i64) {
-    let mut lo = xs[0]
-    let mut hi = xs[0]
+    let mut lo = xs[0];
+    let mut hi = xs[0];
     for x in xs {
-        if x < lo { lo = x }
-        if x > hi { hi = x }
+        if x < lo { lo = x; }
+        if x > hi { hi = x; }
     }
-    return (lo, hi)
+    (lo, hi)
 }
 
-fn main() -> i64 {
-    let v: Vec<i64> = vec[4, -2, 9, 3]
-    let (lo, hi) = min_max(v[0..4])
-    println("{lo} {hi}")
-    let named: (i64, string) = (7, "seven")
-    println("{named.1} is {named.0}")
+fn main() {
+    let v: Vec<i64> = vec![4, -2, 9, 3];
+    let (lo, hi) = min_max(v[0..4]);
+    println!("{lo} {hi}");
+    let named: (i64, String) = (7, "seven");
+    println!("{} is {}", named.1, named.0);
     match (lo < 0, Some(hi)) {
-        (true, Some(h @ 5..=10)) => println("mixed, top {h}"),
-        (true, _) => println("mixed"),
-        (false, _) => println("positive")
+        (true, Some(h @ 5..=10)) => println!("mixed, top {h}"),
+        (true, _) => println!("mixed"),
+        (false, _) => println!("positive"),
     }
-    return 0
 }
 ```
 
@@ -1112,21 +1070,20 @@ mixed, top 9
 `if let` runs a block when one pattern matches. `while let` loops while it matches, here until `pop` answers `None`.
 
 ```rust run
-fn main() -> i64 {
-    let mut stack: Vec<i64> = vec[1, 2, 3]
-    let mut total = 0
+fn main() {
+    let mut stack: Vec<i64> = vec![1, 2, 3];
+    let mut total = 0;
     while let Some(x) = stack.pop() {
-        total = total * 10 + x
+        total = total * 10 + x;
     }
-    println(total)
-    let found: Option<string> = Some("key")
+    println!("{}", total);
+    let found: Option<String> = Some("key");
     if let Some(k) = found {
-        println("found {k}")
+        println!("found {k}");
     }
     if let None = stack.pop() {
-        println("empty")
+        println!("empty");
     }
-    return 0
 }
 ```
 
@@ -1139,22 +1096,21 @@ empty
 `const` declares a constant and `type` an alias, another name for the same type. `r#` turns a keyword into a name: `r#and` is a function named `and`.
 
 ```rust run
-const SCALE: i64 = 10
+const SCALE: i64 = 10;
 
-type Point = (i64, i64)
+type Point = (i64, i64);
 
 fn scaled(p: Point) -> Point {
-    return (p.0 * SCALE, p.1 * SCALE)
+    (p.0 * SCALE, p.1 * SCALE)
 }
 
 fn r#and(a: Point, b: Point) -> Point {
-    return (a.0 + b.0, a.1 + b.1)
+    (a.0 + b.0, a.1 + b.1)
 }
 
-fn main() -> i64 {
-    let p = r#and(scaled((1, 2)), (3, 4))
-    println("{p.0},{p.1}")
-    return 0
+fn main() {
+    let p = r#and(scaled((1, 2)), (3, 4));
+    println!("{},{}", p.0, p.1);
 }
 ```
 
@@ -1165,33 +1121,32 @@ fn main() -> i64 {
 A struct field can be a `Vec`, and a `&mut self` method pushes to it. The format spec of a placeholder lines up columns.
 
 ```rust run
-struct Ledger { names: Vec<string>, amounts: Vec<i64> }
+struct Ledger { names: Vec<String>, amounts: Vec<i64> }
 
 impl Ledger {
-    fn new() -> Self { return Ledger { names: Vec::new(), amounts: Vec::new() } }
-    fn add(&mut self, name: string, amount: i64) {
-        self.names.push(name)
-        self.amounts.push(amount)
+    fn new() -> Self { Ledger { names: Vec::new(), amounts: Vec::new() } }
+    fn add(&mut self, name: String, amount: i64) {
+        self.names.push(name);
+        self.amounts.push(amount);
     }
     fn total(&self) -> i64 {
-        let mut t = 0
-        for a in Vec::as_slice(self.amounts) { t = t + a }
-        return t
+        let mut t = 0;
+        for a in Vec::as_slice(self.amounts) { t = t + a; }
+        t
     }
 }
 
-fn main() -> i64 {
-    let mut l = Ledger::new()
-    l.add("rent", 1200)
-    l.add("food", 345)
-    for i in 0..l.names.len {
-        let name = l.names[i]
-        let amount = l.amounts[i]
-        println("{name:<6}{amount:>8}")
+fn main() {
+    let mut l = Ledger::new();
+    l.add("rent", 1200);
+    l.add("food", 345);
+    for i in 0..l.names.len() {
+        let name = l.names[i];
+        let amount = l.amounts[i];
+        println!("{name:<6}{amount:>8}");
     }
-    let t = l.total()
-    println("{"total":<6}{t:>8}")
-    return 0
+    let t = l.total();
+    println!("{:<6}{t:>8}", "total");
 }
 ```
 
@@ -1206,28 +1161,27 @@ An enum refers to itself through `Rc`. `Rc::get` reads the value behind an `Rc`,
 ```rust run
 enum Expr { Num(i64), Add(Rc<Expr>, Rc<Expr>), Mul(Rc<Expr>, Rc<Expr>) }
 
-fn num(n: i64) -> Rc<Expr> { return Rc::new(Expr::Num(n)) }
+fn num(n: i64) -> Rc<Expr> { Rc::new(Expr::Num(n)) }
 
 fn eval(e: Rc<Expr>) -> i64 {
-    return match Rc::get(e) {
+    match Rc::get(e) {
         Expr::Num(n) => n,
         Expr::Add(a, b) => eval(a) + eval(b),
-        Expr::Mul(a, b) => eval(a) * eval(b)
+        Expr::Mul(a, b) => eval(a) * eval(b),
     }
 }
 
-fn show(e: Rc<Expr>) -> string {
-    return match Rc::get(e) {
-        Expr::Num(n) => "{n}",
-        Expr::Add(a, b) => "({show(a)} + {show(b)})",
-        Expr::Mul(a, b) => "{show(a)} * {show(b)}"
+fn show(e: Rc<Expr>) -> String {
+    match Rc::get(e) {
+        Expr::Num(n) => format!("{n}"),
+        Expr::Add(a, b) => format!("({} + {})", show(a), show(b)),
+        Expr::Mul(a, b) => format!("{} * {}", show(a), show(b)),
     }
 }
 
-fn main() -> i64 {
-    let e = Rc::new(Expr::Mul(Rc::new(Expr::Add(num(1), num(2))), num(4)))
-    println("{show(e)} = {eval(e)}")
-    return 0
+fn main() {
+    let e = Rc::new(Expr::Mul(Rc::new(Expr::Add(num(1), num(2))), num(4)));
+    println!("{} = {}", show(e), eval(e));
 }
 ```
 
@@ -1244,32 +1198,31 @@ A bound is `nogc`, a builtin trait (`eq`, `ord`, `Display`) or a user trait, com
 Traits dispatch statically: each instance of a generic function calls the impl of its type argument, there is no `dyn`. An impl lives in the module of the trait or of the type, impls of one trait never overlap, and a trait method may have a default body that an impl can override.
 
 ```rust run
-trait Area {
-    fn area(&self) -> i64
-    fn twice(&self) -> i64 { return self.area() * 2 }
+use std::fmt; trait Area {
+    fn area(&self) -> i64;
+    fn twice(&self) -> i64 { self.area() * 2 }
 }
 
 struct Sq { s: i64 }
 
 impl Area for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 
-impl Display for Sq {
-    fn to_string(&self) -> string { return "Sq({self.s})" }
+impl fmt::Display for Sq {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "Sq({})", self.s) }
 }
 
 fn total<T: Area>(xs: &[T]) -> i64 {
-    let mut acc: i64 = 0
-    for x in xs { acc = acc + x.twice() }
-    return acc
+    let mut acc: i64 = 0;
+    for x in xs { acc = acc + x.twice(); }
+    acc
 }
 
-fn main() -> i64 {
-    let sq: [Sq; 2] = [Sq { s: 2 }, Sq { s: 3 }]
-    println(total(sq[..]))
-    println(sq[1])
-    return 0
+fn main() {
+    let sq: [Sq; 2] = [Sq { s: 2 }, Sq { s: 3 }];
+    println!("{}", total(sq[..]));
+    println!("{}", sq[1]);
 }
 ```
 
@@ -1282,31 +1235,30 @@ A trait takes type parameters. `Collection<T>` is implemented once for every `Ba
 
 ```rust run
 trait Collection<T> {
-    fn add(&mut self, x: T)
-    fn size(&self) -> i64
-    fn is_empty(&self) -> bool { return self.size() == 0 }
+    fn add(&mut self, x: T);
+    fn size(&self) -> i64;
+    fn is_empty(&self) -> bool { self.size() == 0 }
 }
 
 struct Bag<T> { items: Vec<T> }
 
 impl<T> Collection<T> for Bag<T> {
-    fn add(&mut self, x: T) { self.items.push(x) }
-    fn size(&self) -> i64 { return self.items.len }
+    fn add(&mut self, x: T) { self.items.push(x); }
+    fn size(&self) -> i64 { self.items.len() }
 }
 
 fn fill<C: Collection<i64>>(c: &mut C, n: i64) {
-    for i in 0..n { c.add(i * i) }
+    for i in 0..n { c.add(i * i); }
 }
 
-fn main() -> i64 {
-    let mut b: Bag<i64> = Bag { items: Vec::new() }
-    println(b.is_empty())
-    fill(&mut b, 4)
-    println("{b.size()} {b.items[3]}")
-    let mut w: Bag<string> = Bag { items: Vec::new() }
-    w.add("one")
-    println(w.size())
-    return 0
+fn main() {
+    let mut b: Bag<i64> = Bag { items: Vec::new() };
+    println!("{}", b.is_empty());
+    fill(&mut b, 4);
+    println!("{} {}", b.size(), b.items[3]);
+    let mut w: Bag<String> = Bag { items: Vec::new() };
+    w.add("one");
+    println!("{}", w.size());
 }
 ```
 
@@ -1319,37 +1271,36 @@ true
 A user type gets `==` from `impl eq`, `<` and `>` from `impl ord`, and `println` from `impl Display`. `cmp` answers a negative number, zero or a positive number.
 
 ```rust run
-struct Version { major: i64, minor: i64 }
+use std::fmt; struct Version { major: i64, minor: i64 }
 
-impl eq for Version {
-    fn eq(&self, o: &Version) -> bool { return self.major == o.major and self.minor == o.minor }
+impl PartialEq for Version {
+    fn eq(&self, o: &Version) -> bool { self.major == o.major && self.minor == o.minor }
 }
 
-impl ord for Version {
+impl Ord for Version {
     fn cmp(&self, o: &Version) -> i64 {
-        if self.major != o.major { return self.major - o.major }
-        return self.minor - o.minor
+        if self.major != o.major { return self.major - o.major; }
+        self.minor - o.minor
     }
 }
 
-impl Display for Version {
-    fn to_string(&self) -> string { return "v{self.major}.{self.minor}" }
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "v{}.{}", self.major, self.minor) }
 }
 
-fn newest<T: ord>(xs: &[T]) -> T {
-    let mut best = xs[0]
+fn newest<T: Ord>(xs: &[T]) -> T {
+    let mut best = xs[0];
     for x in xs {
-        if x > best { best = x }
+        if x > best { best = x; }
     }
-    return best
+    best
 }
 
-fn main() -> i64 {
-    let vs: [Version; 3] = [Version { major: 1, minor: 4 }, Version { major: 2, minor: 0 }, Version { major: 1, minor: 10 }]
-    println(newest(vs[..]))
-    println(vs[0] < vs[2])
-    println(vs[1] == Version { major: 2, minor: 0 })
-    return 0
+fn main() {
+    let vs: [Version; 3] = [Version { major: 1, minor: 4 }, Version { major: 2, minor: 0 }, Version { major: 1, minor: 10 }];
+    println!("{}", newest(vs[..]));
+    println!("{}", vs[0] < vs[2]);
+    println!("{}", vs[1] == Version { major: 2, minor: 0 });
 }
 ```
 
@@ -1363,17 +1314,16 @@ A trait is not a type. There are no trait objects, and a trait written where a t
 
 ```rust refused E0750
 trait Shape {
-    fn area(&self) -> i64
+    fn area(&self) -> i64;
 }
 
 fn total(shapes: &[Shape]) -> i64 {
-    let mut t: i64 = 0
-    for s in shapes { t = t + s.area() }
-    return t
+    let mut t: i64 = 0;
+    for s in shapes { t = t + s.area(); }
+    t
 }
 
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 ```
 
@@ -1389,20 +1339,19 @@ error: aborting due to 1 previous error
 ```
 
 ```rust run
-nogc fn largest<T: ord>(xs: &[T]) -> T {
-    let mut best: T = xs[0]
+nogc fn largest<T: Ord>(xs: &[T]) -> T {
+    let mut best: T = xs[0];
     for x in xs {
-        if x > best { best = x }
+        if x > best { best = x; }
     }
-    return best
+    best
 }
 
-fn main() -> i64 {
-    let mut ns: Vec<i64> = vec[3, 9, 4]
-    println(largest(ns[0..3]))
-    let mut fs: Vec<f64> = vec[1.5, 0.25]
-    println(largest(fs[0..2]))
-    return 0
+fn main() {
+    let mut ns: Vec<i64> = vec![3, 9, 4];
+    println!("{}", largest(ns[0..3]));
+    let mut fs: Vec<f64> = vec![1.5, 0.25];
+    println!("{}", largest(fs[0..2]));
 }
 ```
 
@@ -1414,18 +1363,17 @@ fn main() -> i64 {
 A `nogc` function's type parameters are `nogc` too, so `largest` does not take a `&[string]`, and the compiler says what a `nogc` value is:
 
 ```rust refused E0730
-nogc fn largest<T: ord>(xs: &[T]) -> T {
-    let mut best: T = xs[0]
+nogc fn largest<T: Ord>(xs: &[T]) -> T {
+    let mut best: T = xs[0];
     for x in xs {
-        if x > best { best = x }
+        if x > best { best = x; }
     }
-    return best
+    best
 }
 
-fn main() -> i64 {
-    let mut ss: Vec<string> = vec["pear", "apple"]
-    println(largest(ss[0..2]))
-    return 0
+fn main() {
+    let mut ss: Vec<String> = vec!["pear", "apple"];
+    println!("{}", largest(ss[0..2]));
 }
 ```
 
@@ -1445,27 +1393,26 @@ error: aborting due to 1 previous error
 `eq` takes `string` and `bool`, and bounds combine with `+`:
 
 ```rust run
-fn count<T: eq>(xs: &[T], x: T) -> i64 {
-    let mut n: i64 = 0
+fn count<T: PartialEq>(xs: &[T], x: T) -> i64 {
+    let mut n: i64 = 0;
     for y in xs {
-        if y == x { n = n + 1 }
+        if y == x { n = n + 1; }
     }
-    return n
+    n
 }
 
-fn top<T: ord + nogc>(a: T, b: T) -> T {
-    if a > b { return a }
-    return b
+fn top<T: Ord + nogc>(a: T, b: T) -> T {
+    if a > b { return a; }
+    b
 }
 
-fn main() -> i64 {
-    let mut ws: Vec<string> = vec["a", "b", "a"]
-    println(count(ws[0..3], "a"))
-    let mut bs: Vec<bool> = vec[true, false, false]
-    println(count(bs[0..3], false))
-    println(top(3, 8))
-    println(top('a', 'z') as i64)
-    return 0
+fn main() {
+    let mut ws: Vec<String> = vec!["a", "b", "a"];
+    println!("{}", count(ws[0..3], "a"));
+    let mut bs: Vec<bool> = vec![true, false, false];
+    println!("{}", count(bs[0..3], false));
+    println!("{}", top(3, 8));
+    println!("{}", top('a', 'z') as i64);
 }
 ```
 
@@ -1480,11 +1427,10 @@ A name that is neither a builtin bound nor a trait in scope is refused:
 
 ```rust refused E0106
 fn show<T: Hash>(x: T) -> T {
-    return x
+    x
 }
 
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 ```
 
@@ -1502,17 +1448,16 @@ error: aborting due to 1 previous error
 `ord` includes `string`: `<`, `<=`, `>` and `>=` order two strings by their bytes, so a multi-byte character sorts after every ASCII one and a prefix sorts before the longer string:
 
 ```rust run
-fn first<T: ord>(xs: &[T]) -> T {
-    return xs[0]
+fn first<T: Ord>(xs: &[T]) -> T {
+    xs[0]
 }
 
-fn main() -> i64 {
-    let mut ss: Vec<string> = vec["pear", "apple"]
-    println(first(ss[0..2]))
-    println("apple" < "pear")
-    println("é" > "z")
-    println("ab" < "abc")
-    return 0
+fn main() {
+    let mut ss: Vec<String> = vec!["pear", "apple"];
+    println!("{}", first(ss[0..2]));
+    println!("{}", "apple" < "pear");
+    println!("{}", "é" > "z");
+    println!("{}", "ab" < "abc");
 }
 ```
 
@@ -1526,19 +1471,18 @@ true
 `str.compare(a, b)` answers `-1`, `0` or `1` over the same bytes, and `sort.strings` is the generic `sort.insertion_sort` on strings.
 
 ```rust run
-needs std.sort
-needs std.str
-needs std.io
+use std::sort;
+use std::str;
+use std::io;
 
-fn main() -> i64 {
-    println(str.compare("apple", "pear"))
-    let mut ss: Vec<string> = vec["pear", "apple", "fig"]
-    sort.strings(ss[0..3])
+fn main() {
+    println!("{}", str::compare("apple", "pear"));
+    let mut ss: Vec<String> = vec!["pear", "apple", "fig"];
+    sort::strings(ss[0..3]);
     for s in Vec::as_slice(ss) {
-        io.print_out(s)
-        io.print_out("\n")
+        io::print_out(s);
+        io::print_out("\n");
     }
-    return 0
 }
 ```
 
@@ -1554,14 +1498,13 @@ pear
 An `unsafe extern fn` declares a C function, and the program links against it. Every call of an external function sits inside an `unsafe { }` block; `unsafe` does not re-enable managed allocation in a `nogc` function.
 
 ```rust run
-unsafe extern nogc fn strlen(s: &u8) -> u64
+extern "C" { nogc fn strlen(s: &u8) -> u64; }
 
-fn main() -> i64 {
-    let s: string = "héllo\0"
-    let b = s.bytes
-    let n = unsafe { strlen(&b[0]) }
-    println(n)
-    return 0
+fn main() {
+    let s: String = "héllo\0";
+    let b = s.as_bytes();
+    let n = unsafe { strlen(&b[0]) };
+    println!("{}", n);
 }
 ```
 
@@ -1570,24 +1513,23 @@ fn main() -> i64 {
 ```
 
 ```rust refused E0617
-unsafe extern nogc fn strlen(s: &u8) -> u64
+extern "C" { nogc fn strlen(s: &u8) -> u64; }
 
-fn main() -> i64 {
-    let s: string = "abc\0"
-    let b = s.bytes
-    println(strlen(&b[0]))
-    return 0
+fn main() {
+    let s: String = "abc\0";
+    let b = s.as_bytes();
+    println!("{}", strlen(&b[0]));
 }
 ```
 
 ```rust refused E0727
-nogc fn make() -> i64 {
-    let n = unsafe { vec[1, 2] }
-    return 0
+use std::process::ExitCode; nogc fn make() -> i64 {
+    let n = unsafe { vec![1, 2] };
+    0
 }
 
-fn main() -> i64 {
-    return make()
+fn main() -> ExitCode {
+    return ExitCode::from(make() as u8);
 }
 ```
 
