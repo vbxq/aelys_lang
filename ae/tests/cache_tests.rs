@@ -84,6 +84,18 @@ fn a_module_behind_a_symlinked_directory_is_tracked() {
 }
 
 #[test]
+fn a_codegen_knob_in_the_environment_recompiles() {
+    let dir = project("c_env", "", PRINTS_ONE);
+    assert!(compiles(&ae(&dir, &["build"])));
+    let no_elision = [("AELYS_RC_ELISION", "0")];
+    assert!(compiles(&ae_with(&dir, &["build"], &no_elision)));
+    assert!(!compiles(&ae_with(&dir, &["build"], &no_elision)));
+    let outlined = [("AELYS_OUTLINE_STR_COUNTS", "1")];
+    assert!(compiles(&ae_with(&dir, &["build"], &outlined)));
+    assert!(compiles(&ae(&dir, &["build"])));
+}
+
+#[test]
 fn a_deleted_executable_is_rebuilt() {
     let dir = project("c_deleted", "", PRINTS_ONE);
     assert!(compiles(&ae(&dir, &["build"])));

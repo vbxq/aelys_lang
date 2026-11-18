@@ -25,6 +25,8 @@ enum Job {
     Check,
 }
 
+const CODEGEN_ENV: [&str; 2] = ["AELYS_RC_ELISION", "AELYS_OUTLINE_STR_COUNTS"];
+
 pub fn compile(
     shell: &Shell,
     package: &Package,
@@ -195,12 +197,19 @@ fn options(bin: &Bin, job: &Job, profile: Profile) -> String {
     let root = bin.path.display();
     match job {
         Job::Check => format!("kind=bin mode=check root={root}"),
-        Job::Build { link, .. } => format!(
-            "kind=bin mode=build root={root} -O{} runtime={} link={}",
-            profile.opt_level.numeric(),
-            profile.runtime.name(),
-            native::describe(link)
-        ),
+        Job::Build { link, .. } => {
+            let env: Vec<String> = CODEGEN_ENV
+                .iter()
+                .map(|name| format!("{name}={}", std::env::var(name).unwrap_or_default()))
+                .collect();
+            format!(
+                "kind=bin mode=build root={root} -O{} runtime={} link={} {}",
+                profile.opt_level.numeric(),
+                profile.runtime.name(),
+                native::describe(link),
+                env.join(" ")
+            )
+        }
     }
 }
 
