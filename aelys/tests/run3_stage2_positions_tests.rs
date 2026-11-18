@@ -1460,7 +1460,7 @@ const GROUP_C: &[Row] = &[
     Row {
         id: "C11",
         position: "Member.object without a deref",
-        class: Class::MustNotMoveRejected("E0304"),
+        class: Class::MustNotMoveAccepted,
         src: "struct S { r: Rc<i64>, n: i64 }\n\
               nogc fn peek(s: &S) -> i64 { return s.n }\n\
               fn main() -> i64 { return 0 }\n",
@@ -3071,7 +3071,7 @@ fn the_corpus_census_is_exact() {
             owed_rows,
             total
         ),
-        (31, 27, 0, 0, 15, 44, 4, 0, 121),
+        (31, 27, 0, 0, 16, 43, 4, 0, 121),
         "the class split changed"
     );
 }
