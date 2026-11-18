@@ -502,8 +502,8 @@ fn each_half_of_the_reserved_set_is_what_nm_says_about_it() {
 
     assert_eq!(
         measured_undefined.len(),
-        22,
-        "nm reports twenty two undefined symbols, got: {measured_undefined:?}"
+        23,
+        "nm reports twenty three undefined symbols, got: {measured_undefined:?}"
     );
     let imported_only: BTreeSet<String> = measured_undefined
         .difference(&measured_defined)
@@ -511,8 +511,8 @@ fn each_half_of_the_reserved_set_is_what_nm_says_about_it() {
         .collect();
     assert_eq!(
         imported_only.len(),
-        17,
-        "seventeen of the twenty two are imported and never defined, got: {imported_only:?}"
+        18,
+        "eighteen of the twenty three are imported and never defined, got: {imported_only:?}"
     );
     assert_eq!(
         imported_only,
@@ -528,8 +528,8 @@ fn each_half_of_the_reserved_set_is_what_nm_says_about_it() {
     );
     assert_eq!(
         RUNTIME_RESERVED_SYMBOLS.len(),
-        24,
-        "the union counts twenty four entries"
+        25,
+        "the union counts twenty five entries"
     );
 }
 

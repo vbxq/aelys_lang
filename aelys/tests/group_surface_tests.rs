@@ -335,7 +335,7 @@ fn group_surface_a_generic_over_two_parameters_monomorphizes_from_its_arguments(
 }
 
 #[test]
-fn group_surface_a_type_parameter_no_argument_names_is_the_call_sites_fault() {
+fn group_surface_a_type_parameter_named_only_by_the_annotation_is_inferred() {
     let h = Harness::new();
     let src = format!(
         "{GENERIC_PRELUDE}fn ok<T, E>(v: T) -> Res<T, E> {{ return Res::Ok(v) }}\n\
@@ -346,12 +346,8 @@ fn group_surface_a_type_parameter_no_argument_names_is_the_call_sites_fault() {
          \x20   return 0\n\
          }}\n"
     );
-    h.refuses(
-        "ok_two_params",
-        &src,
-        "E0902",
-        "the call site does not determine its type arguments",
-    );
+    let _pin = pin_legs("ok_two_params", LEVELS.len());
+    h.value_row("ok_two_params", &src, "9\n");
 }
 
 #[test]

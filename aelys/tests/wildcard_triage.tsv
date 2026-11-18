@@ -42,7 +42,6 @@ sema/src/infer/expr/call.rs	infer_result_builtin	1	InferType	_	unreachable!( )	c
 sema/src/infer/expr/call.rs	infer_result_builtin	2	InferType	_	unreachable!( )	correct-as-is	aggregate-only
 sema/src/infer/expr/call.rs	instantiate_inner	1	InferType	other	other.clone()	correct-as-is	carrier-walk
 sema/src/infer/expr/catch_expr.rs	infer_catch_expr	1	InferType	other	{ self.errors.push(TypeError::error_handling(  }	correct-as-is	aggregate-only
-sema/src/infer/expr/match_expr.rs	infer_match_typed	1	InferType	other	{ self.errors.push(TypeError { kind: TypeError }	correct-as-is	aggregate-only
 sema/src/infer/expr/member.rs	infer_field_assign_expr	1	InferType	_	None	correct-as-is	aggregate-only
 sema/src/infer/expr/member.rs	infer_field_assign_expr	2	InferType	_	None	correct-as-is	aggregate-only
 sema/src/infer/expr/member.rs	member_result_type	1	InferType	_other	InferType::Dynamic	correct-as-is	aggregate-only
@@ -153,3 +152,33 @@ sema/src/infer/traits.rs	type_key	1	InferType	other	other.to_string()	correct-as
 sema/src/infer/traits.rs	unifiable	1	InferType	_	None	correct-as-is	aggregate-only
 sema/src/infer/traits.rs	unifiable	2	InferType	_	a == b	correct-as-is	aggregate-only
 air/src/bir/build.rs	build_call_args	1	InferType	_	Vec::new()	correct-as-is	aggregate-only
+air/src/bir/build.rs	build_stmt	1	InferType	_	BirRvalue::Use(self.build_operand(initializer))	correct-as-is	aggregate-only
+air/src/lower/program.rs	const_struct_ref	1	AirType	_	crate::StructRef::plain(name)	correct-as-is	aggregate-only
+air/src/mono/mod.rs	rc_reachable	1	AirType	_	false	correct-as-is	carrier-walk
+sema/src/constraint/error.rs	value_in_unit_fn	1	InferType	_	format!( )	correct-as-is	delegates-to-a-decided-arm
+sema/src/constraint/error.rs	value_in_unit_fn	2	InferType	_	format!( )	correct-as-is	delegates-to-a-decided-arm
+sema/src/infer/decls/consts.rs	eval	2	InferType	_	Ok((Val::Int(*v as i128)	correct-as-is	refuses-adaptation
+sema/src/infer/decls/consts.rs	eval	3	InferType	_	Ok((Val::Float(*v)	correct-as-is	refuses-adaptation
+sema/src/infer/decls/consts.rs	natural	2	InferType	_	match self.natural(owner	correct-as-is	delegates-to-a-decided-arm
+sema/src/infer/expr/match_expr.rs	check_struct_pattern	1	InferType	_	None	correct-as-is	aggregate-only
+sema/src/infer/expr/match_expr.rs	check_variant_pattern	1	InferType	other	{ self.pattern_mismatch( format!( , source_typ }	correct-as-is	aggregate-only
+sema/src/infer/expr/match_expr.rs	infer_match_arms_dynamic	1	InferType	other	TypedPattern::new( TypedPatternKind::Wildcard	correct-as-is	aggregate-only
+sema/src/infer/expr/match_expr.rs	infer_match_typed	1	InferType	_	typed_scrutinee	correct-as-is	aggregate-only
+sema/src/infer/expr/member.rs	infer_struct_literal	1	InferType	_	type_params.iter().map(|_| self.type_gen.fresh()	correct-as-is	aggregate-only
+sema/src/infer/expr/member.rs	slot_mentions_param	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/infer/expr/member.rs	tuple_element_type	1	InferType	other	{ self.errors.push(TypeError::member_access( f }	correct-as-is	aggregate-only
+sema/src/infer/expr/primary.rs	vec_receiver_inner	1	InferType	other	{ self.errors.push(TypeError { kind: TypeError }	correct-as-is	aggregate-only
+sema/src/infer/stmt/implicit.rs	infer_stmt_with_implicit_return	1	InferType	_	{ let typed_stmt = self.infer_stmt(stmt); if ! }	correct-as-is	aggregate-only
+sema/src/infer/stmt/mod.rs	bind_pattern_parts	1	InferType	other	{ self.errors.push(TypeError::coded( , format! }	correct-as-is	aggregate-only
+sema/src/infer/stmt/mod.rs	infer_let_pattern	1	InferType	_	InferType::Dynamic	correct-as-is	aggregate-only
+sema/src/infer/stmt/return_stmt.rs	infer_return_stmt	1	InferType	_	ConstraintReason::Return { func_name }	correct-as-is	aggregate-only
+sema/src/infer/structs.rs	names_with_other_args	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/infer/substitute/tuples.rs	leaf_pairs	1	InferType	_	out.push((l.clone()	correct-as-is	aggregate-only
+sema/src/infer/substitute/tuples.rs	printable_leaves	1	InferType	_	true	correct-as-is	carrier-walk
+sema/src/infer/usefulness.rs	check_match_usefulness	1	InferType	_		correct-as-is	aggregate-only
+sema/src/infer/usefulness.rs	show	1	InferType	_	{ let inner: Vec<String> = args.iter().map(|a| }	correct-as-is	aggregate-only
+sema/src/types/infer_type.rs	int_bounds	1	InferType	_	None	correct-as-is	refuses-adaptation
+sema/src/types/infer_type.rs	satisfies_eq	1	InferType	_	Self::eq_types().contains(self)	correct-as-is	aggregate-only
+sema/src/types/infer_type.rs	subst_params	1	InferType	other	other.clone()	correct-as-is	carrier-walk
+sema/src/types/type_table.rs	scan_rc_outside_tags	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/types/type_table.rs	scan_rc_outside_tags	2	InferType	_	d	correct-as-is	carrier-walk

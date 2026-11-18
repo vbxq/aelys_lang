@@ -335,6 +335,7 @@ pub const RUNTIME_IMPORTED_SYMBOLS: &[&str] = &[
     "malloc_usable_size",
     "memcmp",
     "memcpy",
+    "memmove",
     "realloc",
     "snprintf",
     "stderr",

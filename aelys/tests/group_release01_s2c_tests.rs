@@ -598,9 +598,9 @@ fn release01_71_a_backend_only_refusal_is_named_in_sema_at_the_expression() {
                 src: "struct S { a: i64 }\nfn main() -> i64 {\n    let s = S { a: 1 }\n    println(\"{s}\")\n    return 0\n}\n",
                 module: None,
                 expect: Expect::Refused {
-                    code: "E0902",
+                    code: "E0732",
                     at: (4, 13),
-                    says: "printing a struct is not supported yet; print its fields",
+                    says: "`S` does not implement `Display`; write `impl Display for S` to print it",
                     alone: false,
                 },
             },
@@ -609,9 +609,9 @@ fn release01_71_a_backend_only_refusal_is_named_in_sema_at_the_expression() {
                 src: "struct S { a: i64 }\nfn main() -> i64 {\n    let s = S { a: 1 }\n    println(s)\n    return 0\n}\n",
                 module: None,
                 expect: Expect::Refused {
-                    code: "E0902",
+                    code: "E0732",
                     at: (4, 13),
-                    says: "printing a struct is not supported yet; print its fields",
+                    says: "`S` does not implement `Display`; write `impl Display for S` to print it",
                     alone: false,
                 },
             },

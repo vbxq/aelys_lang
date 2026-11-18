@@ -1633,8 +1633,8 @@ const GROUP_C: &[Row] = &[
     // the second of the two rows that bound the projection chain: a vec cannot sit under a field
     Row {
         id: "C27",
-        position: "a struct field of Vec type",
-        class: Class::MustNotMoveRejected("E0902"),
+        position: "a struct field of Vec type, read through a shared reference",
+        class: Class::MustNotMoveAccepted,
         src: "struct S { v: Vec<i64> }\n\
               nogc fn f(s: &S) -> i64 { return 0 }\n\
               fn main() -> i64 { return 0 }\n",
@@ -3071,7 +3071,7 @@ fn the_corpus_census_is_exact() {
             owed_rows,
             total
         ),
-        (31, 27, 0, 0, 22, 37, 4, 0, 121),
+        (31, 27, 0, 0, 23, 36, 4, 0, 121),
         "the class split changed"
     );
 }

@@ -493,17 +493,38 @@ fn main() -> i64 {
 }
 
 #[test]
-fn w17_ref_to_rc_at_a_let_is_still_e0410() {
-    let err = rejects(
+fn w17_ref_to_rc_at_a_let_reads_through_and_stays_balanced() {
+    accepts_and_runs(
         r#"
+fn get(p: &Rc<i64>) -> i64 { return Rc::get(*p) }
 fn main() -> i64 {
     let r: Rc<i64> = Rc::new(5)
     let p: &Rc<i64> = &r
+    println(get(p))
+    println(Rc::get(*p))
+    return 0
+}
+"#,
+        "5\n5\n",
+        0,
+        "allocs=1 frees=1",
+    );
+}
+
+#[test]
+fn w17b_writing_an_rc_while_a_reference_to_it_is_live_is_e0711() {
+    let err = rejects(
+        r#"
+fn main() -> i64 {
+    let mut r: Rc<i64> = Rc::new(5)
+    let p: &Rc<i64> = &r
+    r = Rc::new(9)
+    println(Rc::get(*p))
     return 0
 }
 "#,
     );
-    assert!(err.contains("E0410"), "got: {err}");
+    assert!(err.contains("E0711"), "got: {err}");
 }
 
 #[test]

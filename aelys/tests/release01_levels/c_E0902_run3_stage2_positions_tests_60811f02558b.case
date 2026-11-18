@@ -1,3 +1,0 @@
-struct G { n: Vec<i64> }
-fn main() {
-}
