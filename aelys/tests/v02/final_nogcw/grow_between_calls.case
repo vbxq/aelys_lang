@@ -1,0 +1,19 @@
+struct R { v: Vec<i64>, total: i64 }
+
+nogc fn bump_last(r: &mut R) {
+    let n = r.v.len()
+    r.v[n - 1] = r.v[n - 1] * 2 + n
+    r.total = r.total + r.v[n - 1]
+}
+
+fn main() -> i64 {
+    let mut r = R { v: Vec::new(), total: 0 }
+    for i in 0..200 {
+        r.v.push(i)
+        bump_last(&mut r)
+    }
+    let mut s: i64 = 0
+    for i in 0..200 { s = s + r.v[i] }
+    println("{r.total} {s} {r.v[0]} {r.v[199]}")
+    return 0
+}

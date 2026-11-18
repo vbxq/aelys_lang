@@ -4,12 +4,13 @@ use crate::lowering::body::FunctionCodegen;
 use crate::types::{air_basic_type_to_llvm, air_type_to_llvm};
 use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use aelys_air::{
-    AirFunction, AirProgram, AirType, CallingConv as AirCallingConv, FunctionAttribs, InlineHint,
-    layout::enum_has_data, symbols::NATIVE_ENTRY_SYMBOL,
+    AirFunction, AirProgram, AirType, CallingConv as AirCallingConv, FunctionAttribs, GcMode,
+    InlineHint, layout::enum_has_data, symbols::NATIVE_ENTRY_SYMBOL,
 };
 use inkwell::AddressSpace;
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::llvm_sys::LLVMCallConv;
+use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
 use inkwell::values::FunctionValue;
 use std::collections::HashMap;
@@ -54,8 +55,47 @@ impl CodegenContext {
             if function.is_extern && matches!(function.calling_conv, AirCallingConv::C) {
                 self.apply_c_integer_extension(fn_value, function, use_sret)?;
             }
+            if function.attributes.no_gc
+                && function.gc_mode != GcMode::Manual
+                && !function.is_extern
+                && matches!(function.calling_conv, AirCallingConv::Aelys)
+            {
+                let offset = u32::from(use_sret) + u32::from(function_has_implicit_env(function));
+                self.mark_struct_refs_dereferenceable(fn_value, function, offset)?;
+            }
         }
 
+        Ok(())
+    }
+
+    // nothing a nogc body runs can free the struct behind a reference, so llvm may load from it early
+    fn mark_struct_refs_dereferenceable(
+        &self,
+        fn_value: FunctionValue<'static>,
+        function: &AirFunction,
+        offset: u32,
+    ) -> Result<(), CodegenError> {
+        let layout = self.module.get_data_layout();
+        let Some(repr) = layout.as_str().to_str().ok().filter(|r| !r.is_empty()) else {
+            return Ok(());
+        };
+        let td = TargetData::create(repr);
+        let deref = Attribute::get_named_enum_kind_id("dereferenceable_or_null");
+        let align = Attribute::get_named_enum_kind_id("align");
+        for (index, param) in function.params.iter().enumerate() {
+            let AirType::Ptr(pointee) = &param.ty else {
+                continue;
+            };
+            if !matches!(pointee.as_ref(), AirType::Struct(_)) {
+                continue;
+            }
+            let ty = air_basic_type_to_llvm(pointee, self.context)?;
+            let at = AttributeLoc::Param(index as u32 + offset);
+            let size = td.get_abi_size(&ty);
+            fn_value.add_attribute(at, self.context.create_enum_attribute(deref, size));
+            let alignment = u64::from(td.get_abi_alignment(&ty));
+            fn_value.add_attribute(at, self.context.create_enum_attribute(align, alignment));
+        }
         Ok(())
     }
 

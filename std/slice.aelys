@@ -78,6 +78,12 @@ pub fn swap<T>(s: &mut [T], i: i64, j: i64) {
     s[j] = t;
 }
 
+pub fn copy_from_slice<T>(s: &mut [T], src: &[T]) {
+    // a length mismatch panics through an out of bounds read
+    if s.len != src.len { let past_end: T = src[src.len] }
+    for i in 0..s.len { s[i] = src[i] }
+}
+
 pub fn reverse<T>(s: &mut [T]) {
     let mut i: i64 = 0;
     let mut j: i64 = s.len() - 1;
@@ -93,6 +99,7 @@ impl<T> [T] {
     pub fn last(&self) -> Option<T> { return last(self) }
     pub fn fill(&mut self, x: T) { fill(self, x) }
     pub fn swap(&mut self, i: i64, j: i64) { swap(self, i, j) }
+    pub fn copy_from_slice(&mut self, src: &[T]) { copy_from_slice(self, src) }
     pub fn reverse(&mut self) { reverse(self) }
     pub fn sort_by(&mut self, f: fn(T, T) -> i64) { sort::sort_by(self, f) }
 }

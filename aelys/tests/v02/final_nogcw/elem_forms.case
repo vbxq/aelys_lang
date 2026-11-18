@@ -1,0 +1,69 @@
+struct Plane { height: i32, picnum: i32, top: [u8; 8] }
+
+impl Plane {
+    fn raise(&mut self, d: i32) { self.height = self.height + d }
+}
+
+struct Inner { buf: Vec<i64>, tag: i64 }
+
+struct State {
+    planes: Vec<Plane>,
+    hits: Vec<i64>,
+    weights: Vec<f64>,
+    flags: Vec<bool>,
+    small: Vec<i32>,
+    inner: Inner,
+    count: i64,
+}
+
+nogc fn find_plane(s: &mut State, height: i32, picnum: i32) -> i64 {
+    for i in 0..s.count {
+        if s.planes[i].height == height and s.planes[i].picnum == picnum { return i }
+    }
+    let k = s.count
+    s.planes[k].height = height
+    s.planes[k].picnum = picnum
+    s.planes[k].top[5] = 255 as u8
+    s.count = k + 1
+    return k
+}
+
+nogc fn bump(s: &mut State, i: i64) {
+    s.hits[i] += 2
+    s.hits[i] = s.hits[i] * 3
+    s.weights[i] = s.weights[i] * 0.5
+    s.flags[i] = not s.flags[i]
+    s.small[i] = s.small[i] - 7 as i32
+    s.inner.buf[i] = s.inner.buf[i] + 100
+    s.planes[i].raise(1000 as i32)
+}
+
+nogc fn poke(t: &mut [i64], v: i64) {
+    t[0] = v
+}
+
+nogc fn through(s: &mut State) {
+    bump(s, 1)
+    poke(s.inner.buf[0..2], 77)
+}
+
+fn main() -> i64 {
+    let mut s = State { planes: Vec::new(), hits: Vec::new(), weights: Vec::new(), flags: Vec::new(), small: Vec::new(), inner: Inner { buf: Vec::new(), tag: 9 }, count: 0 }
+    for i in 0..4 {
+        s.planes.push(Plane { height: 0 as i32, picnum: 0 as i32, top: [0 as u8; 8] })
+        s.hits.push(i * 10)
+        s.weights.push(1.5)
+        s.flags.push(i == 2)
+        s.small.push(i as i32)
+        s.inner.buf.push(i)
+    }
+    let a = find_plane(&mut s, 10 as i32, 3 as i32)
+    let b = find_plane(&mut s, 20 as i32, 3 as i32)
+    let c = find_plane(&mut s, 10 as i32, 3 as i32)
+    bump(&mut s, 2)
+    through(&mut s)
+    println("{a} {b} {c} {s.count} {s.planes[1].height} {s.planes[1].top[5]} {s.planes[2].height}")
+    println("{s.hits[2]} {s.weights[2]} {s.flags[2]} {s.small[2]} {s.inner.buf[2]}")
+    println("{s.hits[1]} {s.flags[1]} {s.small[1]} {s.inner.buf[0]} {s.inner.buf[1]} {s.planes[1].height}")
+    return 0
+}

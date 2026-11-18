@@ -1263,7 +1263,13 @@ references are not supported.",
         explanation: "\
 A function declared `nogc` was inferred to reach managed (reference-counted
 or heap-allocating) memory, directly or through a call it makes. A `nogc`
-function must stay free of managed effects.",
+function must stay free of managed effects.
+
+Writing an element of a `Vec` is allowed in a `nogc` function: it never
+copies the buffer and panics instead if the buffer is shared. Managed code
+calls `v.make_unique()` before the call when the buffer may be shared.
+Growing or shrinking a `Vec` (`push`, `insert`, `pop`, `remove`, `clear`)
+stays refused.",
         severity: Severity::Error,
     },
     DiagnosticInfo {

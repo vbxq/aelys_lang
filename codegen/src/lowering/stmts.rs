@@ -38,7 +38,11 @@ impl<'a> FunctionCodegen<'a> {
                     Place::Local(local) => self.assign_local(*local, value),
                     _ => {
                         let ptr = self.place_ptr(place)?;
-                        self.store_value(ptr, value)
+                        self.store_value(ptr, value)?;
+                        if matches!(place, Place::Index(..)) && is_scalar(&expected_ty) {
+                            self.mark_scalar_elem_store()?;
+                        }
+                        Ok(())
                     }
                 }
             }
@@ -287,6 +291,7 @@ impl<'a> FunctionCodegen<'a> {
 
     pub(crate) fn elem_base(&mut self, root: LocalId) -> Result<(ElemBase, AirType), CodegenError> {
         let root_ty = self.local_air_type(root)?.clone();
+        let root_is_ptr = matches!(root_ty, AirType::Ptr(_));
         let (header_ptr, collection) = match &root_ty {
             AirType::Ptr(inner) | AirType::Rc(inner) => {
                 let p = self.load_local(root)?.into_pointer_value();
@@ -347,8 +352,7 @@ impl<'a> FunctionCodegen<'a> {
                 let data = self
                     .builder
                     .build_load(ptr_ty, data_ptr_slot, "buf_ptr")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                    .into_pointer_value();
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                 let len_slot = self
                     .builder
                     .build_struct_gep(hdr_struct, header_ptr, 1, "buf_len_slot")
@@ -356,9 +360,18 @@ impl<'a> FunctionCodegen<'a> {
                 let len = self
                     .builder
                     .build_load(self.context.i64_type(), len_slot, "buf_len")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                    .into_int_value();
-                Ok((ElemBase::Buffer { data, len }, *inner))
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                if matches!(collection, AirType::Vec(_)) && root_is_ptr {
+                    self.mark_vec_header_load(data)?;
+                    self.mark_vec_header_load(len)?;
+                }
+                Ok((
+                    ElemBase::Buffer {
+                        data: data.into_pointer_value(),
+                        len: len.into_int_value(),
+                    },
+                    *inner,
+                ))
             }
             other @ (AirType::I8
             | AirType::I16
@@ -598,4 +611,22 @@ impl<'a> FunctionCodegen<'a> {
             }
         }
     }
+}
+
+fn is_scalar(ty: &AirType) -> bool {
+    matches!(
+        ty,
+        AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+    )
 }

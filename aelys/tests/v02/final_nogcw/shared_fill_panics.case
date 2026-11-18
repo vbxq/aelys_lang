@@ -1,0 +1,17 @@
+needs std.slice
+
+struct R { screen: Vec<u8>, w: i64 }
+
+nogc fn clear(r: &mut R) {
+    r.screen.fill(5 as u8)
+}
+
+fn main() -> i64 {
+    let mut r = R { screen: Vec::new(), w: 3 }
+    for i in 0..4 { r.screen.push(1 as u8) }
+    let keep = r.screen
+    println("{keep[1]}")
+    clear(&mut r)
+    println("unreachable {r.screen[1]}")
+    return 0
+}

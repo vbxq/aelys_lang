@@ -95,6 +95,7 @@ fn base_unless_inside_a_buffer(object: &TypedExpr) -> Pos {
 struct Witness {
     rank: u8,
     site: Option<(Span, String)>,
+    nogc: bool,
 }
 
 impl Witness {
@@ -104,15 +105,29 @@ impl Witness {
             self.site = Some((span, name));
         }
     }
+
+    // a nogc fn lowers the store to a uniqueness check that panics instead of detaching
+    fn buffer_store(&mut self, set: &mut EffectSet, span: Span, what: &str) {
+        if self.nogc {
+            set.insert(Effect::Panic);
+        } else {
+            set.insert(Effect::Managed);
+            self.record(RANK_INTRINSIC, span, what.to_string());
+        }
+    }
 }
 
 pub fn intrinsic_effects(
     body: &[TypedStmt],
     params: &[TypedParam],
     tt: &TypeTable,
+    nogc: bool,
 ) -> (EffectSet, Option<(Span, String)>) {
     let mut set = EffectSet::EMPTY;
-    let mut w = Witness::default();
+    let mut w = Witness {
+        nogc,
+        ..Witness::default()
+    };
     for p in params {
         if category(&p.ty, tt).is_managed() {
             set.insert(Effect::Managed);
@@ -144,6 +159,7 @@ fn is_managed_alloc_variant(enum_name: &str, variant: &str) -> bool {
             | ("Vec", "insert")
             | ("Vec", "remove")
             | ("Vec", "clear")
+            | ("Vec", "make_unique")
             | ("Vec", "with_capacity")
             | ("Vec", "reserve")
             | ("string", "substring_bytes")
@@ -333,12 +349,7 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
         } => {
             set.insert(Effect::Panic);
             if peels_to_vec(&object.ty) || chain_crosses_vec(object) {
-                set.insert(Effect::Managed);
-                w.record(
-                    RANK_INTRINSIC,
-                    expr.span,
-                    "a store into a buffer that may be shared".to_string(),
-                );
+                w.buffer_store(set, expr.span, "a store into a buffer that may be shared");
             }
             walk_expr(object, tt, set, w, Pos::Base);
             walk_expr(index, tt, set, w, Pos::Value);
@@ -346,12 +357,7 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
         }
         TypedExprKind::FieldAssign { object, value, .. } => {
             if chain_crosses_vec(object) {
-                set.insert(Effect::Managed);
-                w.record(
-                    RANK_INTRINSIC,
-                    expr.span,
-                    "a store into a buffer that may be shared".to_string(),
-                );
+                w.buffer_store(set, expr.span, "a store into a buffer that may be shared");
             }
             walk_expr(object, tt, set, w, Pos::Base);
             walk_expr(value, tt, set, w, Pos::Value);
@@ -369,17 +375,27 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             if matches!(expr.ty, InferType::Slice { mutable: true, .. })
                 && (peels_to_vec(&object.ty) || chain_crosses_vec(object))
             {
-                set.insert(Effect::Managed);
-                w.record(
-                    RANK_INTRINSIC,
+                w.buffer_store(
+                    set,
                     expr.span,
-                    "a mutable view of a buffer that may be shared".to_string(),
+                    "a mutable view of a buffer that may be shared",
                 );
             }
             walk_expr(object, tt, set, w, base_unless_inside_a_buffer(object));
             walk_expr(range, tt, set, w, Pos::Value);
         }
-        TypedExprKind::Reference { operand, .. } => {
+        TypedExprKind::Reference {
+            operand,
+            mutable,
+            receiver_of,
+        } => {
+            if *mutable && receiver_of.is_some() && chain_crosses_vec(operand) {
+                w.buffer_store(
+                    set,
+                    expr.span,
+                    "a mutable borrow into a buffer that may be shared",
+                );
+            }
             walk_expr(operand, tt, set, w, base_unless_inside_a_buffer(operand))
         }
         TypedExprKind::Deref(inner) => walk_expr(inner, tt, set, w, Pos::Value),

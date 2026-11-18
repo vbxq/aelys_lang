@@ -372,13 +372,8 @@ impl<'a> FunctionCodegen<'a> {
         local: LocalId,
         inner: &AirType,
         through_ptr: bool,
+        panic_if_shared: bool,
     ) -> Result<(), CodegenError> {
-        let glue = self.vec_elem_glue(inner, true);
-        let detach_fn = match glue {
-            Some(_) => self.ensure_vec_detach_glue_function(),
-            None => self.ensure_vec_detach_function(*inner == AirType::Str),
-        };
-        let elem_size = self.air_type_size(inner)? as u64;
         let v_alloca = if through_ptr {
             let p = self.load_local(local)?.into_pointer_value();
             self.emit_null_check(p)?;
@@ -391,8 +386,11 @@ impl<'a> FunctionCodegen<'a> {
         let data_ptr = self
             .builder
             .build_load(ptr_ty, v_alloca, "cow_dataptr")
-            .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-            .into_pointer_value();
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        if through_ptr {
+            self.mark_vec_header_load(data_ptr)?;
+        }
+        let data_ptr = data_ptr.into_pointer_value();
 
         let current_fn = self.function;
         let chk_block = self.context.append_basic_block(current_fn, "cow_chk");
@@ -438,19 +436,37 @@ impl<'a> FunctionCodegen<'a> {
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
         self.builder.position_at_end(slow_block);
-        let elem_size_val = self.context.i64_type().const_int(elem_size, false);
-        let zero = self.context.i64_type().const_zero();
-        let mut detach_args: Vec<inkwell::values::BasicMetadataValueEnum<'static>> =
-            vec![v_alloca.into(), elem_size_val.into(), zero.into()];
-        if let Some(dup) = glue {
-            detach_args.push(dup.as_global_value().as_pointer_value().into());
+        if panic_if_shared {
+            let panic_fn = self.ensure_panic_function();
+            let (msg_ptr, msg_len) = self.global_string_ptr_len("nogc write to a shared buffer")?;
+            let msg_len_val = self.context.i64_type().const_int(msg_len, false);
+            self.builder
+                .build_call(panic_fn, &[msg_ptr.into(), msg_len_val.into()], "")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            self.builder
+                .build_unreachable()
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        } else {
+            let glue = self.vec_elem_glue(inner, true);
+            let detach_fn = match glue {
+                Some(_) => self.ensure_vec_detach_glue_function(),
+                None => self.ensure_vec_detach_function(*inner == AirType::Str),
+            };
+            let elem_size = self.air_type_size(inner)? as u64;
+            let elem_size_val = self.context.i64_type().const_int(elem_size, false);
+            let zero = self.context.i64_type().const_zero();
+            let mut detach_args: Vec<inkwell::values::BasicMetadataValueEnum<'static>> =
+                vec![v_alloca.into(), elem_size_val.into(), zero.into()];
+            if let Some(dup) = glue {
+                detach_args.push(dup.as_global_value().as_pointer_value().into());
+            }
+            self.builder
+                .build_call(detach_fn, &detach_args, "")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            self.builder
+                .build_unconditional_branch(cont_block)
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         }
-        self.builder
-            .build_call(detach_fn, &detach_args, "")
-            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-        self.builder
-            .build_unconditional_branch(cont_block)
-            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
         self.builder.position_at_end(cont_block);
         Ok(())

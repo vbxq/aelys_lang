@@ -1,0 +1,23 @@
+struct M { x: i64 }
+
+impl M {
+    fn bump(&mut self) { self.x = self.x + 1 }
+}
+
+struct W { ms: Vec<M> }
+
+fn helper(w: &mut W) {
+    w.ms[0].bump()
+}
+
+nogc fn top(w: &mut W) {
+    helper(w)
+}
+
+fn main() -> i64 {
+    let mut w = W { ms: Vec::new() }
+    w.ms.push(M { x: 10 })
+    top(&mut w)
+    println("{w.ms[0].x}")
+    return 0
+}

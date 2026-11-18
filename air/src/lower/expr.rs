@@ -433,6 +433,12 @@ impl<'a> LoweringContext<'a> {
                         },
                         sp,
                     )
+                } else if self.in_nogc && Self::roots_a_vec(&object.ty) {
+                    // through the address the header loads stay hoistable: nogc never resizes a vec
+                    match self.projection_base(object) {
+                        Some(addr) => Operand::Copy(addr.ptr),
+                        None => self.lower_expr(object),
+                    }
                 } else {
                     self.lower_expr(object)
                 };
@@ -670,6 +676,16 @@ impl<'a> LoweringContext<'a> {
                 }
                 if enum_name == "Vec" && variant == "clear" {
                     return self.lower_vec_clear(args, sp);
+                }
+                if enum_name == "Vec" && variant == "make_unique" {
+                    match self.projection_base_mode(&args[0], PlaceMode::Store) {
+                        Some(addr) => self.emit_cow_detach(addr.ptr, sp),
+                        None => self.report_ice(
+                            "ICE: Vec::make_unique target denotes no storage at AIR lowering"
+                                .to_string(),
+                        ),
+                    }
+                    return Operand::Const(AirConst::Null);
                 }
                 if enum_name == "Vec" && variant == "with_capacity" {
                     return self.lower_vec_with_capacity(&expr.ty, args, sp);

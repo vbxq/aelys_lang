@@ -36,6 +36,7 @@ impl<'a> FunctionCodegen<'a> {
     fn generate_vec_detach_call(
         &mut self,
         args: &[Operand],
+        panic_if_shared: bool,
     ) -> Result<Option<BasicValueEnum<'static>>, CodegenError> {
         let [Operand::Copy(local) | Operand::Move(local)] = args else {
             return Err(CodegenError::UnsupportedInstruction(
@@ -58,7 +59,7 @@ impl<'a> FunctionCodegen<'a> {
                 )));
             }
         };
-        self.emit_vec_detach(*local, &inner, true)?;
+        self.emit_vec_detach(*local, &inner, true, panic_if_shared)?;
         Ok(None)
     }
 
@@ -70,8 +71,8 @@ impl<'a> FunctionCodegen<'a> {
     ) -> Result<Option<BasicValueEnum<'static>>, CodegenError> {
         // given as `void(ptr,ptr,i64)`, which is push's abi, and it loses the inline `ugt 1`
         if let Callee::Named(name) = callee {
-            if name == "__aelys_vec_detach" {
-                return self.generate_vec_detach_call(args);
+            if name == "__aelys_vec_detach" || name == "__aelys_vec_require_unique" {
+                return self.generate_vec_detach_call(args, name == "__aelys_vec_require_unique");
             }
             if name == "__aelys_cycle_poll" && args.is_empty() {
                 self.emit_cycle_poll()?;

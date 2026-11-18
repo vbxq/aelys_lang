@@ -254,8 +254,26 @@ impl TypeInference {
                 span,
             ));
         }
+        if matches!(base, InferType::Vec(_)) && !Self::vec_receiver_method(member) {
+            let key = crate::infer::impls::SLICE_KEY;
+            if let Some(entry) = self.builtin_entry(key, member) {
+                return Ok(self.builtin_method_call(
+                    typed_object,
+                    &base,
+                    via_ref,
+                    key,
+                    entry,
+                    args,
+                    span,
+                ));
+            }
+        }
         if let Some(key) = crate::infer::impls::builtin_type_key(&base)
-            && let Some(module) = std_method_module(key, member)
+            && let Some(module) = std_method_module(key, member).or_else(|| {
+                matches!(base, InferType::Vec(_))
+                    .then(|| std_method_module(crate::infer::impls::SLICE_KEY, member))
+                    .flatten()
+            })
         {
             self.errors.push(TypeError::coded(
                 "E0304",
@@ -548,7 +566,7 @@ impl TypeInference {
             other => other.clone(),
         };
         let recv_elem = match base {
-            InferType::Array(elem, _) => Some(InferType::Slice {
+            InferType::Array(elem, _) | InferType::Vec(elem) => Some(InferType::Slice {
                 elem: elem.clone(),
                 mutable: false,
             }),
@@ -611,7 +629,7 @@ impl TypeInference {
                 }
                 object
             }
-            InferType::Array(elem, _) => {
+            InferType::Array(elem, _) | InferType::Vec(elem) => {
                 let writable = {
                     let env = &self.env;
                     crate::place_spine::place_is_writable(&object, &|n: &str| env.is_mutable(n))
@@ -648,7 +666,8 @@ impl TypeInference {
                     },
                     InferType::Slice {
                         elem: elem.clone(),
-                        mutable: writable,
+                        // a mutable view of a vec detaches its buffer, so only a writer asks for one
+                        mutable: writable && (wants_mut || matches!(base, InferType::Array(..))),
                     },
                     recv_span,
                 )

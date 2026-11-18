@@ -168,9 +168,14 @@ impl<'a> LoweringContext<'a> {
 
     /// the buffer must be unique *before* the element address exists: the detach repoints
     pub(super) fn emit_cow_detach(&mut self, vec_addr: LocalId, sp: Option<Span>) {
+        let func = if self.in_nogc {
+            "__aelys_vec_require_unique"
+        } else {
+            "__aelys_vec_detach"
+        };
         self.emit(
             AirStmtKind::CallVoid {
-                func: Callee::Named("__aelys_vec_detach".to_string()),
+                func: Callee::Named(func.to_string()),
                 args: vec![Operand::Copy(vec_addr)],
             },
             sp,

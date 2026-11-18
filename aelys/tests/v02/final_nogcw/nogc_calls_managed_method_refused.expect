@@ -1,0 +1,2 @@
+refuse E0727
+a mutable borrow into a buffer that may be shared

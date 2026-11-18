@@ -1,0 +1,11 @@
+struct R { screen: Vec<u8>, w: i64 }
+
+nogc fn fix(r: &mut R) {
+    r.screen.make_unique()
+}
+
+fn main() -> i64 {
+    let mut r = R { screen: Vec::new(), w: 3 }
+    fix(&mut r)
+    return 0
+}

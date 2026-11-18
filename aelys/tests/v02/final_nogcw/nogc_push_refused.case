@@ -1,0 +1,11 @@
+struct R { screen: Vec<u8>, w: i64 }
+
+nogc fn grow(r: &mut R) {
+    r.screen.push(1 as u8)
+}
+
+fn main() -> i64 {
+    let mut r = R { screen: Vec::new(), w: 3 }
+    grow(&mut r)
+    return 0
+}

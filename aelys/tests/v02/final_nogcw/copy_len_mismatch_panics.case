@@ -1,0 +1,19 @@
+needs std.slice
+
+struct R { row: Vec<u8>, w: i64 }
+
+nogc fn save(r: &mut R, src: &[u8]) {
+    r.row.copy_from_slice(src)
+}
+
+fn main() -> i64 {
+    let mut r = R { row: Vec::new(), w: 0 }
+    for i in 0..4 { r.row.push(0 as u8) }
+    let a: [u8; 4] = [1 as u8, 2 as u8, 3 as u8, 4 as u8]
+    save(&mut r, a[0..4])
+    println("{r.row[3]}")
+    let b: [u8; 3] = [9 as u8, 9 as u8, 9 as u8]
+    save(&mut r, b[0..3])
+    println("unreachable")
+    return 0
+}

@@ -1056,7 +1056,10 @@ impl TypeInference {
                     self.check_write_target(&args[0], "a `Vec::push`", expr.span);
                 }
                 if enum_name == "Vec"
-                    && matches!(variant.as_str(), "pop" | "insert" | "remove" | "clear")
+                    && matches!(
+                        variant.as_str(),
+                        "pop" | "insert" | "remove" | "clear" | "make_unique"
+                    )
                     && !args.is_empty()
                 {
                     self.check_write_target(&args[0], &format!("a `Vec::{variant}`"), expr.span);

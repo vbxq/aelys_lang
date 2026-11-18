@@ -232,8 +232,8 @@ impl TypeInference {
         if enum_name == "Vec" && variant == "insert" {
             return self.infer_vec_insert(args, span);
         }
-        if enum_name == "Vec" && (variant == "remove" || variant == "clear") {
-            return self.infer_vec_remove_or_clear(variant, args, span);
+        if enum_name == "Vec" && matches!(variant, "remove" | "clear" | "make_unique") {
+            return self.infer_vec_mutator(variant, args, span);
         }
         if enum_name == "Vec" && variant == "with_capacity" {
             return self.infer_vec_with_capacity(args, span);
@@ -1047,7 +1047,7 @@ impl TypeInference {
         )
     }
 
-    fn infer_vec_remove_or_clear(
+    fn infer_vec_mutator(
         &mut self,
         variant: &str,
         args: &[Expr],
@@ -1446,6 +1446,7 @@ pub(crate) fn intrinsic_methods(head: &str) -> Option<&'static [&'static str]> {
             "len",
             "as_slice",
             "try_as_unique_mut_slice",
+            "make_unique",
         ]),
         "Rc" => Some(&["new", "get", "null", "is_null"]),
         "string" => Some(&["substring_bytes", "from_char", "new", "from", "with_capacity"]),

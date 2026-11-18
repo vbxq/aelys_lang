@@ -387,7 +387,8 @@ fn build_toplevel(
         fn_names,
         InferType::Null,
     );
-    (b.intrinsic_effects, b.managed_witness) = effects::intrinsic_effects(&program.stmts, &[], tt);
+    (b.intrinsic_effects, b.managed_witness) =
+        effects::intrinsic_effects(&program.stmts, &[], tt, false);
     b.open_scope(span);
     for stmt in stmts {
         b.build_stmt(stmt);
@@ -406,7 +407,7 @@ fn build_function(tt: &TypeTable, func: &TypedFunction, fn_names: &HashSet<Strin
         func.return_type.clone(),
     );
     (b.intrinsic_effects, b.managed_witness) =
-        effects::intrinsic_effects(&func.body, &func.params, tt);
+        effects::intrinsic_effects(&func.body, &func.params, tt, func.declared_nogc);
     b.declared_nogc = func.declared_nogc;
     b.open_scope(func.span);
     for p in &func.params {
@@ -446,7 +447,8 @@ fn build_lambdas<'t>(
             return_type.clone(),
         );
         b.is_lambda = true;
-        (b.intrinsic_effects, b.managed_witness) = effects::intrinsic_effects(body, params, tt);
+        (b.intrinsic_effects, b.managed_witness) =
+            effects::intrinsic_effects(body, params, tt, false);
         b.open_scope(lambda.span);
         for p in params {
             b.new_named(&p.name, p.ty.clone(), p.span, p.mutable);
@@ -1146,7 +1148,7 @@ impl<'a> BodyBuilder<'a> {
                 }
                 // pop writes its receiver, so a live element borrow must die at the write
                 if enum_name.as_str() == "Vec"
-                    && matches!(variant.as_str(), "pop" | "remove" | "clear")
+                    && matches!(variant.as_str(), "pop" | "remove" | "clear" | "make_unique")
                 {
                     if let Some((recv, rest)) = args.split_first() {
                         let rest_ops: Vec<BirOperand> =

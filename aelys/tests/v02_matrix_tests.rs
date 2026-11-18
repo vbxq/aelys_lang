@@ -21,6 +21,7 @@ struct Case {
     modules: Option<PathBuf>,
     args: Vec<String>,
     expect: Expect,
+    stderr: Vec<String>,
 }
 
 fn parse_expect(text: &str) -> Expect {
@@ -66,6 +67,14 @@ fn cases_of(track: &str) -> Vec<Case> {
         let args = fs::read_to_string(src.with_extension("args"))
             .map(|a| a.split_whitespace().map(str::to_string).collect())
             .unwrap_or_default();
+        let stderr = fs::read_to_string(src.with_extension("stderr"))
+            .map(|t| {
+                t.lines()
+                    .filter(|l| !l.is_empty())
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
         let modules = src.with_extension("mod");
         cases.push(Case {
             name,
@@ -73,6 +82,7 @@ fn cases_of(track: &str) -> Vec<Case> {
             src,
             args,
             expect: parse_expect(&text),
+            stderr,
         });
     }
     cases.sort_by(|a, b| a.name.cmp(&b.name));
@@ -195,6 +205,9 @@ fn leg(bin: &Path, case: &Case, level: &str) -> Result<(), String> {
     };
     if &got != want {
         return Err(format!("stdout mismatch\nwant {want:?}\ngot  {got:?}\nstderr {stderr}"));
+    }
+    if let Some(line) = case.stderr.iter().find(|l| !stderr.contains(l.as_str())) {
+        return Err(format!("missing {line:?} in stderr:\n{stderr}"));
     }
     if let Expect::Balanced(_) = case.expect {
         let line = stderr
@@ -337,4 +350,9 @@ fn track_final_xmod() {
 #[test]
 fn track_final_small() {
     run_track("final_small");
+}
+
+#[test]
+fn track_final_nogcw() {
+    run_track("final_nogcw");
 }

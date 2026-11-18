@@ -1,0 +1,76 @@
+needs std.slice
+
+struct Job { y: i64, x1: i64, x2: i64, color: u8 }
+
+struct Renderer {
+    screen: Vec<u8>,
+    ylookup: Vec<i64>,
+    colormap: [u8; 256],
+    tex: Vec<u8>,
+    jobs: Vec<Job>,
+    row: Vec<u8>,
+    drawn: i64,
+}
+
+nogc fn clear(r: &mut Renderer, c: u8) {
+    r.screen.fill(c)
+}
+
+nogc fn draw_column(r: &mut Renderer, x: i64, yl: i64, yh: i64, frac0: i64, step: i64) {
+    let mut frac = frac0
+    let mut y = yl
+    while y <= yh {
+        let t = r.tex[(frac >> 16) & 127]
+        r.screen[r.ylookup[y] + x] = r.colormap[t as i64]
+        frac = frac + step
+        y = y + 1
+    }
+    r.drawn = r.drawn + yh - yl + 1
+}
+
+nogc fn draw_jobs(r: &mut Renderer) {
+    for i in 0..r.jobs.len() {
+        let j = r.jobs[i]
+        for x in j.x1..j.x2 { r.screen[r.ylookup[j.y] + x] = j.color }
+        r.jobs[i].color = r.jobs[i].color + 1 as u8
+    }
+}
+
+nogc fn mirror_row(r: &mut Renderer, y: i64) {
+    let base = r.ylookup[y]
+    for x in 0..160 { r.screen.swap(base + x, base + 319 - x) }
+}
+
+nogc fn save_top_row(r: &mut Renderer) {
+    r.row.copy_from_slice(r.screen[0..320])
+}
+
+nogc fn frame(r: &mut Renderer, f: i64) {
+    clear(r, (f * 3) as u8)
+    for x in 0..320 { draw_column(r, x, x % 50, 199 - x % 30, f * 1000 + x * 77, 40000 + x) }
+    draw_jobs(r)
+    mirror_row(r, 10 + f)
+    save_top_row(r)
+}
+
+fn main() -> i64 {
+    let mut r = Renderer { screen: Vec::new(), ylookup: Vec::new(), colormap: [0 as u8; 256], tex: Vec::new(), jobs: Vec::new(), row: Vec::new(), drawn: 0 }
+    for i in 0..64000 { r.screen.push(0 as u8) }
+    for i in 0..200 { r.ylookup.push(i * 320) }
+    for i in 0..256 { r.colormap[i] = (255 - i) as u8 }
+    for i in 0..128 { r.tex.push((i * 7) as u8) }
+    for i in 0..320 { r.row.push(0 as u8) }
+    for i in 0..8 { r.jobs.push(Job { y: 20 + i * 9, x1: i * 11, x2: 100 + i * 25, color: (250 + i) as u8 }) }
+    for f in 0..3 { frame(&mut r, f) }
+    let mut sum: i64 = 0
+    let mut xs: i64 = 0
+    for i in 0..64000 {
+        sum = sum + r.screen[i] as i64
+        xs = (xs * 31 + r.screen[i] as i64) % 1000000007
+    }
+    let mut rowsum: i64 = 0
+    for i in 0..320 { rowsum = rowsum + r.row[i] as i64 }
+    println("{sum} {xs} {rowsum} {r.drawn}")
+    println("{r.screen[0]} {r.screen[12 * 320 + 5]} {r.screen[56 * 320 + 40]} {r.jobs[0].color} {r.jobs[7].color}")
+    return 0
+}
