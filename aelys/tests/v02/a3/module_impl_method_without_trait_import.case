@@ -1,0 +1,11 @@
+needs m
+
+trait Sh {
+    fn sh2(&self) -> i64
+}
+
+fn main() -> i64 {
+    let b = m.Box { v: 1 }
+    println(b.sh2())
+    return 0
+}
