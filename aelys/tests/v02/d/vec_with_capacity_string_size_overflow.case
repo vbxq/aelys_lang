@@ -1,0 +1,7 @@
+fn main() -> i64 {
+    let mut v: Vec<string> = Vec::with_capacity(1152921504606846976)
+    Vec::push(v, "aaaa")
+    Vec::push(v, "bbbb")
+    println(v[1])
+    return 0
+}

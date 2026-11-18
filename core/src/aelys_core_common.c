@@ -318,9 +318,23 @@ unsigned __aelys_rc_refcount(void *ptr) {
     return *(uint32_t *)((char *)ptr - AELYS_RC_HEADER_SIZE);
 }
 
+static long long vec_bytes(long long elem_size, long long cap) {
+    if (cap > 0 && elem_size > 0 && cap > (LLONG_MAX - AELYS_RC_HEADER_SIZE) / elem_size) {
+        __aelys_panic("Vec capacity overflow", 21);
+    }
+    return AELYS_RC_HEADER_SIZE + (cap > 0 ? elem_size * cap : 0);
+}
+
+static long long vec_next_cap(long long cap) {
+    if (cap > LLONG_MAX / 2) {
+        __aelys_panic("Vec capacity overflow", 21);
+    }
+    return cap > 0 ? cap * 2 : 1;
+}
+
 /* type_id 0 is reserved and has no drop glue, so a vec buffer release frees bytes only */
 void *__aelys_vec_new(long long elem_size, long long cap) {
-    long long bytes = AELYS_RC_HEADER_SIZE + (cap > 0 ? elem_size * cap : 0);
+    long long bytes = vec_bytes(elem_size, cap);
     char *base = (char *)__aelys_alloc(bytes > 0 ? bytes : AELYS_RC_HEADER_SIZE);
     *(uint32_t *)(base + 0) = 1u;
     *(uint8_t *)(base + 4) = AELYS_FLAG_NO_TRACE;
@@ -336,7 +350,7 @@ void *__aelys_vec_new(long long elem_size, long long cap) {
    it under the other owner's feet */
 void *__aelys_vec_grow(void *ptr, long long elem_size, long long new_cap) {
     char *base = (char *)ptr - AELYS_RC_HEADER_SIZE;
-    long long bytes = AELYS_RC_HEADER_SIZE + elem_size * new_cap;
+    long long bytes = vec_bytes(elem_size, new_cap);
     char *nbase = (char *)__aelys_realloc(base, bytes);
     return nbase + AELYS_RC_HEADER_SIZE;
 }
@@ -512,7 +526,7 @@ static void vec_push(void *vecptr, void *elemptr, long long elem_size, int strin
     vec_detach(vecptr, elem_size, 1, strings, dup);
 
     if (v->len == v->cap) {
-        long long newcap = v->cap > 0 ? v->cap * 2 : 1;
+        long long newcap = vec_next_cap(v->cap);
         v->ptr = __aelys_vec_grow(v->ptr, elem_size, newcap);
         v->cap = newcap;
     }
@@ -566,7 +580,7 @@ static void vec_insert(void *vecptr, void *elemptr, long long elem_size, long lo
     }
     vec_detach(vecptr, elem_size, 1, strings, dup);
     if (v->len == v->cap) {
-        long long newcap = v->cap > 0 ? v->cap * 2 : 1;
+        long long newcap = vec_next_cap(v->cap);
         v->ptr = __aelys_vec_grow(v->ptr, elem_size, newcap);
         v->cap = newcap;
     }
