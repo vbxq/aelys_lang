@@ -1,0 +1,17 @@
+needs std.vec
+
+fn triple(x: i64) -> i64 { return x * 3 }
+fn odd(x: i64) -> bool { return x % 2 == 1 }
+
+fn main() {
+    let mut i = 0
+    let mut total = 0
+    while i < 200 {
+        let v: Vec<i64> = vec[1, 2, 3, 4, 5]
+        let m = vec.map(&v, triple)
+        let f = vec.filter(&m, odd)
+        total = total + vec.sum(&f)
+        i = i + 1
+    }
+    println(total)
+}

@@ -303,3 +303,8 @@ fn track_showcase() {
 fn track_cross() {
     run_track("cross");
 }
+
+#[test]
+fn track_std() {
+    run_track("std");
+}

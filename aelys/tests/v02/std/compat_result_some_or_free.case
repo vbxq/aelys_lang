@@ -1,0 +1,12 @@
+needs std.result
+
+fn half(x: i64) -> Option<i64> {
+    if x % 2 == 0 { return Some(x / 2) }
+    return None
+}
+
+fn main() {
+    println(result.some_or(half(8), -1) + result.some_or(half(7), -1))
+    println(result.err_code(result.ok_or(half(3), 9)))
+    println(result.is_ok(result.ok_or(half(4), 9)))
+}

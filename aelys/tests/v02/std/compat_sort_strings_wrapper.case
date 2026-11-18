@@ -1,0 +1,7 @@
+needs std.sort
+
+fn main() {
+    let mut a: [string; 4] = ["pear", "apple", "fig", "banana"]
+    sort.strings(a[..])
+    println("{a[0]} {a[1]} {a[2]} {a[3]}")
+}
