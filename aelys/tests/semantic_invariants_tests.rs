@@ -8023,6 +8023,7 @@ fn ffi_link_to(dir: &Path, libraries: &[&str]) -> LinkRequirement {
     LinkRequirement {
         search_paths: vec![dir.join("lib")],
         libraries: libraries.iter().map(|name| (*name).to_string()).collect(),
+        args: Vec::new(),
     }
 }
 

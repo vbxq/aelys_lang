@@ -29,8 +29,9 @@ pub(super) fn compile_air_with_llvm(
         source,
         &LinkRequirement::default(),
         None,
+        ObjectPath::Beside,
+        None,
         require,
-        true,
     )
     .map(|_| ())
 }
@@ -42,6 +43,12 @@ pub enum CompiledArtifact {
     LlvmIr(PathBuf),
 }
 
+pub(super) enum ObjectPath<'a> {
+    Beside,
+    Private,
+    At(&'a Path),
+}
+
 pub(super) fn compile_air_with_llvm_linked(
     path: &Path,
     air: &aelys_air::AirProgram,
@@ -51,8 +58,9 @@ pub(super) fn compile_air_with_llvm_linked(
     source: Arc<Source>,
     link: &LinkRequirement,
     output: Option<&Path>,
+    object: ObjectPath<'_>,
+    core_lib: Option<&Path>,
     require: &[String],
-    keep_object: bool,
 ) -> Result<CompiledArtifact, AelysError> {
     let module_name = path
         .file_stem()
@@ -126,10 +134,12 @@ pub(super) fn compile_air_with_llvm_linked(
     }
 
     let exe_path = target;
-    let object_path = match (has_main_entry, keep_object) {
+    let keep_object = matches!(object, ObjectPath::Beside);
+    let object_path = match (has_main_entry, object) {
         (false, _) => exe_path.clone(),
-        (true, true) => object_path_for(path),
-        (true, false) => private_object_path().map_err(|message| {
+        (true, ObjectPath::Beside) => object_path_for(path),
+        (true, ObjectPath::At(given)) => given.to_path_buf(),
+        (true, ObjectPath::Private) => private_object_path().map_err(|message| {
             backend_diagnostic_error(
                 source.clone(),
                 program_anchor_span(air, source.as_ref()),
@@ -151,17 +161,20 @@ pub(super) fn compile_air_with_llvm_linked(
     }
     let linked = (|| {
         let anchor = program_anchor_span(air, source.as_ref());
-        let core_lib = resolve_aelys_core_lib(runtime).map_err(|message| {
-            backend_diagnostic_error(
-                source.clone(),
-                anchor,
-                "llvm-linker",
-                message,
-                None,
-                None,
-                Fault::Environment,
-            )
-        })?;
+        let core_lib = match core_lib {
+            Some(given) => given.to_path_buf(),
+            None => resolve_aelys_core_lib(runtime).map_err(|message| {
+                backend_diagnostic_error(
+                    source.clone(),
+                    anchor,
+                    "llvm-linker",
+                    message,
+                    None,
+                    None,
+                    Fault::Environment,
+                )
+            })?,
+        };
         link_native_executable(&object_path, &exe_path, &core_lib, runtime, link, require).map_err(
             |message| {
                 backend_diagnostic_error(

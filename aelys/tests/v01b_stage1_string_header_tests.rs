@@ -252,6 +252,7 @@ fn link_probe(lib: &Path) -> LinkRequirement {
     LinkRequirement {
         search_paths: vec![lib.join("lib")],
         libraries: vec!["aelyshdrprobe".to_string()],
+        args: Vec::new(),
     }
 }
 

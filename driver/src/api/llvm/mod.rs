@@ -29,7 +29,7 @@ use diagnostics::{
     optimization_verdict_split, program_anchor_span, reserved_name_errors_to_error,
     runtime_symbol_errors_to_error, sema_errors_to_diagnostics, vec_surface_errors_to_error,
 };
-use lower::{compile_air_with_llvm, compile_air_with_llvm_linked};
+use lower::{ObjectPath, compile_air_with_llvm, compile_air_with_llvm_linked};
 
 // todo: find a better way, clean this up once we have a proper bootstrap
 use aelys_air::symbols::BOOTSTRAP_BUILTIN_SYMBOLS as BOOTSTRAP_BUILTINS;
@@ -1023,10 +1023,46 @@ pub fn compile_file_with_llvm_artifact(
         artifacts.source.clone(),
         link,
         output,
+        ObjectPath::Private,
+        None,
         &artifacts.required_externs,
-        false,
     )?;
     Ok((artifacts.warnings, artifact))
+}
+
+pub struct BuildRequest<'a> {
+    pub root: &'a Path,
+    pub sources: &'a SourceOptions,
+    pub opt_level: OptimizationLevel,
+    pub runtime: RuntimeVariant,
+    pub link: &'a LinkRequirement,
+    pub core_lib: &'a Path,
+    pub output: &'a Path,
+    pub object: &'a Path,
+}
+
+pub fn build(request: &BuildRequest<'_>) -> Result<(Vec<Warning>, CompiledArtifact), AelysError> {
+    let artifacts =
+        lower_file_to_air_with_source(request.root, request.opt_level, request.sources)?;
+    let artifact = compile_air_with_llvm_linked(
+        request.root,
+        &artifacts.air,
+        request.opt_level,
+        false,
+        request.runtime,
+        artifacts.source.clone(),
+        request.link,
+        Some(request.output),
+        ObjectPath::At(request.object),
+        Some(request.core_lib),
+        &artifacts.required_externs,
+    )?;
+    Ok((artifacts.warnings, artifact))
+}
+
+pub fn check_file(path: &Path, sources: &SourceOptions) -> Result<Vec<Warning>, AelysError> {
+    lower_file_to_air_with_source(path, OptimizationLevel::None, sources)
+        .map(|artifacts| artifacts.warnings)
 }
 
 fn run_process_c_locale(program: &str, args: &[String]) -> Result<(), String> {

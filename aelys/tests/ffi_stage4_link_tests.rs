@@ -74,6 +74,7 @@ fn link_to(dir: &Path, libraries: &[&str]) -> LinkRequirement {
     LinkRequirement {
         search_paths: vec![dir.join("lib")],
         libraries: libraries.iter().map(|name| (*name).to_string()).collect(),
+        args: Vec::new(),
     }
 }
 
@@ -200,6 +201,7 @@ fn a_library_without_a_search_path_is_rejected() {
     let link = LinkRequirement {
         search_paths: Vec::new(),
         libraries: vec!["mystage4".to_string()],
+        args: Vec::new(),
     };
     let err = compile(dir.path(), "l4", TRIPLE_AE, &link, OptimizationLevel::None)
         .expect_err("L4: a bare `-l` finds only the system path");
@@ -214,6 +216,7 @@ fn a_search_path_that_does_not_exist_is_a_rejection_not_a_panic() {
     let link = LinkRequirement {
         search_paths: vec![PathBuf::from("/aelys/no/such/directory")],
         libraries: vec!["mystage4".to_string()],
+        args: Vec::new(),
     };
     let err = compile(dir.path(), "l5", TRIPLE_AE, &link, OptimizationLevel::None)
         .expect_err("L5: the library is not on that path");

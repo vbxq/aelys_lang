@@ -167,6 +167,7 @@ fn a_callee_that_keeps_a_pointer_to_a_caller_local_is_accepted_at_every_level() 
     let link = aelys_driver::LinkRequirement {
         search_paths: vec![root.join("lib")],
         libraries: vec!["stash".to_string()],
+        args: Vec::new(),
     };
     let source = "unsafe extern fn aelys_stash(p: &u8)\n\
                   unsafe extern fn aelys_peek() -> i64\n\

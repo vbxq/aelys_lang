@@ -6,11 +6,12 @@ use super::runtime::RuntimeVariant;
 pub struct LinkRequirement {
     pub search_paths: Vec<PathBuf>,
     pub libraries: Vec<String>,
+    pub args: Vec<String>,
 }
 
 impl LinkRequirement {
     pub fn is_empty(&self) -> bool {
-        self.search_paths.is_empty() && self.libraries.is_empty()
+        self.search_paths.is_empty() && self.libraries.is_empty() && self.args.is_empty()
     }
 }
 
@@ -60,6 +61,7 @@ fn link_windows(
     for name in &link.libraries {
         link_args.push(format!("{}.lib", name));
     }
+    link_args.extend(link.args.iter().cloned());
     for symbol in require {
         link_args.push(format!("/INCLUDE:{}", symbol));
     }
@@ -103,6 +105,7 @@ fn link_unix(
     for name in &link.libraries {
         args.push(format!("-l{}", name));
     }
+    args.extend(link.args.iter().cloned());
     // a float remainder lowers to fmod or fmodf, which only libm defines
     args.push("-lm".to_string());
     // the symbol set is the unoptimised air's, so a pass that deletes the only call cannot delete the link
