@@ -470,9 +470,10 @@ impl TypeInference {
                     self.constraints.push(Constraint::flows(
                         typed_value.ty.clone(),
                         field_ty,
-                        f.span,
-                        ConstraintReason::TypeAnnotation {
-                            var_name: format!("{}.{}", name, f.name),
+                        typed_value.span,
+                        ConstraintReason::StructField {
+                            struct_name: name.to_string(),
+                            field: f.name.clone(),
                         },
                     ));
                 }

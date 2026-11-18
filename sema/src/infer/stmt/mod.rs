@@ -131,7 +131,10 @@ impl TypeInference {
             Pattern::Tuple { elems, span } => {
                 let parts = match ty {
                     InferType::Tuple(parts) => parts.clone(),
-                    InferType::Dynamic => return,
+                    InferType::Dynamic => {
+                        self.bind_refused_pattern(pattern);
+                        return;
+                    }
                     other => {
                         self.errors.push(TypeError::coded(
                             "E0301",
@@ -139,6 +142,7 @@ impl TypeInference {
                             "not a tuple",
                             *span,
                         ));
+                        self.bind_refused_pattern(pattern);
                         return;
                     }
                 };
@@ -153,6 +157,7 @@ impl TypeInference {
                         "wrong number of elements",
                         *span,
                     ));
+                    self.bind_refused_pattern(pattern);
                     return;
                 }
                 for (i, (elem, part)) in elems.iter().zip(parts.iter()).enumerate() {
@@ -178,6 +183,43 @@ impl TypeInference {
                     *span,
                 ));
             }
+        }
+    }
+
+    fn bind_refused_pattern(&mut self, pattern: &aelys_syntax::Pattern) {
+        use aelys_syntax::Pattern;
+        match pattern {
+            Pattern::Binding {
+                name,
+                mutable,
+                sub,
+                span,
+            } => {
+                self.env
+                    .define_local_with_span(name.clone(), InferType::Dynamic, *span);
+                if *mutable {
+                    self.env.mark_mutable(name.clone());
+                }
+                if let Some(sub) = sub {
+                    self.bind_refused_pattern(sub);
+                }
+            }
+            Pattern::Tuple { elems, .. } | Pattern::Variant { fields: elems, .. } => {
+                for elem in elems {
+                    self.bind_refused_pattern(elem);
+                }
+            }
+            Pattern::Struct { fields, .. } => {
+                for (_, field, _) in fields {
+                    self.bind_refused_pattern(field);
+                }
+            }
+            Pattern::Or(alternatives, _) => {
+                if let Some(first) = alternatives.first() {
+                    self.bind_refused_pattern(first);
+                }
+            }
+            Pattern::Wildcard(_) | Pattern::Lit(..) | Pattern::Range { .. } => {}
         }
     }
 

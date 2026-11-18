@@ -185,8 +185,30 @@ impl TypeInference {
 
         self.resolve_deferred(&mut pending, &mut subst);
         self.report_unresolved(&pending);
+        self.drop_operand_mismatches_under_operator_refusals();
 
         subst
+    }
+
+    fn drop_operand_mismatches_under_operator_refusals(&mut self) {
+        use crate::constraint::TypeErrorKind;
+        let refused: Vec<aelys_syntax::Span> = self
+            .errors
+            .iter()
+            .filter(|e| {
+                matches!(e.kind, TypeErrorKind::NotOneOf { .. })
+                    && matches!(e.reason, ConstraintReason::BinaryOp { .. })
+            })
+            .map(|e| e.span)
+            .collect();
+        if refused.is_empty() {
+            return;
+        }
+        self.errors.retain(|e| {
+            !(matches!(e.kind, TypeErrorKind::Mismatch { .. })
+                && matches!(e.reason, ConstraintReason::BinaryOp { .. })
+                && refused.contains(&e.span))
+        });
     }
 
     fn pick_widest_type(options: &[InferType]) -> Option<InferType> {

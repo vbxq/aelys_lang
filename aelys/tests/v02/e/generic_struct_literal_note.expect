@@ -1,0 +1,3 @@
+refuse E0301
+expected `i64`, found `string`
+!variable 'Box.v'

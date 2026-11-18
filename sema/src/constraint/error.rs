@@ -220,6 +220,8 @@ pub enum TypeErrorKind {
     },
 }
 
+const TYPE_ARG_COUNT: &str = "type argument count";
+
 impl fmt::Display for TypeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
@@ -1369,6 +1371,10 @@ impl TypeError {
         matches!(&self.kind, TypeErrorKind::NotSupportedYet { detail } if detail == GENERIC_FN_AS_VALUE)
     }
 
+    pub fn is_type_arg_count(&self) -> bool {
+        matches!(&self.reason, ConstraintReason::Other(r) if r == TYPE_ARG_COUNT)
+    }
+
     pub fn type_arg_count(
         what: &str,
         name: &str,
@@ -1398,7 +1404,7 @@ impl TypeError {
                 ),
             },
             span,
-            reason: ConstraintReason::Other("type annotations needed".to_string()),
+            reason: ConstraintReason::Other(TYPE_ARG_COUNT.to_string()),
             secondary_spans: Vec::new(),
             help: Some(help),
             suggestion: None,

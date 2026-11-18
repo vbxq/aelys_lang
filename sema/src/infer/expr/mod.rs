@@ -1039,8 +1039,9 @@ impl TypeInference {
                     value.ty.clone(),
                     expected,
                     value.span,
-                    ConstraintReason::TypeAnnotation {
-                        var_name: format!("{}.{}", name, field_name),
+                    ConstraintReason::StructField {
+                        struct_name: name.to_string(),
+                        field: field_name.clone(),
                     },
                 ));
             }

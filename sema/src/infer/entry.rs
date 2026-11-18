@@ -75,11 +75,21 @@ impl TypeInference {
 
     pub fn type_from_annotation(&mut self, ann: &TypeAnnotation) -> InferType {
         // default position: a `nogc fn(...)` type is out of position here and gets rejected
-        self.lower_type(ann, false)
+        self.lower_known_type(ann, false)
     }
 
     pub(crate) fn type_from_param_annotation(&mut self, ann: &TypeAnnotation) -> InferType {
-        self.lower_type(ann, true)
+        self.lower_known_type(ann, true)
+    }
+
+    fn lower_known_type(&mut self, ann: &TypeAnnotation, nogc_ok: bool) -> InferType {
+        let before = self.errors.len();
+        let ty = self.lower_type(ann, nogc_ok);
+        if self.errors[before..].iter().any(|e| !e.is_type_arg_count()) {
+            InferType::Dynamic
+        } else {
+            ty
+        }
     }
 
     // recursion passes false, so a `nogc fn` anywhere but a bare parameter type is rejected
@@ -230,6 +240,7 @@ impl TypeInference {
             if self.type_table.has_enum(&qualified) {
                 let type_args = self.collect_type_args(ann);
                 self.check_enum_type_arg_count(&qualified, type_args.len(), ann);
+                let type_args = self.fit_enum_type_args(&qualified, type_args);
                 return InferType::Enum(qualified, type_args);
             }
             if self.type_table.has_struct(&qualified) {
@@ -243,6 +254,7 @@ impl TypeInference {
             if self.type_table.has_enum(name) {
                 let type_args = self.collect_type_args(ann);
                 self.check_enum_type_arg_count(name, type_args.len(), ann);
+                let type_args = self.fit_enum_type_args(name, type_args);
                 return InferType::Enum(name.clone(), type_args);
             }
             if self.type_table.has_struct(name) {
@@ -250,6 +262,13 @@ impl TypeInference {
             }
         }
         ty
+    }
+
+    fn fit_enum_type_args(&self, name: &str, mut args: Vec<InferType>) -> Vec<InferType> {
+        if let Some(expected) = self.type_table.get_enum(name).map(|d| d.type_params.len()) {
+            args.resize(expected, InferType::Dynamic);
+        }
+        args
     }
 
     fn struct_annotation(&mut self, name: &str, ann: &TypeAnnotation) -> InferType {
@@ -541,7 +560,10 @@ impl TypeInference {
         };
         let reported = |inf: &TypeInference, err: &TypeError| match &err.kind {
             TypeErrorKind::Mismatch { expected, found } => {
-                !(matches!(&err.reason, ConstraintReason::TypeAnnotation { .. })
+                !(matches!(
+                    &err.reason,
+                    ConstraintReason::TypeAnnotation { .. } | ConstraintReason::StructField { .. }
+                )
                     && (is_type_param(inf, expected) || is_type_param(inf, found)))
             }
             _ => true,

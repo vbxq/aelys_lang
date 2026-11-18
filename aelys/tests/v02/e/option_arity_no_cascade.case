@@ -1,0 +1,4 @@
+fn main() {
+    let o: Option<i64, i64> = Option::None
+    println(1)
+}

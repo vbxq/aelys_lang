@@ -17,6 +17,7 @@ pub enum ConstraintReason {
     /// Variable assignment (reassignment)
     Assignment { var_name: String },
     /// Explicit type annotation on variable declaration (FATAL error)
+    StructField { struct_name: String, field: String },
     TypeAnnotation { var_name: String },
     /// If condition must be bool
     IfCondition,
@@ -69,6 +70,9 @@ impl fmt::Display for ConstraintReason {
             }
             ConstraintReason::ReturnInUnit { func_name } => {
                 write!(f, "`{func_name}` declares no return type")
+            ConstraintReason::StructField { struct_name, field } => {
+                write!(f, "field `{field}` of struct `{struct_name}`")
+            }
             }
             ConstraintReason::Assignment { var_name } => {
                 write!(f, "assignment to variable '{}'", var_name)
