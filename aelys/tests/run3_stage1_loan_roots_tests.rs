@@ -1223,7 +1223,7 @@ fn main() -> i64 {{
 "#
         ),
         &[
-            r#"LOANROOT fn=main loan=0 root=%3 proj=[Field(a)] ty=Struct("S") class=Unknown"#,
+            r#"LOANROOT fn=main loan=0 root=%3 proj=[Field(a)] ty=Struct("S", []) class=Unknown"#,
             r#"LOANROOT fn=main loan=1 root=%5 proj=[] ty=Slice { elem: I64, mutable: false } class=Unknown"#,
         ],
     );
@@ -1266,7 +1266,7 @@ fn main() -> i64 {{
 }}
 "#
         ),
-        &[r#"LOANROOT fn=main loan=0 root=%3 proj=[Field(a)] ty=Struct("S") class=Unknown"#],
+        &[r#"LOANROOT fn=main loan=0 root=%3 proj=[Field(a)] ty=Struct("S", []) class=Unknown"#],
     );
 }
 
@@ -1282,7 +1282,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        &[r#"LOANROOT fn=main loan=0 root=%2 proj=[Field(a)] ty=Struct("T") class=Unknown"#],
+        &[r#"LOANROOT fn=main loan=0 root=%2 proj=[Field(a)] ty=Struct("T", []) class=Unknown"#],
     );
 }
 
@@ -1303,8 +1303,8 @@ fn main() -> i64 {{
 "#
         ),
         &[
-            r#"LOANROOT fn=f loan=0 root=%0 proj=[Deref,Field(a)] ty=Ref { referent: Struct("S"), mutable: false } class=Unknown"#,
-            r#"LOANROOT fn=main loan=0 root=%3 proj=[] ty=Struct("S") class=Managed"#,
+            r#"LOANROOT fn=f loan=0 root=%0 proj=[Deref,Field(a)] ty=Ref { referent: Struct("S", []), mutable: false } class=Unknown"#,
+            r#"LOANROOT fn=main loan=0 root=%3 proj=[] ty=Struct("S", []) class=Managed"#,
         ],
     );
 }
@@ -1323,7 +1323,7 @@ fn main() -> i64 {{
 }}
 "#
         ),
-        &[r#"LOANROOT fn=main loan=0 root=%3 proj=[] ty=Struct("S") class=Managed"#],
+        &[r#"LOANROOT fn=main loan=0 root=%3 proj=[] ty=Struct("S", []) class=Managed"#],
     );
 }
 
@@ -1343,8 +1343,8 @@ fn main() -> i64 {{
 "#
         ),
         &[
-            r#"LOANROOT fn=f loan=0 root=%0 proj=[Deref] ty=Ref { referent: Struct("S"), mutable: false } class=Unknown"#,
-            r#"LOANROOT fn=main loan=0 root=%3 proj=[] ty=Struct("S") class=Managed"#,
+            r#"LOANROOT fn=f loan=0 root=%0 proj=[Deref] ty=Ref { referent: Struct("S", []), mutable: false } class=Unknown"#,
+            r#"LOANROOT fn=main loan=0 root=%3 proj=[] ty=Struct("S", []) class=Managed"#,
         ],
     );
 }
@@ -1367,8 +1367,8 @@ fn main() -> i64 { return go(pick) }
 "#,
         &[
             r#"LOANROOT fn=go loan=0 root=%2 proj=[] ty=Rc(I64) class=Managed"#,
-            r#"LOANROOT fn=go loan=1 root=%5 proj=[] ty=Struct("S") class=Unmanaged"#,
-            r#"LOANROOT fn=go loan=2 root=%10 proj=[Deref,Field(a)] ty=Ref { referent: Struct("S"), mutable: false } class=Unknown"#,
+            r#"LOANROOT fn=go loan=1 root=%5 proj=[] ty=Struct("S", []) class=Unmanaged"#,
+            r#"LOANROOT fn=go loan=2 root=%10 proj=[Deref,Field(a)] ty=Ref { referent: Struct("S", []), mutable: false } class=Unknown"#,
         ],
     );
 }
@@ -1418,7 +1418,7 @@ fn f(a: [S;2]) -> i64 {
 }
 fn main() -> i64 { return 0 }
 "#,
-        &[r#"LOANROOT fn=f loan=0 root=%0 proj=[] ty=Array(Struct("S"), Some(2)) class=Managed"#],
+        &[r#"LOANROOT fn=f loan=0 root=%0 proj=[] ty=Array(Struct("S", []), Some(2)) class=Managed"#],
     );
 }
 
