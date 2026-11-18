@@ -1,0 +1,17 @@
+enum Opt<T> { S(T), N }
+
+impl<T> Opt<T> {
+    fn or_else(self, d: T) -> T {
+        match self {
+            Opt::S(x) => return x,
+            Opt::N => return d
+        }
+    }
+}
+
+fn main() {
+    let a: Opt<i64> = Opt::S(5)
+    let b: Opt<string> = Opt::N
+    println(a.or_else(1))
+    println(b.or_else("dflt"))
+}

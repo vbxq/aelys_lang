@@ -1,0 +1,6 @@
+fn main() {
+    let mut v: Vec<i64> = vec[1, 2, 3]
+    let s = v.as_slice()
+    v.push(9)
+    println(s[0])
+}

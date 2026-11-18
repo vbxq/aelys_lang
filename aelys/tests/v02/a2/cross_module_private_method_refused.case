@@ -1,0 +1,6 @@
+needs geom
+
+fn main() {
+    let p = geom.mk(4)
+    println(p.hidden())
+}

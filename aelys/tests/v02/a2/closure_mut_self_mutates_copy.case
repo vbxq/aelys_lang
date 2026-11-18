@@ -1,0 +1,16 @@
+struct C { n: i64 }
+
+impl C {
+    fn tick(&mut self) -> i64 {
+        self.n = self.n + 1
+        return self.n
+    }
+}
+
+fn main() {
+    let mut c = C { n: 0 }
+    let g = fn() -> i64 { return c.tick() }
+    println(g())
+    println(g())
+    println(c.n)
+}

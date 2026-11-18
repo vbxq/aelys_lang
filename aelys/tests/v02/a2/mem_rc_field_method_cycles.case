@@ -1,0 +1,20 @@
+struct Node { val: i64, next: Rc<Node> }
+
+impl Node {
+    fn total(&self) -> i64 {
+        if Rc::is_null(self.next) { return self.val }
+        return self.val + Rc::get(self.next).total()
+    }
+}
+
+fn main() {
+    let mut sum = 0
+    for k in 0..100 {
+        let mut head: Rc<Node> = Rc::null()
+        for i in 1..5 {
+            head = Rc::new(Node { val: i, next: head })
+        }
+        sum = sum + Rc::get(head).total()
+    }
+    println(sum)
+}

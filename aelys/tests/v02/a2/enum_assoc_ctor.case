@@ -1,0 +1,21 @@
+enum Shape { Sq(i64), Rect(i64, i64) }
+
+impl Shape {
+    fn unit() -> Self { return Shape::Sq(1) }
+    fn area(&self) -> i64 {
+        match *self {
+            Shape::Sq(s) => return s * s,
+            Shape::Rect(a, b) => return a * b
+        }
+    }
+    fn widen(self, d: i64) -> Self {
+        match self {
+            Shape::Sq(s) => return Shape::Rect(s + d, s),
+            Shape::Rect(a, b) => return Shape::Rect(a + d, b)
+        }
+    }
+}
+
+fn main() {
+    println(Shape::unit().widen(4).area())
+}

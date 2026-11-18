@@ -1,0 +1,3 @@
+refuse E0417
+`bump` takes `&mut self`
+let mut p

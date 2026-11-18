@@ -1,0 +1,13 @@
+struct P { x: i64 }
+
+impl P {
+    fn get(&self) -> i64 { return self.x }
+}
+
+impl P {
+    fn get(&self) -> i64 { return 0 }
+}
+
+fn main() {
+    println(1)
+}

@@ -1,0 +1,14 @@
+struct F { n: i64 }
+
+impl F {
+    fn fact(&self) -> i64 {
+        if self.n <= 1 { return 1 }
+        let next = F { n: self.n - 1 }
+        return self.n * next.fact()
+    }
+}
+
+fn main() {
+    let f = F { n: 10 }
+    println(f.fact())
+}

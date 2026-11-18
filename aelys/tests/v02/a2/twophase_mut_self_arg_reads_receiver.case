@@ -1,0 +1,12 @@
+struct C { n: i64 }
+
+impl C {
+    fn get(&self) -> i64 { return self.n }
+    fn add(&mut self, d: i64) { self.n = self.n + d }
+}
+
+fn main() {
+    let mut c = C { n: 5 }
+    c.add(c.get())
+    println(c.n)
+}

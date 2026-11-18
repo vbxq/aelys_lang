@@ -1,0 +1,7 @@
+struct P { x: i64 }
+
+fn f(&self) -> i64 { return 1 }
+
+fn main() {
+    println(1)
+}

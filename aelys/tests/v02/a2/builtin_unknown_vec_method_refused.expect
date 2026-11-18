@@ -1,0 +1,3 @@
+refuse E0304
+no method `frob` on `Vec<i64>`
+`push`
