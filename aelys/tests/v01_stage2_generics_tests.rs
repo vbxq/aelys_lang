@@ -701,7 +701,7 @@ fn s2_an_invented_bound_is_refused_by_naming_the_three_that_exist() {
         "S2-BAD-BOUND",
         AN_INVENTED_BOUND,
         "E0106",
-        &["`hash` is not a bound; the bounds are `nogc`, `eq` and `ord`, combined with `+`"],
+        &["no trait named `hash`; a bound is `nogc`, `eq`, `ord`, `Display` or a trait in scope"],
     );
 }
 

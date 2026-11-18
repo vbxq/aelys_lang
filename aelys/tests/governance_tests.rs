@@ -8,7 +8,7 @@ const SWEEPS_PIN_REL: &str = "scripts/sweeps_pin.tsv";
 const REGISTRY_REL: &str = "common/src/diagnostic/registry.rs";
 const COMPILE_CODE_REL: &str = "common/src/error/compile/code.rs";
 const FAULT_REL: &str = "common/src/error/fault.rs";
-const REGISTERED_CODES: usize = 116;
+const REGISTERED_CODES: usize = 120;
 
 const UNEMITTED_RESIDUE: &[(&str, &str)] = &[];
 const UNEMITTED_RESIDUE_ROWS: usize = 0;
@@ -1787,7 +1787,7 @@ const AIR_SRC_REL: &str = "air/src";
 const COMPARED_STAGE: &str = "fn air_stage(";
 const COMPARED_STAGE_CALLER: &str = "fn lower_file_to_air_with_source(";
 
-const COMPARED_REJECTION_SITES: usize = 14;
+const COMPARED_REJECTION_SITES: usize = 15;
 const UNCOMPARED_REJECTION_SITES: usize = 25;
 
 // the functions whose refusals the residue excuses for raising before any pass has run
