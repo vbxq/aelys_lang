@@ -1,5 +1,6 @@
 mod core_lib;
 mod diagnostics;
+mod group;
 mod link;
 mod lower;
 mod runtime;
@@ -45,18 +46,20 @@ struct LoweringArtifacts {
     files: Vec<(PathBuf, Arc<Source>)>,
 }
 
+fn known_globals() -> HashSet<String> {
+    BOOTSTRAP_BUILTINS.iter().map(|s| s.to_string()).collect()
+}
+
 pub fn compile_to_typed_ast(source_code: &str) -> Result<aelys_sema::TypedProgram, AelysError> {
     let src = Source::new("<inline>", source_code);
     let tokens = Lexer::with_source(src.clone()).scan()?;
     let stmts = Parser::new(tokens, src.clone()).parse()?;
 
-    let known_globals: HashSet<String> = BOOTSTRAP_BUILTINS.iter().map(|s| s.to_string()).collect();
-
     let inference = aelys_sema::TypeInference::infer_program_full(
         stmts,
         src.clone(),
         aelys_sema::ModuleImports::default(),
-        known_globals,
+        known_globals(),
     )
     .map_err(|errors| sema_errors_to_diagnostics(errors, src.clone()))?;
 
@@ -147,12 +150,13 @@ struct ModuleFront {
     functions_unreachable: bool,
 }
 
+// a declaration pass is `tolerant` of items its neighbours have not declared yet
 fn build_imports(
     unit: &crate::modules::ModuleUnit,
+    unit_index: usize,
     exports: &[Arc<aelys_sema::ModuleExports>],
+    tolerant: bool,
 ) -> Result<aelys_sema::ModuleImports, AelysError> {
-    use aelys_sema::Lookup;
-
     let mut imports = aelys_sema::ModuleImports {
         is_importable: !unit.dotted.is_empty(),
         ..Default::default()
@@ -163,12 +167,12 @@ fn build_imports(
     let direct: HashSet<usize> = unit
         .imports
         .iter()
-        .map(|import| match import {
-            crate::modules::ResolvedImport::Namespace { target, .. }
-            | crate::modules::ResolvedImport::Symbols { target, .. } => *target,
-        })
+        .map(crate::modules::ResolvedImport::target)
         .collect();
     for (index, module) in exports.iter().enumerate() {
+        if index == unit_index {
+            continue;
+        }
         for (ty, entries) in &module.methods {
             if aelys_sema::is_builtin_key(ty) {
                 if direct.contains(&index) {
@@ -180,7 +184,11 @@ fn build_imports(
                 }
                 continue;
             }
-            imports.methods.insert(ty.clone(), entries.clone());
+            imports
+                .methods
+                .entry(ty.clone())
+                .or_default()
+                .extend(entries.iter().cloned());
         }
         for def in module.traits.values() {
             imports
@@ -201,83 +209,63 @@ fn build_imports(
                 target,
                 span,
             } => {
-                let module = &exports[*target];
                 for name in names {
-                    match module.value(name) {
-                        Lookup::Found(item) => {
-                            imports.values.insert(name.clone(), item.clone());
-                            continue;
-                        }
-                        Lookup::NotPublic => {
-                            return Err(import_error(
-                                unit,
-                                *span,
-                                CompileErrorKind::SymbolNotPublic {
-                                    symbol: name.clone(),
-                                    module: module.path.clone(),
-                                },
-                            ));
-                        }
-                        Lookup::Missing => {}
-                    }
-                    if let Some(def) = module.traits.get(name) {
-                        if !def.is_pub {
-                            return Err(import_error(
-                                unit,
-                                *span,
-                                CompileErrorKind::SymbolNotPublic {
-                                    symbol: name.clone(),
-                                    module: module.path.clone(),
-                                },
-                            ));
-                        }
-                        imports.traits.insert(name.clone(), def.clone());
-                        continue;
-                    }
-                    if let Some(def) = module.aliases.get(name) {
-                        if !def.is_pub {
-                            return Err(import_error(
-                                unit,
-                                *span,
-                                CompileErrorKind::SymbolNotPublic {
-                                    symbol: name.clone(),
-                                    module: module.path.clone(),
-                                },
-                            ));
-                        }
-                        imports.aliases.insert(name.clone(), def.clone());
-                        continue;
-                    }
-                    match module.module_type(name) {
-                        Lookup::Found(ty) => {
-                            imports.types.insert(name.clone(), ty.clone());
-                        }
-                        Lookup::NotPublic => {
-                            return Err(import_error(
-                                unit,
-                                *span,
-                                CompileErrorKind::SymbolNotPublic {
-                                    symbol: name.clone(),
-                                    module: module.path.clone(),
-                                },
-                            ));
-                        }
-                        Lookup::Missing => {
-                            return Err(import_error(
-                                unit,
-                                *span,
-                                CompileErrorKind::SymbolNotFound {
-                                    symbol: name.clone(),
-                                    module: module.path.clone(),
-                                },
-                            ));
-                        }
+                    if let Err(kind) = import_symbol(&mut imports, &exports[*target], name)
+                        && !tolerant
+                    {
+                        return Err(import_error(unit, *span, kind));
                     }
                 }
             }
         }
     }
     Ok(imports)
+}
+
+fn import_symbol(
+    imports: &mut aelys_sema::ModuleImports,
+    module: &aelys_sema::ModuleExports,
+    name: &str,
+) -> Result<(), CompileErrorKind> {
+    use aelys_sema::Lookup;
+
+    let not_public = || CompileErrorKind::SymbolNotPublic {
+        symbol: name.to_string(),
+        module: module.path.clone(),
+    };
+    match module.value(name) {
+        Lookup::Found(item) => {
+            imports.values.insert(name.to_string(), item.clone());
+            return Ok(());
+        }
+        Lookup::NotPublic => return Err(not_public()),
+        Lookup::Missing => {}
+    }
+    if let Some(def) = module.traits.get(name) {
+        if !def.is_pub {
+            return Err(not_public());
+        }
+        imports.traits.insert(name.to_string(), def.clone());
+        return Ok(());
+    }
+    if let Some(def) = module.aliases.get(name) {
+        if !def.is_pub {
+            return Err(not_public());
+        }
+        imports.aliases.insert(name.to_string(), def.clone());
+        return Ok(());
+    }
+    match module.module_type(name) {
+        Lookup::Found(ty) => {
+            imports.types.insert(name.to_string(), ty.clone());
+            Ok(())
+        }
+        Lookup::NotPublic => Err(not_public()),
+        Lookup::Missing => Err(CompileErrorKind::SymbolNotFound {
+            symbol: name.to_string(),
+            module: module.path.clone(),
+        }),
+    }
 }
 
 fn names_a_std_module(path: &str) -> bool {
@@ -440,23 +428,34 @@ fn sourced(warnings: Vec<Warning>, src: &Arc<Source>) -> Vec<Warning> {
         .collect()
 }
 
-fn front_stage(
+struct Typed {
+    inference: aelys_sema::InferenceResult,
+    globals: HashSet<String>,
+}
+
+fn typecheck(
     unit: &crate::modules::ModuleUnit,
     imports: aelys_sema::ModuleImports,
-    bir_imports: &aelys_air::bir::Imports,
-) -> Result<(ModuleFront, aelys_air::bir::Checked), AelysError> {
+) -> Result<Typed, AelysError> {
     let src = unit.source.clone();
     let globals = imported_global_symbols(&imports);
-
-    let known_globals: HashSet<String> = BOOTSTRAP_BUILTINS.iter().map(|s| s.to_string()).collect();
     let inference = aelys_sema::TypeInference::infer_program_full(
         unit.stmts.clone(),
         src.clone(),
         imports,
-        known_globals,
+        known_globals(),
     )
-    .map_err(|errors| sema_errors_to_diagnostics(errors, src.clone()))?;
+    .map_err(|errors| sema_errors_to_diagnostics(errors, src))?;
+    Ok(Typed { inference, globals })
+}
 
+fn front_stage(
+    unit: &crate::modules::ModuleUnit,
+    typed: Typed,
+    bir_imports: &aelys_air::bir::Imports,
+) -> Result<(ModuleFront, aelys_air::bir::Checked), AelysError> {
+    let src = unit.source.clone();
+    let Typed { inference, globals } = typed;
     let aelys_sema::InferenceResult {
         program,
         warnings,
@@ -552,6 +551,7 @@ fn air_stage(
     sources: &ModuleSources,
     opt_level: OptimizationLevel,
     judge_instances: bool,
+    group_start: Option<usize>,
 ) -> Result<aelys_air::AirProgram, StageFailure> {
     if opt_level != OptimizationLevel::None && aelys_air::ablation::optimized_stage_refuses() {
         return Err(backend_diagnostic_error(
@@ -570,14 +570,44 @@ fn air_stage(
     let mut fresh_returns: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut retaining_fns: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    for (file, (front, typed_program)) in fronts.iter().zip(typed.iter().copied()).enumerate() {
+    let mut group: Option<group::GroupLowering> = None;
+    let mut before_group = None;
+    let mut file = 0;
+    while file < fronts.len() {
+        let (front, typed_program) = (&fronts[file], typed[file]);
+        if Some(file) == group_start {
+            let lowering = group.get_or_insert_with(|| {
+                group::GroupLowering::new(fronts, typed, file)
+            });
+            let snapshot = before_group.get_or_insert_with(|| {
+                (fresh_returns.clone(), retaining_fns.clone(), bir_imports.clone())
+            });
+            (fresh_returns, retaining_fns, bir_imports) = snapshot.clone();
+            programs.truncate(file);
+            retaining_fns.extend(lowering.assumed.iter().cloned());
+            for later in &fronts[file..] {
+                bir_imports.effects.extend(later.effects.clone());
+                bir_imports.chains.extend(later.chains.clone());
+            }
+        }
+        let grouped = group.as_ref().filter(|g| file >= g.start);
         let src = front.source.clone();
+        let mut known_fresh = fresh_returns.clone();
+        let mut structs: Vec<aelys_air::AirStructDef> =
+            programs.iter().flat_map(|p| p.structs.clone()).collect();
+        let mut enums: Vec<aelys_air::AirEnumDef> =
+            programs.iter().flat_map(|p| p.enums.clone()).collect();
+        if let Some(g) = grouped {
+            known_fresh.extend(g.assumed_by(file));
+            structs.extend(g.structs_after(file));
+            enums.extend(g.enums_after(file));
+        }
         let imported = aelys_air::lower::Imported {
             globals: front.globals.clone(),
-            structs: programs.iter().flat_map(|p| p.structs.clone()).collect(),
-            enums: programs.iter().flat_map(|p| p.enums.clone()).collect(),
+            structs,
+            enums,
             bir: bir_imports.clone(),
-            fresh_returns: fresh_returns.clone(),
+            fresh_returns: known_fresh.clone(),
             retaining_fns: retaining_fns.clone(),
             file: file as u32,
         };
@@ -620,7 +650,10 @@ fn air_stage(
         aelys_air::modules::qualify(&mut air, &front.dotted);
         let carriers = aelys_air::counts::Carriers::merged(&air.structs, &air.enums);
         let proven =
-            aelys_air::lower::fresh_returning_functions(&air.functions, &carriers, &fresh_returns);
+            aelys_air::lower::fresh_returning_functions(&air.functions, &carriers, &known_fresh);
+        if let Some(g) = group.as_mut().filter(|g| file >= g.start) {
+            g.record_unproven(&air.functions, &carriers, &proven);
+        }
         fresh_returns.extend(proven);
         retaining_fns.extend(aelys_air::lower::retaining_functions(&air.functions));
 
@@ -640,6 +673,13 @@ fn air_stage(
         }
 
         programs.push(air);
+        file += 1;
+        if file == fronts.len()
+            && let Some(g) = group.as_mut()
+            && g.retract_unproven()
+        {
+            file = g.start;
+        }
     }
 
     drop_unreached_prelude_functions(fronts, &mut programs);
@@ -768,6 +808,10 @@ fn air_stage(
         .into());
     }
 
+    let root = &fronts.last().expect("a graph always holds its root").dotted;
+    if !root.is_empty() {
+        aelys_air::modules::rename_function(&mut air, &format!("{root}.main"), "main");
+    }
     Ok(air)
 }
 
@@ -812,13 +856,31 @@ fn lower_file_to_air_with_source(
     let mut checked: Vec<aelys_air::bir::Checked> = Vec::new();
     let mut bir_imports = aelys_air::bir::Imports::default();
     let mut prelude_scope: Option<aelys_sema::ModuleImports> = None;
+    let group_start = graph
+        .units
+        .iter()
+        .position(|unit| graph.grouped && !aelys_sema::modules::is_std_module(&unit.dotted));
+    let mut grouped: Vec<Typed> = Vec::new();
     for (index, unit) in graph.units.iter().enumerate() {
-        let mut imports = build_imports(unit, &exports)?;
+        if Some(index) == group_start {
+            group::declare(&graph.units, index, &mut exports, prelude_scope.as_ref())?;
+        }
+        let mut imports = build_imports(unit, index, &exports, false)?;
         let prelude_own_scope = (Some(index) == graph.prelude).then(|| imports.clone());
         if let Some(scope) = &prelude_scope {
             fall_back_to_prelude(&mut imports, scope, &unit.bound_types, &unit.bound_values);
         }
-        let (front, unit_checked) = front_stage(unit, imports, &bir_imports)?;
+        if group_start.is_some_and(|start| index >= start) {
+            aelys_sema::localize::localize_imports(&mut imports);
+            let typed = typecheck(unit, imports)?;
+            exports[index] = Arc::new(aelys_sema::modules::collect_exports(
+                &unit.dotted,
+                &typed.inference.program,
+            ));
+            grouped.push(typed);
+            continue;
+        }
+        let (front, unit_checked) = front_stage(unit, typecheck(unit, imports)?, &bir_imports)?;
         if let Some(mut scope) = prelude_own_scope {
             widen_with_exports(&mut scope, &front.exports);
             prelude_scope = Some(scope);
@@ -835,6 +897,21 @@ fn lower_file_to_air_with_source(
         exports.push(front.exports.clone());
         fronts.push(front);
         checked.push(unit_checked);
+    }
+    if let Some(start) = group_start {
+        let units = &graph.units[start..];
+        group::settle_effects(units, &grouped, &mut bir_imports);
+        for (unit, typed) in units.iter().zip(grouped) {
+            let (front, unit_checked) = front_stage(unit, typed, &bir_imports)?;
+            for (name, steps) in &front.chains {
+                bir_imports.chains.insert(name.clone(), steps.clone());
+            }
+            for (name, sig) in &front.externs {
+                bir_imports.externs.insert(name.clone(), sig.clone());
+            }
+            fronts.push(front);
+            checked.push(unit_checked);
+        }
     }
     if prelude_scope
         .as_ref()
@@ -855,6 +932,7 @@ fn lower_file_to_air_with_source(
             &module_sources,
             OptimizationLevel::None,
             true,
+            group_start,
         )
     });
     let reference = reference.transpose().map_err(|failure| failure.error)?;
@@ -878,6 +956,7 @@ fn lower_file_to_air_with_source(
         &module_sources,
         opt_level,
         opt_level == OptimizationLevel::None,
+        group_start,
     );
 
     let level = format!("-O{}", opt_level.numeric());

@@ -4,6 +4,7 @@ use crate::embedded_std::{EMBEDDED_STD, embedded_std_path};
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
+use aelys_sema::modules::is_std_module;
 use aelys_syntax::{ImportKind, NeedsStmt, NeedsTarget, Source, Span, Stmt, StmtKind};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -21,6 +22,7 @@ struct Discovery {
     units: Vec<ModuleUnit>,
     by_path: HashMap<String, usize>,
     by_file: HashMap<PathBuf, usize>,
+    imported_as: HashMap<usize, String>,
 }
 
 enum StdSource {
@@ -59,6 +61,7 @@ pub(crate) fn discover(
         units: Vec::new(),
         by_path: HashMap::new(),
         by_file: HashMap::new(),
+        imported_as: HashMap::new(),
     };
 
     let mut prelude = None;
@@ -68,8 +71,7 @@ pub(crate) fn discover(
             // a prelude that does not resolve is not a prelude, and not an error
             Located::Missing(_) => {}
             Located::Found(file) => {
-                let mut stack = Vec::new();
-                prelude = Some(discovery.visit(&file, dotted.clone(), &mut stack)?);
+                prelude = Some(discovery.load(&file, dotted.clone())?);
             }
             Located::Ambiguous(roots) => {
                 return Err(ModuleError {
@@ -85,33 +87,163 @@ pub(crate) fn discover(
         }
     }
 
-    let mut stack = Vec::new();
-    let root = discovery.visit(
-        &ModuleFile::Disk(root_file.to_path_buf()),
-        String::new(),
-        &mut stack,
-    )?;
+    let root = discovery.load(&ModuleFile::Disk(root_file.to_path_buf()), String::new())?;
     let mut reached = vec![false; discovery.units.len()];
     let mut pending = vec![root];
     while let Some(index) = pending.pop() {
         if std::mem::replace(&mut reached[index], true) {
             continue;
         }
-        for import in &discovery.units[index].imports {
-            pending.push(match import {
-                ResolvedImport::Namespace { target, .. }
-                | ResolvedImport::Symbols { target, .. } => *target,
-            });
-        }
+        pending.extend(discovery.units[index].imports.iter().map(ResolvedImport::target));
     }
     for (unit, reached) in discovery.units.iter_mut().zip(reached) {
         unit.prelude_only = !reached;
     }
 
-    Ok(ModuleGraph {
-        units: discovery.units,
-        prelude,
+    let mut order = Order::of(&discovery.units, prelude.into_iter().chain([root]));
+    if order.cyclic.contains(&root)
+        && let Some(name) = discovery.imported_as.get(&root)
+    {
+        discovery.units[root].dotted = name.clone();
+    }
+    let grouped = !order.cyclic.is_empty() || discovery.units.iter().any(impls_a_foreign_type);
+    if grouped {
+        // std never imports a user module, so typing all of std first keeps every import ahead
+        let (std, user): (Vec<usize>, Vec<usize>) = order
+            .sequence
+            .iter()
+            .partition(|&&unit| is_std_module(&discovery.units[unit].dotted));
+        order.sequence = std.into_iter().chain(user).collect();
+    }
+    Ok(order.apply(discovery.units, prelude, grouped))
+}
+
+fn impls_a_foreign_type(unit: &ModuleUnit) -> bool {
+    if is_std_module(&unit.dotted) {
+        return false;
+    }
+    let imported = |name: &str| {
+        unit.imports.iter().any(|import| match import {
+            ResolvedImport::Symbols { names, .. } => names.iter().any(|n| n == name),
+            ResolvedImport::Namespace { .. } => false,
+        })
+    };
+    unit.stmts.iter().any(|stmt| match &stmt.kind {
+        StmtKind::Impl(decl) => decl.self_ty.name.contains('.') || imported(&decl.self_ty.name),
+        _ => false,
     })
+}
+
+// imports in source order, so an acyclic graph keeps the post order units were always typed in
+struct Order {
+    sequence: Vec<usize>,
+    cyclic: HashSet<usize>,
+}
+
+impl Order {
+    fn of(units: &[ModuleUnit], starts: impl Iterator<Item = usize>) -> Self {
+        let mut tarjan = Tarjan {
+            units,
+            index: vec![None; units.len()],
+            low: vec![0; units.len()],
+            on_stack: vec![false; units.len()],
+            stack: Vec::new(),
+            next: 0,
+            finished: vec![0; units.len()],
+            finish_clock: 0,
+            components: Vec::new(),
+        };
+        for start in starts {
+            if tarjan.index[start].is_none() {
+                tarjan.visit(start);
+            }
+        }
+        let mut order = Order {
+            sequence: Vec::new(),
+            cyclic: HashSet::new(),
+        };
+        for mut component in std::mem::take(&mut tarjan.components) {
+            component.sort_by_key(|&unit| tarjan.finished[unit]);
+            if component.len() > 1 {
+                order.cyclic.extend(component.iter().copied());
+            }
+            order.sequence.extend(component);
+        }
+        order
+    }
+
+    fn apply(self, units: Vec<ModuleUnit>, prelude: Option<usize>, grouped: bool) -> ModuleGraph {
+        let mut position = vec![usize::MAX; units.len()];
+        for (at, &unit) in self.sequence.iter().enumerate() {
+            position[unit] = at;
+        }
+        let mut slots: Vec<Option<ModuleUnit>> = units.into_iter().map(Some).collect();
+        let units = self
+            .sequence
+            .iter()
+            .map(|&old| {
+                let mut unit = slots[old].take().expect("each unit is placed once");
+                for import in &mut unit.imports {
+                    let target = import.target_mut();
+                    *target = position[*target];
+                }
+                unit
+            })
+            .collect();
+        ModuleGraph {
+            units,
+            prelude: prelude.map(|old| position[old]),
+            grouped,
+        }
+    }
+}
+
+struct Tarjan<'a> {
+    units: &'a [ModuleUnit],
+    index: Vec<Option<usize>>,
+    low: Vec<usize>,
+    on_stack: Vec<bool>,
+    stack: Vec<usize>,
+    next: usize,
+    finished: Vec<usize>,
+    finish_clock: usize,
+    components: Vec<Vec<usize>>,
+}
+
+impl Tarjan<'_> {
+    fn visit(&mut self, unit: usize) {
+        self.index[unit] = Some(self.next);
+        self.low[unit] = self.next;
+        self.next += 1;
+        self.stack.push(unit);
+        self.on_stack[unit] = true;
+        for target in self.units[unit].imports.iter().map(ResolvedImport::target) {
+            match self.index[target] {
+                None => {
+                    self.visit(target);
+                    self.low[unit] = self.low[unit].min(self.low[target]);
+                }
+                Some(seen) if self.on_stack[target] => {
+                    self.low[unit] = self.low[unit].min(seen);
+                }
+                Some(_) => {}
+            }
+        }
+        self.finished[unit] = self.finish_clock;
+        self.finish_clock += 1;
+        if Some(self.low[unit]) == self.index[unit] {
+            let mut component = Vec::new();
+            loop {
+                let member = self.stack.pop().expect("the unit is on the stack");
+                self.on_stack[member] = false;
+                component.push(member);
+                if member == unit {
+                    break;
+                }
+            }
+            self.components.push(component);
+        }
+    }
 }
 
 fn std_source(roots: &[PathBuf]) -> StdSource {
@@ -136,12 +268,7 @@ fn ordered_roots(root_dir: PathBuf, include: &[PathBuf]) -> Vec<PathBuf> {
 }
 
 impl Discovery {
-    fn visit(
-        &mut self,
-        file: &ModuleFile,
-        dotted: String,
-        stack: &mut Vec<String>,
-    ) -> Result<usize, ModuleError> {
+    fn load(&mut self, file: &ModuleFile, dotted: String) -> Result<usize, ModuleError> {
         if let Some(index) = self.by_path.get(&dotted) {
             return Ok(*index);
         }
@@ -152,6 +279,7 @@ impl Discovery {
             ModuleFile::Embedded { name, .. } => PathBuf::from(embedded_std_path(name)),
         };
         if let Some(index) = self.by_file.get(&identity).copied() {
+            self.imported_as.entry(index).or_insert_with(|| dotted.clone());
             self.by_path.insert(dotted, index);
             return Ok(index);
         }
@@ -191,7 +319,22 @@ impl Discovery {
             bound.insert(binding.name.clone(), binding);
         }
 
-        stack.push(dotted.clone());
+        let index = self.units.len();
+        self.units.push(ModuleUnit {
+            dotted: dotted.clone(),
+            source: source.clone(),
+            file: match file {
+                ModuleFile::Disk(path) => Some(path.clone()),
+                ModuleFile::Embedded { .. } => None,
+            },
+            stmts: Vec::new(),
+            imports: Vec::new(),
+            bound_types: HashSet::new(),
+            bound_values: HashSet::new(),
+            prelude_only: false,
+        });
+        self.by_path.insert(dotted, index);
+        self.by_file.insert(identity, index);
         let mut imports = Vec::new();
 
         for stmt in &stmts {
@@ -231,17 +374,6 @@ impl Discovery {
                     },
                 ));
             }
-            if stack.contains(&dotted_target) {
-                let mut chain: Vec<String> =
-                    stack.iter().map(|module| display_path(module)).collect();
-                chain.push(display_path(&dotted_target));
-                return Err(self.fail(
-                    &source,
-                    needs.span,
-                    CompileErrorKind::CircularDependency { chain },
-                ));
-            }
-
             let target_file = match self.locate(path) {
                 Located::Found(file) => file,
                 Located::Missing(searched_paths) => {
@@ -267,7 +399,16 @@ impl Discovery {
                 }
             };
 
-            let target = self.visit(&target_file, dotted_target.clone(), stack)?;
+            let target = self.load(&target_file, dotted_target.clone())?;
+            if target == index {
+                return Err(self.fail(
+                    &source,
+                    needs.span,
+                    CompileErrorKind::ModuleImportsItself {
+                        module_path: dotted_target,
+                    },
+                ));
+            }
             let names = binding_names(needs, path, kind);
             for name in &names {
                 let binding = TopLevelBinding {
@@ -298,32 +439,19 @@ impl Discovery {
                 },
             });
         }
-        stack.pop();
-
-        let index = self.units.len();
-        self.units.push(ModuleUnit {
-            dotted: dotted.clone(),
-            source,
-            file: match file {
-                ModuleFile::Disk(path) => Some(path.clone()),
-                ModuleFile::Embedded { .. } => None,
-            },
-            stmts,
-            imports,
-            bound_types: bound
-                .values()
-                .filter(|binding| binding.is_type())
-                .map(|binding| binding.name.clone())
-                .collect(),
-            bound_values: bound
-                .values()
-                .filter(|binding| !binding.is_type())
-                .map(|binding| binding.name.clone())
-                .collect(),
-            prelude_only: false,
-        });
-        self.by_path.insert(dotted, index);
-        self.by_file.insert(identity, index);
+        let unit = &mut self.units[index];
+        unit.stmts = stmts;
+        unit.imports = imports;
+        unit.bound_types = bound
+            .values()
+            .filter(|binding| binding.is_type())
+            .map(|binding| binding.name.clone())
+            .collect();
+        unit.bound_values = bound
+            .values()
+            .filter(|binding| !binding.is_type())
+            .map(|binding| binding.name.clone())
+            .collect();
         Ok(index)
     }
 
@@ -415,14 +543,6 @@ impl Discovery {
         ModuleError {
             error: AelysError::Compile(CompileError::new(kind, span, source.clone())),
         }
-    }
-}
-
-fn display_path(dotted: &str) -> String {
-    if dotted.is_empty() {
-        "<root>".to_string()
-    } else {
-        dotted.to_string()
     }
 }
 

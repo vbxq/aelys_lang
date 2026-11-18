@@ -13,6 +13,24 @@ pub(crate) enum ResolvedImport {
     },
 }
 
+impl ResolvedImport {
+    pub(crate) fn target(&self) -> usize {
+        match self {
+            ResolvedImport::Namespace { target, .. } | ResolvedImport::Symbols { target, .. } => {
+                *target
+            }
+        }
+    }
+
+    pub(crate) fn target_mut(&mut self) -> &mut usize {
+        match self {
+            ResolvedImport::Namespace { target, .. } | ResolvedImport::Symbols { target, .. } => {
+                target
+            }
+        }
+    }
+}
+
 pub(crate) struct ModuleUnit {
     pub(crate) dotted: String,
     pub(crate) source: Arc<Source>,
@@ -28,6 +46,8 @@ pub(crate) struct ModuleGraph {
     pub(crate) units: Vec<ModuleUnit>,
     // the prelude is visited first, so units at or below it are its own subtree and get no prelude
     pub(crate) prelude: Option<usize>,
+    // a cycle or an impl outside its type's module: user modules see each other's declarations
+    pub(crate) grouped: bool,
 }
 
 impl ModuleGraph {
