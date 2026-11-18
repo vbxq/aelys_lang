@@ -87,7 +87,8 @@ fn cli_bin() -> PathBuf {
 
 fn copy_tree(from: &Path, to: &Path) {
     for entry in fs::read_dir(from).unwrap().flatten() {
-        let target = to.join(entry.file_name());
+        let name = entry.file_name().to_string_lossy().replace(".amod", ".aelys");
+        let target = to.join(name);
         if entry.path().is_dir() {
             fs::create_dir_all(&target).unwrap();
             copy_tree(&entry.path(), &target);
