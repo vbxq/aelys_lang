@@ -937,7 +937,44 @@ from nogc
 
 A function takes a type parameter and unifies it against the element of a slice at the call site.
 
-Bounds are built-in and structural. There are exactly three, `nogc`, `eq` and `ord`, combined with `+`. There is no user-written bound and no user-written impl: **this is not a trait system**, and a name that is not one of the three is refused where it is written (`E0106`). `nogc` says the type is a value a `nogc` function may hold: a primitive, a fixed array, a reference, a `nogc fn`, or a non-generic struct or enum built only from those. `eq` is the numeric types, `char`, `bool` and `string`. `ord` is the numeric types and `char`.
+A bound is `nogc`, a builtin trait (`eq`, `ord`, `Display`) or a user trait, combined with `+` or written in a `where` clause; a name that is none of these is refused where it is written (`E0106`). `nogc` stays structural and cannot be implemented: it says the type is a value a `nogc` function may hold, a primitive, a fixed array, a reference, a `nogc fn`, or a non-generic struct or enum built only from those. `eq` holds structurally of the numeric types, `char`, `bool` and `string`, `ord` of the numeric types and `char`, `Display` of the numeric types, `char`, `bool` and `string`; a struct or enum gets them from `impl eq for P`, `impl ord for P` (which needs `impl eq`) and `impl Display for P`, and then `==`, `<` and `println` use the impl.
+
+Traits dispatch statically: each instance of a generic function calls the impl of its type argument, there is no `dyn`. An impl lives in the module of the trait or of the type, impls of one trait never overlap, and a trait method may have a default body that an impl can override.
+
+```rust run
+trait Area {
+    fn area(&self) -> i64
+    fn twice(&self) -> i64 { return self.area() * 2 }
+}
+
+struct Sq { s: i64 }
+
+impl Area for Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+
+impl Display for Sq {
+    fn to_string(&self) -> string { return "Sq({self.s})" }
+}
+
+fn total<T: Area>(xs: &[T]) -> i64 {
+    let mut acc: i64 = 0
+    for x in xs { acc = acc + x.twice() }
+    return acc
+}
+
+fn main() -> i64 {
+    let sq: [Sq; 2] = [Sq { s: 2 }, Sq { s: 3 }]
+    println(total(sq[..]))
+    println(sq[1])
+    return 0
+}
+```
+
+```output
+26
+Sq(3)
+```
 
 ```rust run
 nogc fn largest<T: ord>(xs: &[T]) -> T {
