@@ -149,8 +149,15 @@ fn leg(bin: &Path, case: &Case, level: &str) -> Result<(), String> {
             }
         }
         for line in says {
-            if !rendered.contains(line.as_str()) {
-                return Err(format!("missing {line:?} in:\n{rendered}"));
+            match line.strip_prefix('!') {
+                Some(absent) if rendered.contains(absent) => {
+                    return Err(format!("present {absent:?} in:\n{rendered}"));
+                }
+                Some(_) => {}
+                None if !rendered.contains(line.as_str()) => {
+                    return Err(format!("missing {line:?} in:\n{rendered}"));
+                }
+                None => {}
             }
         }
         if rendered.contains("E0901") || rendered.contains("E0432") {
