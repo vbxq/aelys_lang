@@ -553,6 +553,114 @@ void __aelys_vec_pop_glue(void *vecptr, void *outptr, long long elem_size, void 
     vec_pop(vecptr, outptr, elem_size, 0, (AelysElemGlue)dup);
 }
 
+/* the lengths must match the literals: 26 bytes for both bound messages, 21 for the capacity */
+static void vec_insert(void *vecptr, void *elemptr, long long elem_size, long long index,
+                       int strings, AelysElemGlue dup) {
+    AelysVec *v = (AelysVec *)vecptr;
+    if (index < 0 || index > v->len) {
+        __aelys_panic("insert index out of bounds", 26);
+    }
+    vec_detach(vecptr, elem_size, 1, strings, dup);
+    if (v->len == v->cap) {
+        long long newcap = v->cap > 0 ? v->cap * 2 : 1;
+        v->ptr = __aelys_vec_grow(v->ptr, elem_size, newcap);
+        v->cap = newcap;
+    }
+    char *at = (char *)v->ptr + index * elem_size;
+    if (index < v->len) {
+        memmove(at + elem_size, at, (size_t)((v->len - index) * elem_size));
+    }
+    memcpy(at, elemptr, (size_t)elem_size);
+    v->len += 1;
+}
+
+void __aelys_vec_insert(void *vecptr, void *elemptr, long long elem_size, long long index) {
+    vec_insert(vecptr, elemptr, elem_size, index, 0, NULL);
+}
+
+void __aelys_vec_insert_str(void *vecptr, void *elemptr, long long elem_size, long long index) {
+    vec_insert(vecptr, elemptr, elem_size, index, 1, NULL);
+}
+
+void __aelys_vec_insert_glue(void *vecptr, void *elemptr, long long elem_size, long long index,
+                             void *dup) {
+    vec_insert(vecptr, elemptr, elem_size, index, 0, (AelysElemGlue)dup);
+}
+
+static void vec_remove(void *vecptr, void *outptr, long long elem_size, long long index,
+                       int strings, AelysElemGlue dup) {
+    AelysVec *v = (AelysVec *)vecptr;
+    if (index < 0 || index >= v->len) {
+        __aelys_panic("remove index out of bounds", 26);
+    }
+    vec_detach(vecptr, elem_size, 0, strings, dup);
+    char *at = (char *)v->ptr + index * elem_size;
+    memcpy(outptr, at, (size_t)elem_size);
+    if (index + 1 < v->len) {
+        memmove(at, at + elem_size, (size_t)((v->len - index - 1) * elem_size));
+    }
+    v->len -= 1;
+}
+
+void __aelys_vec_remove(void *vecptr, void *outptr, long long elem_size, long long index) {
+    vec_remove(vecptr, outptr, elem_size, index, 0, NULL);
+}
+
+void __aelys_vec_remove_str(void *vecptr, void *outptr, long long elem_size, long long index) {
+    vec_remove(vecptr, outptr, elem_size, index, 1, NULL);
+}
+
+void __aelys_vec_remove_glue(void *vecptr, void *outptr, long long elem_size, long long index,
+                             void *dup) {
+    vec_remove(vecptr, outptr, elem_size, index, 0, (AelysElemGlue)dup);
+}
+
+/* a shared buffer keeps its elements for the other owner, so only our share goes */
+static void vec_clear(void *vecptr, long long elem_size, int strings, AelysElemGlue drop) {
+    AelysVec *v = (AelysVec *)vecptr;
+    if (v->ptr == NULL) {
+        v->len = 0;
+        return;
+    }
+    if (__aelys_rc_refcount(v->ptr) > 1) {
+        __aelys_rc_release(v->ptr);
+        v->ptr = __aelys_vec_new(elem_size, 0);
+        v->len = 0;
+        v->cap = 0;
+        return;
+    }
+    for (long long i = 0; i < v->len; i++) {
+        if (strings) {
+            __aelys_str_release((AelysString *)v->ptr + i);
+        } else if (drop != NULL) {
+            drop((char *)v->ptr + i * elem_size);
+        }
+    }
+    v->len = 0;
+}
+
+void __aelys_vec_clear(void *vecptr, long long elem_size) {
+    vec_clear(vecptr, elem_size, 0, NULL);
+}
+
+void __aelys_vec_clear_str(void *vecptr, long long elem_size) {
+    vec_clear(vecptr, elem_size, 1, NULL);
+}
+
+void __aelys_vec_clear_glue(void *vecptr, long long elem_size, void *drop) {
+    vec_clear(vecptr, elem_size, 0, (AelysElemGlue)drop);
+}
+
+void __aelys_vec_init_cap(void *vecptr, long long elem_size, long long cap) {
+    if (cap < 0) {
+        __aelys_panic("negative Vec capacity", 21);
+    }
+    AelysVec *v = (AelysVec *)vecptr;
+    v->ptr = __aelys_vec_new(elem_size, cap);
+    v->len = 0;
+    v->cap = cap;
+}
+
 /* arc is reserved, not implemented; the length must match the 19-byte literal */
 void __aelys_arc_retain(void *ptr) {
     (void)ptr;

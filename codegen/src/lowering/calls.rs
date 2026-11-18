@@ -348,6 +348,10 @@ impl<'a> FunctionCodegen<'a> {
             if name == "__aelys_vec_init"
                 || name == "__aelys_vec_push"
                 || name == "__aelys_vec_pop"
+                || name == "__aelys_vec_insert"
+                || name == "__aelys_vec_remove"
+                || name == "__aelys_vec_clear"
+                || name == "__aelys_vec_init_cap"
                 || name == "__aelys_vec_try_as_unique_mut_slice"
             {
                 return self.generate_vec_runtime_call(name, args, &arg_values);
@@ -971,9 +975,16 @@ impl<'a> FunctionCodegen<'a> {
         };
         let elem_size = self.air_type_size(&elem_ty)? as u64;
         let size_val = self.context.i64_type().const_int(elem_size, false);
-        let moves_element = name == "__aelys_vec_push" || name == "__aelys_vec_pop";
+        let moves_element = matches!(
+            name,
+            "__aelys_vec_push"
+                | "__aelys_vec_pop"
+                | "__aelys_vec_insert"
+                | "__aelys_vec_remove"
+                | "__aelys_vec_clear"
+        );
         let elem_glue = moves_element
-            .then(|| self.vec_elem_glue(&elem_ty, true))
+            .then(|| self.vec_elem_glue(&elem_ty, name != "__aelys_vec_clear"))
             .flatten();
         let variant_name;
         let name = if elem_ty == AirType::Str && moves_element {
@@ -1014,6 +1025,42 @@ impl<'a> FunctionCodegen<'a> {
                     )
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                 return Ok(call.try_as_basic_value().basic());
+            } else if name == "__aelys_vec_init_cap" {
+                (
+                    self.context
+                        .void_type()
+                        .fn_type(&[ptr_ty.into(), i64_ty.into(), i64_ty.into()], false),
+                    vec![
+                        arg_values[0].into_pointer_value().into(),
+                        size_val.into(),
+                        arg_values[1].into_int_value().into(),
+                    ],
+                )
+            } else if name.starts_with("__aelys_vec_clear") {
+                let mut params: Vec<BasicMetadataTypeEnum<'static>> =
+                    vec![ptr_ty.into(), i64_ty.into()];
+                let mut values: Vec<BasicMetadataValueEnum<'static>> =
+                    vec![arg_values[0].into_pointer_value().into(), size_val.into()];
+                if let Some(drop) = elem_glue {
+                    params.push(ptr_ty.into());
+                    values.push(drop.as_global_value().as_pointer_value().into());
+                }
+                (self.context.void_type().fn_type(&params, false), values)
+            } else if name.starts_with("__aelys_vec_insert") || name.starts_with("__aelys_vec_remove")
+            {
+                let mut params: Vec<BasicMetadataTypeEnum<'static>> =
+                    vec![ptr_ty.into(), ptr_ty.into(), i64_ty.into(), i64_ty.into()];
+                let mut values: Vec<BasicMetadataValueEnum<'static>> = vec![
+                    arg_values[0].into_pointer_value().into(),
+                    arg_values[1].into_pointer_value().into(),
+                    size_val.into(),
+                    arg_values[2].into_int_value().into(),
+                ];
+                if let Some(dup) = elem_glue {
+                    params.push(ptr_ty.into());
+                    values.push(dup.as_global_value().as_pointer_value().into());
+                }
+                (self.context.void_type().fn_type(&params, false), values)
             } else if name == "__aelys_vec_init" {
                 let vec_ptr = arg_values[0].into_pointer_value();
                 let count = arg_values[1].into_int_value();

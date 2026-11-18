@@ -1062,7 +1062,7 @@ impl<'a> BodyBuilder<'a> {
                 ..
             } => {
                 // row 6: the sole run-1 vec mutator writes its receiver, so a live element borrow
-                if enum_name.as_str() == "Vec" && variant.as_str() == "push" {
+                if enum_name.as_str() == "Vec" && matches!(variant.as_str(), "push" | "insert") {
                     if let Some((recv, rest)) = args.split_first() {
                         match self.build_operand(recv) {
                             BirOperand::Copy(dest) => {
@@ -1090,8 +1090,12 @@ impl<'a> BodyBuilder<'a> {
                     }
                 }
                 // pop writes its receiver, so a live element borrow must die at the write
-                if enum_name.as_str() == "Vec" && variant.as_str() == "pop" {
-                    if let Some(recv) = args.first() {
+                if enum_name.as_str() == "Vec"
+                    && matches!(variant.as_str(), "pop" | "remove" | "clear")
+                {
+                    if let Some((recv, rest)) = args.split_first() {
+                        let rest_ops: Vec<BirOperand> =
+                            rest.iter().map(|a| self.build_operand(a)).collect();
                         match self.build_operand(recv) {
                             BirOperand::Copy(dest) => {
                                 self.push(
@@ -1103,15 +1107,19 @@ impl<'a> BodyBuilder<'a> {
                                     },
                                     span,
                                 );
+                                let mut ops = vec![BirOperand::Copy(dest)];
+                                ops.extend(rest_ops);
                                 return self.emit_to_temp(
-                                    BirRvalue::Aggregate(vec![BirOperand::Copy(dest)]),
+                                    BirRvalue::Aggregate(ops),
                                     expr.ty.clone(),
                                     span,
                                 );
                             }
                             recv_op => {
+                                let mut ops = vec![recv_op];
+                                ops.extend(rest_ops);
                                 return self.emit_to_temp(
-                                    BirRvalue::Aggregate(vec![recv_op]),
+                                    BirRvalue::Aggregate(ops),
                                     expr.ty.clone(),
                                     span,
                                 );

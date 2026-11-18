@@ -928,8 +928,11 @@ impl TypeInference {
                 if enum_name == "Vec" && variant == "push" && !args.is_empty() {
                     self.check_write_target(&args[0], "a `Vec::push`", expr.span);
                 }
-                if enum_name == "Vec" && variant == "pop" && !args.is_empty() {
-                    self.check_write_target(&args[0], "a `Vec::pop`", expr.span);
+                if enum_name == "Vec"
+                    && matches!(variant.as_str(), "pop" | "insert" | "remove" | "clear")
+                    && !args.is_empty()
+                {
+                    self.check_write_target(&args[0], &format!("a `Vec::{variant}`"), expr.span);
                 }
                 if args.is_empty() {
                     if let InferType::Enum(name, type_args) = &expr.ty {

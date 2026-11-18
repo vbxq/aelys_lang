@@ -760,8 +760,10 @@ fn group_surface_a_vec_gives_back_and_a_missing_method_names_what_exists() {
         "vec_pop",
         "fn main() -> i64 {\n\
          \x20   let mut v: Vec<i64> = vec[1, 2, 3]\n\
-         \x20   let x: i64 = Vec::pop(v)\n\
-         \x20   println(x)\n\
+         \x20   match Vec::pop(v) {\n\
+         \x20       Some(x) => { println(x) }\n\
+         \x20       None => { println(0) }\n\
+         \x20   }\n\
          \x20   println(Vec::len(v))\n\
          \x20   return 0\n\
          }\n",

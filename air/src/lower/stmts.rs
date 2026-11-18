@@ -460,7 +460,7 @@ impl<'a> LoweringContext<'a> {
         match kind {
             TypedExprKind::EnumVariant {
                 enum_name, variant, ..
-            } => enum_name == "Vec" && variant == "new",
+            } => enum_name == "Vec" && (variant == "new" || variant == "with_capacity"),
             TypedExprKind::VecLiteral { .. } => true,
             // a callee transfers its share out: emit_rc_releases_for_return excludes the escaped
             TypedExprKind::Call { .. } => true,

@@ -116,7 +116,7 @@ This is what the 0.1 milestone promises, and what it does not. It covers program
 - **The same answer at every level.** A program accepted at one `-O` level is accepted at every level, prints the same output and exits with the same status. A program refused at `-O0` is refused with the same error at `-O3`. Every example in this file is run at `-O0` and `-O2` and must agree.
 - **No use-after-free and no double free, outside `unsafe`.** In a program that has no `unsafe { }` block and calls no `extern` function itself (the `unsafe` calls inside `std` are covered), nothing is read after it is freed and nothing is freed twice. Under the default runtime `rc` and under `rc+cycles`, such a program's memory stays bounded by what it keeps alive, with one exception: a cycle of `Rc` values under `rc` (below).
 - **Cycles are collected during execution under `--runtime rc+cycles`.** The collector runs at points the compiler inserts at function entry and on loop back edges, never inside `nogc` code.
-- **Run-time checks stop the program.** An index outside a `Vec`, an array or a slice, a slice range past the end, a division or remainder by zero, the minimum of a signed type divided by `-1` or taken modulo `-1` in every signed type, `Vec::pop` on an empty `Vec` and `char::from_i64` of a value that is not a Unicode scalar value print a message on standard error and stop the program with `SIGABRT`, at every level. A shell shows the status as 134, and the system may write a core dump.
+- **Run-time checks stop the program.** An index outside a `Vec`, an array or a slice, a slice range past the end, a division or remainder by zero, the minimum of a signed type divided by `-1` or taken modulo `-1` in every signed type, a `Vec::insert` or `Vec::remove` index out of bounds, a negative `Vec::with_capacity` and `char::from_i64` of a value that is not a Unicode scalar value print a message on standard error and stop the program with `SIGABRT`, at every level. A shell shows the status as 134, and the system may write a core dump.
 - **Every refusal is named.** A form the compiler does not support is refused with an error code and a message that says what the form is. `E0901` and `E0432` mean the compiler itself is wrong; an ordinary program that produces either one is a compiler bug. `E0903` means a tool outside the compiler, the linker or the file system, refused after the compiler did its part.
 
 The level point is checked by `aelys/tests/opt_invariance_tests.rs` and `aelys/tests/group_release01_s2b_tests.rs`, the memory points by the `group_rc*` and `group_release01*` suites in `aelys/tests` and by `scripts/memory_growth_sweep.sh`, which measures peak memory at 10^5 and 10^6 iterations.
@@ -406,13 +406,38 @@ fn main() -> i64 {
 }
 ```
 
-`Vec::pop` on an empty `Vec` stops the program:
+`Vec::pop` and `Vec::get` return an `Option`, so an empty `Vec` or an index out of bounds gives `None`:
+
+```rust run
+fn show(o: Option<i64>) {
+    match o {
+        Some(x) => { println(x) }
+        None => { println("none") }
+    }
+}
+
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[1]
+    show(Vec::get(v, 1))
+    show(Vec::pop(v))
+    show(Vec::pop(v))
+    return 0
+}
+```
+
+```output
+none
+1
+none
+```
+
+`Vec::remove` past the end stops the program:
 
 ```rust run exit=134
 fn main() -> i64 {
     let mut v: Vec<i64> = vec[1]
-    println(Vec::pop(v))
-    println(Vec::pop(v))
+    println(Vec::remove(v, 0))
+    println(Vec::remove(v, 0))
     return 0
 }
 ```
@@ -422,7 +447,7 @@ fn main() -> i64 {
 ```
 
 ```stderr
-pop from an empty Vec
+remove index out of bounds
 ```
 
 `i64::MIN / -1` has no `i64` answer and stops the program:
@@ -715,22 +740,22 @@ For more information about this error, try `aelys-cli --explain E0902`
 error: aborting due to 1 previous error
 ```
 
-A `Vec` function other than the six builtins. The whole builtin `Vec` surface is `new`, `push`, `pop`, `len`, `as_slice` and `try_as_unique_mut_slice`, and the compiler says so:
+A `Vec` function other than the eleven builtins. The whole builtin `Vec` surface is `new`, `push`, `pop`, `get`, `insert`, `remove`, `clear`, `with_capacity`, `len`, `as_slice` and `try_as_unique_mut_slice`, and the compiler says so:
 
 ```rust refused E0301
 fn main() -> i64 {
     let mut v: Vec<i64> = vec[1, 2, 3]
-    Vec::remove(v, 0)
+    Vec::truncate(v, 0)
     return 0
 }
 ```
 
 ```diagnostic
-error[E0301]: unknown method 'remove' on Vec; supported: 'new', 'push', 'pop', 'len', 'as_slice', 'try_as_unique_mut_slice'
+error[E0301]: unknown method 'truncate' on Vec; supported: 'new', 'push', 'pop', 'get', 'insert', 'remove', 'clear', 'with_capacity', 'len', 'as_slice', 'try_as_unique_mut_slice'
  --> main.aelys:3:5
   |
-3 |     Vec::remove(v, 0)
-  |     ^^^^^^^^^^^^^^^^^ unknown method 'remove' on Vec; supported: 'new', 'push', 'pop', 'len', 'as_slice', 'try_as_unique_mut_slice'
+3 |     Vec::truncate(v, 0)
+  |     ^^^^^^^^^^^^^^^^^^^ unknown method 'truncate' on Vec; supported: 'new', 'push', 'pop', 'get', 'insert', 'remove', 'clear', 'with_capacity', 'len', 'as_slice', 'try_as_unique_mut_slice'
 
 For more information about this error, try `aelys-cli --explain E0301`
 error: aborting due to 1 previous error

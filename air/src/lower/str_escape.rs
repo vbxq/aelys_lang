@@ -6,6 +6,7 @@ use crate::{
 };
 
 const VEC_POP: &str = "__aelys_vec_pop";
+const VEC_REMOVE: &str = "__aelys_vec_remove";
 
 fn local_of(op: &Operand) -> Option<LocalId> {
     match op {
@@ -51,7 +52,7 @@ fn vec_pop_out_slot(kind: &AirStmtKind) -> Option<LocalId> {
     else {
         return None;
     };
-    (name == VEC_POP)
+    (name == VEC_POP || name == VEC_REMOVE)
         .then(|| args.get(1).and_then(local_of))
         .flatten()
 }
@@ -158,6 +159,7 @@ fn successors(terminator: &AirTerminator) -> Vec<BlockId> {
 // matching on the bare name is safe only because sema rejects a user redefinition of print/println with E0301
 fn callee_stores_nothing(func: &Callee) -> bool {
     matches!(func, Callee::Named(name) if name == "print" || name == "println" || name == VEC_POP
+        || name == VEC_REMOVE
         || name == "__aelys_to_string"
         || crate::symbols::STRING_READER_SYMBOLS.contains(&name.as_str()))
 }

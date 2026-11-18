@@ -583,6 +583,21 @@ impl<'a> LoweringContext<'a> {
                 if enum_name == "Vec" && variant == "pop" {
                     return self.lower_vec_pop(&expr.ty, args, sp);
                 }
+                if enum_name == "Vec" && variant == "get" {
+                    return self.lower_vec_get(&expr.ty, args, sp);
+                }
+                if enum_name == "Vec" && variant == "insert" {
+                    return self.lower_vec_insert(args, sp);
+                }
+                if enum_name == "Vec" && variant == "remove" {
+                    return self.lower_vec_remove(&expr.ty, args, sp);
+                }
+                if enum_name == "Vec" && variant == "clear" {
+                    return self.lower_vec_clear(args, sp);
+                }
+                if enum_name == "Vec" && variant == "with_capacity" {
+                    return self.lower_vec_with_capacity(&expr.ty, args, sp);
+                }
                 if enum_name == "Vec" && variant == "try_as_unique_mut_slice" {
                     return self.lower_vec_try_as_unique_mut_slice(&expr.ty, args, sp);
                 }
@@ -1770,6 +1785,72 @@ impl<'a> LoweringContext<'a> {
         Operand::Const(AirConst::Null)
     }
 
+    fn vec_target_addr(&mut self, what: &str, target: &TypedExpr) -> Option<Operand> {
+        match self.projection_base(target) {
+            Some(addr) => Some(Operand::Copy(addr.ptr)),
+            None => {
+                self.report_ice(format!(
+                    "ICE: Vec::{what} target denotes no storage at AIR lowering; sema must \
+                     reject it (E0421)"
+                ));
+                None
+            }
+        }
+    }
+
+    fn option_parts(&mut self, opt_ty: &AirType) -> Option<(EnumRef, u32, u32)> {
+        let AirType::Enum(enum_ref) = opt_ty else {
+            self.report_ice(format!(
+                "ICE: a Vec operation returning Option has AIR type `{opt_ty:?}`"
+            ));
+            return None;
+        };
+        let def = self.defs().find_enum(&enum_ref.name)?;
+        let tag_of = |name: &str| def.variants.iter().find(|v| v.name == name).map(|v| v.tag);
+        match (tag_of("Some"), tag_of("None")) {
+            (Some(some), Some(none)) => Some((enum_ref.clone(), some, none)),
+            _ => {
+                self.report_ice(format!(
+                    "ICE: enum `{}` returned by a Vec operation has no Some/None",
+                    enum_ref.name
+                ));
+                None
+            }
+        }
+    }
+
+    fn emit_option_init(
+        &mut self,
+        result: LocalId,
+        enum_ref: &EnumRef,
+        tag: u32,
+        payload: Vec<Operand>,
+        sp: Option<Span>,
+    ) {
+        let variant = if payload.is_empty() { "None" } else { "Some" };
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Local(result),
+                rvalue: Rvalue::EnumInit {
+                    enum_ref: enum_ref.clone(),
+                    variant: variant.to_string(),
+                    tag,
+                    payload,
+                },
+            },
+            sp,
+        );
+    }
+
+    fn pose_option_result(&mut self, result: LocalId, opt_ty: &AirType) {
+        if self.last_block_is_terminated() {
+            return;
+        }
+        if self.counted_air(opt_ty) || self.aggregate_rc_paths(opt_ty).is_some() {
+            self.stmt_str_temps.push((result, self.current_blocks.len()));
+        }
+    }
+
     fn lower_vec_pop(
         &mut self,
         result_ty: &InferType,
@@ -1783,18 +1864,45 @@ impl<'a> LoweringContext<'a> {
             ));
             return Operand::Const(AirConst::Null);
         }
-        let vec_addr = match self.projection_base(&args[0]) {
-            Some(addr) => Operand::Copy(addr.ptr),
+        let Some(vec_addr) = self.vec_target_addr("pop", &args[0]) else {
+            return Operand::Const(AirConst::Null);
+        };
+        let opt_ty = self.lower_type_from_infer(result_ty);
+        let Some((enum_ref, some_tag, none_tag)) = self.option_parts(&opt_ty) else {
+            return Operand::Const(AirConst::Null);
+        };
+        let elem_ty = match enum_ref.args.first() {
+            Some(t) => t.clone(),
             None => {
-                self.report_ice(
-                    "ICE: Vec::pop target denotes no storage at AIR lowering; sema must \
-                     reject it (E0421)"
-                        .to_string(),
-                );
+                self.report_ice("ICE: Vec::pop result Option has no type argument".to_string());
                 return Operand::Const(AirConst::Null);
             }
         };
-        let elem_ty = self.lower_type_from_infer(result_ty);
+        let result = self.alloc_temp_mut(opt_ty.clone());
+        let len = self.emit_rvalue_to_temp(AirType::I64, Rvalue::Len(vec_addr.clone()), sp);
+        let empty = self.emit_rvalue_to_temp(
+            AirType::Bool,
+            Rvalue::BinaryOp(BinOp::Eq, len, Operand::Const(AirConst::Int(0, AirIntSize::I64))),
+            sp,
+        );
+        if self.position_is_dead() {
+            return Operand::Const(AirConst::Null);
+        }
+        let none_id = self.alloc_block_id();
+        let some_id = self.alloc_block_id();
+        let merge_id = self.alloc_block_id();
+        let dominated = self.str_temps_posed_here();
+        self.seal_block(AirTerminator::Branch {
+            cond: empty,
+            then_block: none_id,
+            else_block: some_id,
+        });
+
+        self.fixup_block_id_noop(none_id);
+        self.emit_option_init(result, &enum_ref, none_tag, Vec::new(), sp);
+        self.seal_block(AirTerminator::Goto(merge_id));
+
+        self.fixup_block_id_noop(some_id);
         let out_slot = self.alloc_temp_mut(elem_ty.clone());
         let out_addr = self.addr_of_own_temp(out_slot, &elem_ty, sp);
         self.emit(
@@ -1804,11 +1912,244 @@ impl<'a> LoweringContext<'a> {
             },
             sp,
         );
-        if self.counted_air(&elem_ty) && !self.last_block_is_terminated() {
+        self.emit_option_init(result, &enum_ref, some_tag, vec![Operand::Move(out_slot)], sp);
+        self.seal_block(AirTerminator::Goto(merge_id));
+
+        self.fixup_block_id_noop(merge_id);
+        self.restamp_str_temps(&dominated);
+        self.pose_option_result(result, &opt_ty);
+        Operand::Copy(result)
+    }
+
+    fn lower_vec_get(
+        &mut self,
+        result_ty: &InferType,
+        args: &[TypedExpr],
+        sp: Option<Span>,
+    ) -> Operand {
+        if args.len() != 2 {
+            self.report_ice(format!(
+                "ICE: Vec::get expects 2 arguments, got {}",
+                args.len()
+            ));
+            return Operand::Const(AirConst::Null);
+        }
+        let vec_ptr = match self.projection_base(&args[0]) {
+            Some(addr) => addr.ptr,
+            None => {
+                let vec_ty = self.lower_type_from_infer(&args[0].ty);
+                let op = self.lower_expr(&args[0]);
+                let local = self.operand_to_local(op, &vec_ty);
+                match self.addr_of_own_temp(local, &vec_ty, sp) {
+                    Operand::Copy(id) | Operand::Move(id) => id,
+                    Operand::Const(_) => return Operand::Const(AirConst::Null),
+                }
+            }
+        };
+        let idx = self.lower_expr(&args[1]);
+        let opt_ty = self.lower_type_from_infer(result_ty);
+        let Some((enum_ref, some_tag, none_tag)) = self.option_parts(&opt_ty) else {
+            return Operand::Const(AirConst::Null);
+        };
+        let InferType::Enum(_, targs) = result_ty else {
+            return Operand::Const(AirConst::Null);
+        };
+        let elem_infer = targs.first().cloned().unwrap_or(InferType::Dynamic);
+        let elem_ty = self.lower_type_from_infer(&elem_infer);
+        let result = self.alloc_temp_mut(opt_ty.clone());
+        let len = self.emit_rvalue_to_temp(AirType::I64, Rvalue::Len(Operand::Copy(vec_ptr)), sp);
+        let not_neg = self.emit_rvalue_to_temp(
+            AirType::Bool,
+            Rvalue::BinaryOp(
+                BinOp::Ge,
+                idx.clone(),
+                Operand::Const(AirConst::Int(0, AirIntSize::I64)),
+            ),
+            sp,
+        );
+        let below = self.emit_rvalue_to_temp(
+            AirType::Bool,
+            Rvalue::BinaryOp(BinOp::Lt, idx.clone(), len),
+            sp,
+        );
+        let in_bounds =
+            self.emit_rvalue_to_temp(AirType::Bool, Rvalue::BinaryOp(BinOp::And, not_neg, below), sp);
+        if self.position_is_dead() {
+            return Operand::Const(AirConst::Null);
+        }
+        let some_id = self.alloc_block_id();
+        let none_id = self.alloc_block_id();
+        let merge_id = self.alloc_block_id();
+        let dominated = self.str_temps_posed_here();
+        self.seal_block(AirTerminator::Branch {
+            cond: in_bounds,
+            then_block: some_id,
+            else_block: none_id,
+        });
+
+        self.fixup_block_id_noop(some_id);
+        let before = self.str_temp_ids();
+        let elem = self.emit_rvalue_to_temp(
+            elem_ty.clone(),
+            Rvalue::Index {
+                base: Operand::Copy(vec_ptr),
+                index: idx,
+            },
+            sp,
+        );
+        let owned = match crate::rc_paths::rc_field_paths_in(&elem_ty, self.defs()) {
+            crate::rc_paths::RcScan::Paths(paths) => {
+                let shape = super::RcShape {
+                    ty: elem_ty.clone(),
+                    paths,
+                };
+                self.own_rc_value(elem, &elem_infer, &shape, None, sp)
+            }
+            crate::rc_paths::RcScan::None
+            | crate::rc_paths::RcScan::Undecidable(_)
+            | crate::rc_paths::RcScan::RejectedMultiVariant(_) => {
+                if self.counted_air(&elem_ty) {
+                    self.retained_str_copy(elem, sp)
+                } else {
+                    elem
+                }
+            }
+        };
+        let owned = match owned {
+            Operand::Copy(id) => Operand::Move(id),
+            other => other,
+        };
+        self.emit_option_init(result, &enum_ref, some_tag, vec![owned], sp);
+        self.release_arm_str_temps(&before);
+        self.seal_block(AirTerminator::Goto(merge_id));
+
+        self.fixup_block_id_noop(none_id);
+        self.emit_option_init(result, &enum_ref, none_tag, Vec::new(), sp);
+        self.seal_block(AirTerminator::Goto(merge_id));
+
+        self.fixup_block_id_noop(merge_id);
+        self.restamp_str_temps(&dominated);
+        self.pose_option_result(result, &opt_ty);
+        Operand::Copy(result)
+    }
+
+    fn lower_vec_insert(&mut self, args: &[TypedExpr], sp: Option<Span>) -> Operand {
+        if args.len() != 3 {
+            self.report_ice(format!(
+                "ICE: Vec::insert expects 3 arguments, got {}",
+                args.len()
+            ));
+            return Operand::Const(AirConst::Null);
+        }
+        let Some(vec_addr) = self.vec_target_addr("insert", &args[0]) else {
+            return Operand::Const(AirConst::Null);
+        };
+        let idx = self.lower_expr(&args[1]);
+        let elem_ty = self.lower_type_from_infer(&args[2].ty);
+        let elem_op = self.lower_expr(&args[2]);
+        let elem_op = self.own_str_for_store(elem_op, &args[2].ty, sp);
+        let elem_slot = self.alloc_temp_mut(elem_ty.clone());
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Local(elem_slot),
+                rvalue: Rvalue::Use(elem_op),
+            },
+            sp,
+        );
+        let elem_addr = self.addr_of_own_temp(elem_slot, &elem_ty, sp);
+        self.emit(
+            AirStmtKind::CallVoid {
+                func: Callee::Named("__aelys_vec_insert".to_string()),
+                args: vec![vec_addr, elem_addr, idx],
+            },
+            sp,
+        );
+        Operand::Const(AirConst::Null)
+    }
+
+    fn lower_vec_remove(
+        &mut self,
+        result_ty: &InferType,
+        args: &[TypedExpr],
+        sp: Option<Span>,
+    ) -> Operand {
+        if args.len() != 2 {
+            self.report_ice(format!(
+                "ICE: Vec::remove expects 2 arguments, got {}",
+                args.len()
+            ));
+            return Operand::Const(AirConst::Null);
+        }
+        let Some(vec_addr) = self.vec_target_addr("remove", &args[0]) else {
+            return Operand::Const(AirConst::Null);
+        };
+        let idx = self.lower_expr(&args[1]);
+        let elem_ty = self.lower_type_from_infer(result_ty);
+        let out_slot = self.alloc_temp_mut(elem_ty.clone());
+        let out_addr = self.addr_of_own_temp(out_slot, &elem_ty, sp);
+        self.emit(
+            AirStmtKind::CallVoid {
+                func: Callee::Named("__aelys_vec_remove".to_string()),
+                args: vec![vec_addr, out_addr, idx],
+            },
+            sp,
+        );
+        if (self.counted_air(&elem_ty) || self.aggregate_rc_paths(&elem_ty).is_some()
+            || matches!(elem_ty, AirType::Rc(_)))
+            && !self.last_block_is_terminated()
+        {
             self.stmt_str_temps
                 .push((out_slot, self.current_blocks.len()));
         }
         Operand::Copy(out_slot)
+    }
+
+    fn lower_vec_clear(&mut self, args: &[TypedExpr], sp: Option<Span>) -> Operand {
+        if args.len() != 1 {
+            self.report_ice(format!(
+                "ICE: Vec::clear expects 1 argument, got {}",
+                args.len()
+            ));
+            return Operand::Const(AirConst::Null);
+        }
+        let Some(vec_addr) = self.vec_target_addr("clear", &args[0]) else {
+            return Operand::Const(AirConst::Null);
+        };
+        self.emit(
+            AirStmtKind::CallVoid {
+                func: Callee::Named("__aelys_vec_clear".to_string()),
+                args: vec![vec_addr],
+            },
+            sp,
+        );
+        Operand::Const(AirConst::Null)
+    }
+
+    fn lower_vec_with_capacity(
+        &mut self,
+        result_ty: &InferType,
+        args: &[TypedExpr],
+        sp: Option<Span>,
+    ) -> Operand {
+        if args.len() != 1 {
+            self.report_ice(format!(
+                "ICE: Vec::with_capacity expects 1 argument, got {}",
+                args.len()
+            ));
+            return Operand::Const(AirConst::Null);
+        }
+        let cap = self.lower_expr(&args[0]);
+        let vec_ty = self.lower_type_from_infer(result_ty);
+        let vec_local = self.alloc_temp_mut(vec_ty.clone());
+        let addr = self.addr_of_own_temp(vec_local, &vec_ty, sp);
+        self.emit(
+            AirStmtKind::CallVoid {
+                func: Callee::Named("__aelys_vec_init_cap".to_string()),
+                args: vec![addr, cap],
+            },
+            sp,
+        );
+        Operand::Copy(vec_local)
     }
 
     fn lower_len_member(&mut self, object: &TypedExpr, sp: Option<Span>) -> Operand {

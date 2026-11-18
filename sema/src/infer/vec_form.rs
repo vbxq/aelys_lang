@@ -211,7 +211,7 @@ impl TypeInference {
         let accepted = match &expr.kind {
             TypedExprKind::EnumVariant {
                 enum_name, variant, ..
-            } => enum_name == "Vec" && variant == "new",
+            } => enum_name == "Vec" && (variant == "new" || variant == "with_capacity"),
             TypedExprKind::VecLiteral { .. } => true,
             TypedExprKind::Identifier(_) => true,
             TypedExprKind::Call { .. } => true,

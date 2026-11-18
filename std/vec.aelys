@@ -16,11 +16,7 @@ pub fn first(v: &Vec<i64>) -> Option<i64> { return get(v, 0) }
 
 pub fn last(v: &Vec<i64>) -> Option<i64> { return get(v, Vec::len(*v) - 1) }
 
-// the intrinsic aborts on an empty vec, so the length decides before it is called
-pub fn pop(v: &mut Vec<i64>) -> Option<i64> {
-    if Vec::len(*v) == 0 { return None }
-    return Some(Vec::pop(*v))
-}
+pub fn pop(v: &mut Vec<i64>) -> Option<i64> { return Vec::pop(*v) }
 
 pub fn index_of(v: &Vec<i64>, x: i64) -> i64 {
     for i in 0..Vec::len(*v) {

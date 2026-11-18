@@ -139,6 +139,9 @@ fn is_managed_alloc_variant(enum_name: &str, variant: &str) -> bool {
             | ("Vec", "new")
             | ("Vec", "push")
             | ("Vec", "pop")
+            | ("Vec", "insert")
+            | ("Vec", "remove")
+            | ("Vec", "clear")
             | ("Vec", "with_capacity")
             | ("Vec", "reserve")
             | ("string", "substring_bytes")
@@ -390,7 +393,7 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             args,
             ..
         } => {
-            if enum_name == "Vec" && (variant == "len" || variant == "as_slice") {
+            if enum_name == "Vec" && (variant == "len" || variant == "as_slice" || variant == "get") {
                 if let Some((recv, rest)) = args.split_first() {
                     walk_expr(recv, tt, set, w, Pos::Base);
                     for arg in rest {
@@ -414,7 +417,8 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             if enum_name == "char" && variant == "from_i64" {
                 set.insert(Effect::Panic);
             }
-            if enum_name == "Vec" && variant == "pop" {
+            if enum_name == "Vec" && matches!(variant.as_str(), "insert" | "remove" | "with_capacity")
+            {
                 set.insert(Effect::Panic);
             }
             if is_managed_alloc_variant(enum_name, variant) {

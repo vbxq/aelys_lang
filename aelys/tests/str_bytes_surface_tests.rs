@@ -2641,6 +2641,12 @@ fn sb53_a_parameter_handed_to_an_imported_generic_takes_a_share_of_its_own() {
 }
 
 const SB60_A_VEC_OF_STRINGS_ACROSS_COPIES_STORES_AND_POPS: &str = r#"
+fn got(o: Option<string>) -> string {
+    match o {
+        Some(x) => { return x }
+        None => { return "none" }
+    }
+}
 fn main() -> i64 {
     let mut v: Vec<string> = Vec::new()
     Vec::push(v, "ab" + "{1}")
@@ -2650,8 +2656,8 @@ fn main() -> i64 {
     v[0] = "ab" + "{9}"
     v[1] = v[1]
     v[2] = v[1]
-    let a: string = Vec::pop(v)
-    println(Vec::pop(v))
+    let a: string = got(Vec::pop(v))
+    println(got(Vec::pop(v)))
     let q: string = "QQ" + "{8}"
     let r: string = "QQ" + "{7}"
     println(a)
@@ -3216,6 +3222,12 @@ fn sb67_a_push_on_a_shared_buffer_retains_the_elements_it_copies() {
 }
 
 const SB74_A_POP_ON_A_SHARED_BUFFER: &str = r#"
+fn got(o: Option<string>) -> string {
+    match o {
+        Some(x) => { return x }
+        None => { return "none" }
+    }
+}
 fn victim(n: i64) -> string { return "ab" + "{n}" }
 fn churn() -> Vec<string> {
     let mut keep: Vec<string> = Vec::new()
@@ -3233,10 +3245,10 @@ fn main() -> i64 {
     Vec::push(v, victim(2))
     Vec::push(v, victim(3))
     let w: Vec<string> = v
-    let a: string = Vec::pop(v)
+    let a: string = got(Vec::pop(v))
     Vec::pop(v)
     let x: Vec<string> = v
-    let b: string = Vec::pop(v)
+    let b: string = got(Vec::pop(v))
     let k = churn()
     println(a + b)
     println(w[0] + w[1] + w[2])
@@ -3745,13 +3757,19 @@ fn sb80_a_generic_mut_parameter_owns_what_it_is_reassigned() {
 }
 
 const SB87_A_GENERIC_POP: &str = r#"
-fn take<T>(v: &mut Vec<T>) -> T { return Vec::pop(*v) }
+fn take<T>(v: &mut Vec<T>) -> Option<T> { return Vec::pop(*v) }
+fn got(o: Option<string>) -> string {
+    match o {
+        Some(x) => { return x }
+        None => { return "none" }
+    }
+}
 fn main() -> i64 {
     let mut v: Vec<string> = Vec::new()
     Vec::push(v, "a" + "{1}")
     Vec::push(v, "b" + "{2}")
     let w: Vec<string> = v
-    let x: string = take(&mut v)
+    let x: string = got(take(&mut v))
     println(x)
     println(w[0])
     println(v[0])
@@ -4442,7 +4460,13 @@ struct P { name: string, age: i64 }
 struct Q { r: Rc<i64>, name: string }
 
 fn setp<T>(v: &mut Vec<T>, i: i64, x: T) { (*v)[i] = x }
-fn takep<T>(v: &mut Vec<T>) -> T { return Vec::pop(*v) }
+fn takep<T>(v: &mut Vec<T>) -> Option<T> { return Vec::pop(*v) }
+fn gotp(o: Option<P>) -> P {
+    match o {
+        Some(p) => { return p }
+        None => { return P { name: "none", age: 0 } }
+    }
+}
 
 fn main() -> i64 {
     let mut v: Vec<P> = Vec::new()
@@ -4451,7 +4475,7 @@ fn main() -> i64 {
     v[0] = P { name: victim(2), age: 2 }
     let k = churn()
     setp(&mut v, 0, P { name: victim(3), age: 3 })
-    let taken: P = takep(&mut v)
+    let taken: P = gotp(takep(&mut v))
     Vec::push(v, P { name: victim(4), age: 4 })
     println(w[0].name + " " + v[0].name + " " + taken.name)
     return 0
@@ -4631,12 +4655,18 @@ fn churn() -> Vec<string> {
 }
 
 struct P { name: string, age: i64 }
+fn gotp(o: Option<P>) -> P {
+    match o {
+        Some(p) => { return p }
+        None => { return P { name: "none", age: 0 } }
+    }
+}
 fn main() -> i64 {
     let mut v: Vec<P> = Vec::new()
     Vec::push(v, P { name: victim(1), age: 1 })
     let w: Vec<P> = v
     Vec::push(v, P { name: victim(2), age: 2 })
-    let taken: P = Vec::pop(v)
+    let taken: P = gotp(Vec::pop(v))
     let mut u: Vec<[string; 2]> = Vec::new()
     Vec::push(u, [victim(3), victim(4)])
     let t: Vec<[string; 2]> = u
@@ -4906,10 +4936,14 @@ fn main() -> i64 {
     Vec::push(v, Some(victim(2)))
     let w: Vec<Option<string>> = v
     Vec::push(v, Some(victim(3)))
-    let t: Option<string> = Vec::pop(v)
-    match t {
-        Some(x) => { n = n + x.len }
-        None => { n = n + 1 }
+    match Vec::pop(v) {
+        Some(t) => {
+            match t {
+                Some(x) => { n = n + x.len }
+                None => { n = n + 1 }
+            }
+        }
+        None => { n = n + 100 }
     }
     let mut i: i64 = 0
     while i < 3 {

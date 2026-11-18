@@ -33,7 +33,12 @@ pub(super) fn may_free(expr: &TypedExpr) -> bool {
             elements.iter().any(may_free)
         }
         TypedExprKind::StructLiteral { fields, .. } => fields.iter().any(|(_, e)| may_free(e)),
-        TypedExprKind::EnumVariant { args, .. } => args.iter().any(may_free),
+        TypedExprKind::EnumVariant {
+            enum_name,
+            variant,
+            args,
+            ..
+        } => (enum_name == "Vec" && variant == "clear") || args.iter().any(may_free),
         _ => true,
     }
 }
