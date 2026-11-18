@@ -1,2 +1,2 @@
 refuse E0301
-expected `string`, found `i64`
+expected `&str`, found `i64`

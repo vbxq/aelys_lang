@@ -85,8 +85,7 @@ impl TypeInference {
             ),
             None => typed_object,
         };
-        let growing = matches!(member, "push_str" | "push");
-        let arity = usize::from(growing);
+        let arity = usize::from(matches!(member, "push_str" | "push"));
         if args.len() != arity {
             self.errors.push(TypeError::coded(
                 "E0302",
@@ -1193,7 +1192,7 @@ fn matches_head(
             return true;
         }
         if let Some(prev) = bound.get(&name) {
-            return prev == ty;
+            return prev.equiv(ty);
         }
         bound.insert(name, ty.clone());
         return true;
@@ -1215,7 +1214,7 @@ fn matches_head(
                     .zip(ta.iter())
                     .all(|(p, t)| matches_head(p, t, tparams, bound))
         }
-        _ => !is_concrete(pat) || !is_concrete(ty) || pat == ty || (pat.is_str() && ty.is_str()),
+        _ => !is_concrete(pat) || !is_concrete(ty) || pat.equiv(ty),
     }
 }
 

@@ -878,7 +878,7 @@ impl TypeInference {
                         ));
                     }
                 }
-                if !denotes_a_place(object) {
+                if !denotes_a_place(object) && !object.ty.is_str() {
                     self.errors.push(TypeError::no_place(
                         Self::no_place_subject(object, "the base of a slice"),
                         expr.span,

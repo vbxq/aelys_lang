@@ -260,6 +260,14 @@ impl TypeInference {
             }
             ExprKind::Deref(operand) => {
                 let typed_operand = self.infer_expr(operand);
+                if typed_operand.ty == InferType::StrRef {
+                    self.depth -= 1;
+                    return TypedExpr {
+                        kind: typed_operand.kind,
+                        ty: InferType::StrRef,
+                        span: expr.span,
+                    };
+                }
                 let result_ty = match &typed_operand.ty {
                     InferType::Ref { referent, .. } if matches!(**referent, InferType::Dyn(_)) => {
                         self.errors.push(TypeError::coded(
@@ -296,6 +304,15 @@ impl TypeInference {
             ExprKind::DerefAssign { target, value } => {
                 let typed_target = self.infer_expr(target);
                 let typed_value = self.infer_expr(value);
+                if typed_target.ty == InferType::StrRef {
+                    self.errors.push(TypeError::coded(
+                        "E0320",
+                        "cannot write through a `&str`, a read-only string; take `&mut String` \
+                         to replace a string through a reference",
+                        "a `&str` is read-only",
+                        typed_target.span,
+                    ));
+                }
                 if let InferType::Ref { referent, .. } = &typed_target.ty {
                     self.constraints.push(Constraint::flows_into(
                         (**referent).clone(),

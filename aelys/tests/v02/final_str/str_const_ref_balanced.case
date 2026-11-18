@@ -1,0 +1,13 @@
+const GREETING: &str = "hello"
+const OLD: string = "old"
+
+fn main() {
+    let s: String = GREETING + " world"
+    println(s)
+    println(GREETING.len())
+    println(OLD)
+    match s.as_str() {
+        "hello world" => println("matched"),
+        _ => println("no"),
+    }
+}

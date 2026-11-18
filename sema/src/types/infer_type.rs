@@ -130,6 +130,10 @@ impl InferType {
         matches!(self, InferType::String | InferType::StrRef)
     }
 
+    pub fn equiv(&self, other: &InferType) -> bool {
+        self == other || (self.is_str() && other.is_str())
+    }
+
     pub fn is_rc(&self) -> bool {
         matches!(self, InferType::Rc(_))
     }

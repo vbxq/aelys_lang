@@ -1,2 +1,2 @@
 refuse E0301
-expected `u8`, found `string`
+expected `u8`, found `&str`

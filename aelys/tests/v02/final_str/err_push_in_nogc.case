@@ -1,0 +1,8 @@
+nogc fn grow(mut s: String) -> i64 {
+    s.push_str("x")
+    return s.len()
+}
+
+fn main() {
+    println(grow("a"))
+}

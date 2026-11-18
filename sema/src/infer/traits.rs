@@ -275,7 +275,7 @@ pub(crate) fn match_head(
         && params.contains(n)
     {
         if let Some(prev) = out.get(n) {
-            return prev == ty;
+            return prev.equiv(ty);
         }
         out.insert(n.clone(), ty.clone());
         return true;
@@ -303,7 +303,7 @@ pub(crate) fn match_head(
         (InferType::Vec(p), InferType::Vec(t)) | (InferType::Rc(p), InferType::Rc(t)) => {
             match_head(p, params, t, out)
         }
-        _ => pat == ty,
+        _ => pat.equiv(ty),
     }
 }
 
@@ -350,7 +350,7 @@ fn unifiable(
                     .zip(ya.iter())
                     .all(|(p, q)| unifiable(p, ap, q, bp, sa, sb))
         }
-        _ => a == b,
+        _ => a.equiv(b),
     }
 }
 
@@ -1002,7 +1002,7 @@ impl TypeInference {
                                 && t.args
                                     .iter()
                                     .zip(args.iter())
-                                    .all(|(a, b)| self.ann_type(a, &HashMap::new()) == *b)))
+                                    .all(|(a, b)| self.ann_type(a, &HashMap::new()).equiv(b))))
                 }),
             };
         }
@@ -1652,7 +1652,7 @@ fn match_head_loose(pat: &InferType, params: &[String], ty: &InferType) -> bool 
             && params.contains(n)
         {
             if let Some(prev) = out.get(n) {
-                return prev == ty || !ty.is_concrete() || !prev.is_concrete();
+                return prev.equiv(ty) || !ty.is_concrete() || !prev.is_concrete();
             }
             out.insert(n.clone(), ty.clone());
             return true;
@@ -1665,7 +1665,7 @@ fn match_head_loose(pat: &InferType, params: &[String], ty: &InferType) -> bool 
             (InferType::Tuple(pa), InferType::Tuple(ta)) => {
                 pa.len() == ta.len() && pa.iter().zip(ta.iter()).all(|(p, t)| go(p, params, t, out))
             }
-            _ => pat == ty,
+            _ => pat.equiv(ty),
         }
     }
     go(pat, params, ty, &mut HashMap::new())
