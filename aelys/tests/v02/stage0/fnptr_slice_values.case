@@ -1,0 +1,31 @@
+fn sum(s: &[i64]) -> i64 {
+    let mut t = 0
+    for i in 0..s.len {
+        t = t + s[i]
+    }
+    return t
+}
+fn bump(s: &mut [i64]) -> i64 {
+    s[0] = s[0] + 100
+    s[2] = 7
+    return s[0] + s[1]
+}
+fn apply(f: fn(&mut [i64]) -> i64, s: &mut [i64]) -> i64 {
+    return f(s)
+}
+fn fold(f: fn(&[i64]) -> i64, xs: &[i64]) -> i64 {
+    return f(xs)
+}
+fn main() {
+    let mut a: [i64; 3] = [1, 2, 3]
+    println(apply(bump, a[0..3]))
+    println("{a[0]} {a[1]} {a[2]}")
+    println(fold(sum, a[0..3]))
+    let mut v: Vec<i64> = vec[10, 20, 30]
+    println(apply(bump, v[0..3]))
+    Vec::push(v, 40)
+    println("{v[0]} {v[2]} {v[3]} {v.len}")
+    let g = bump
+    println(g(v[0..3]))
+    println("{v[0]} {v[2]} {v[3]}")
+}

@@ -754,7 +754,16 @@ const S4_N10: &str = "fn main() -> i64 {\n\
                       }\n";
 
 const S4_N11: &str = "fn apply(f: fn(&mut [i64]) -> i64, s: &mut [i64]) -> i64 { return f(s) }\n\
-                      fn main() -> i64 { return 0 }\n";
+                      fn bump(s: &mut [i64]) -> i64 {\n\
+                      \x20   s[0] = s[0] + 7900\n\
+                      \x20   return s[0] + s[2]\n\
+                      }\n\
+                      fn main() -> i64 {\n\
+                      \x20   let mut a: [i64; 3] = [19, 2, 3]\n\
+                      \x20   println(apply(bump, a[0..3]))\n\
+                      \x20   println(a[0])\n\
+                      \x20   return 0\n\
+                      }\n";
 
 const S4_N12: &str = "struct H { v: Vec<i64> }\n\
                       nogc fn f(h: H) -> i64 { return 0 }\n\
@@ -1076,11 +1085,11 @@ fn the_projected_global_and_its_local_twin_point_the_same_way() {
 }
 
 #[test]
-fn s4_n11_n12_the_two_pending_rows_name_what_will_move_them() {
+fn s4_n11_n12_a_slice_crosses_a_fn_pointer_and_a_vec_in_a_nogc_struct_stays_refused() {
     let h = Harness::new();
-    h.fenced_row("S4-N11", S4_N11, "E0301");
+    h.value_row("S4-N11", S4_N11, "7922\n7919\n", 0, 0);
     h.fenced_row("S4-N12", S4_N12, "E0902");
-    h.assert_legs(8);
+    h.assert_legs(4 + 8);
 }
 
 // alias of it. one view plus one base read is enough, and that is the common shape, not `s4-o1`'s
