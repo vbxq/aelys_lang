@@ -1064,10 +1064,10 @@ fn main() -> i64 {
 122
 ```
 
-A name that is not a bound is refused:
+A name that is neither a builtin bound nor a trait in scope is refused:
 
 ```rust refused E0106
-fn show<T: Display>(x: T) -> T {
+fn show<T: Hash>(x: T) -> T {
     return x
 }
 
@@ -1077,11 +1077,11 @@ fn main() -> i64 {
 ```
 
 ```diagnostic
-error[E0106]: `Display` is not a bound; the bounds are `nogc`, `eq` and `ord`, combined with `+`
+error[E0106]: no trait named `Hash`; a bound is `nogc`, `eq`, `ord`, `Display` or a trait in scope, combined with `+`
  --> main.aelys:1:12
   |
-1 | fn show<T: Display>(x: T) -> T {
-  |            ^^^^^^^ not a bound
+1 | fn show<T: Hash>(x: T) -> T {
+  |            ^^^^ unknown trait
 
 For more information about this error, try `aelys-cli --explain E0106`
 error: aborting due to 1 previous error

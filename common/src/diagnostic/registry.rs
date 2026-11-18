@@ -160,18 +160,18 @@ into intermediate variables.",
         code: "E0106",
         title: "not a bound",
         explanation: "\
-A type parameter was given a bound the compiler does not have. There are
-three, they are built in, and they are derived structurally from the type
-an instantiation supplies:
+A type parameter was given a bound that names no trait in scope. A bound
+is `nogc`, a builtin trait or a trait declared or imported by the module:
 
-    nogc    a value the managed heap never owns
-    eq      a type `==` answers on: the integers, the floats, `bool`,
-            `char`, `string`
-    ord     a type `<` answers on: the integers, the floats, `char`.
-            `string` is not one: it points at `str.compare` instead.
-            `ord` implies `eq`.
+    nogc     a value the managed heap never owns, derived from the type
+    eq       `==`: the integers, the floats, `bool`, `char`, `string`,
+             or a type with `impl eq`
+    ord      `<`: the integers, the floats, `char`, or a type with
+             `impl ord`; `string` is not one, use `str.compare`
+    Display  printing: the integers, the floats, `bool`, `char`,
+             `string`, or a type with `impl Display`
 
-Combine them with `+`:
+Combine them with `+` or in a `where` clause:
 
     fn sort<T: nogc + ord>(s: &mut [T]) { ... }
 
@@ -1219,21 +1219,21 @@ bound is never checked, so only direct calls are allowed.",
         explanation: "\
 A type parameter was used in a way its bounds do not allow, or a call
 instantiated a bounded type parameter with a type that does not satisfy
-the bound.
+the bound, or a value is printed whose type does not implement `Display`.
 
 `==` and `!=` on a type parameter need `eq`. `<`, `<=`, `>` and `>=`
-need `ord`, which implies `eq`. Neither is assumed: without the bound the
-function body would have no operation to compile.
+need `ord`, which implies `eq`. Without the bound the function body would
+have no operation to compile.
 
     fn eq<T: eq>(a: T, b: T) -> bool { return a == b }
     fn lt<T: ord>(a: T, b: T) -> bool { return a < b }
 
-The bounds are derived structurally by the compiler, never declared by a
-user. `eq` holds of the integers, the floats, `bool`, `char` and
-`string`; `ord` holds of the integers, the floats and `char`. `string` is
-deliberately not `ord`: ordering strings goes through `str.compare`. A
-type parameter, a struct, an enum, a `Vec`, a slice and a reference
-satisfy neither.",
+`eq` holds of the integers, the floats, `bool`, `char` and `string`;
+`ord` holds of the integers, the floats and `char`. `string` is
+deliberately not `ord`: ordering strings goes through `str.compare`.
+`Display` holds of the integers, the floats, `bool`, `char` and `string`.
+A struct or an enum satisfies a trait through its impl (`impl eq for P`,
+`impl ord for P`, `impl Display for P`, or an impl of a user trait).",
         severity: Severity::Error,
     },
     DiagnosticInfo {

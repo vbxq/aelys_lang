@@ -1,0 +1,12 @@
+needs m
+needs n
+
+struct P { x: i64 }
+
+fn main() {
+    let a: [m.P; 3] = [m.P { x: 1 }, m.P { x: 11 }, m.P { x: 2 }]
+    println(n.total(a[..]))
+    println(n.count_eq(a[..], m.P { x: 21 }))
+    let q = P { x: 5 }
+    println(q.x)
+}

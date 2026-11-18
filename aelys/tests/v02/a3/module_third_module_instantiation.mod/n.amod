@@ -1,0 +1,13 @@
+needs Score from tr
+
+pub fn total<T: Score>(xs: &[T]) -> i64 {
+    let mut a: i64 = 0
+    for x in xs { a = a + x.bonus() }
+    return a
+}
+
+pub fn count_eq<T: eq>(xs: &[T], y: T) -> i64 {
+    let mut c: i64 = 0
+    for x in xs { if x == y { c = c + 1 } }
+    return c
+}

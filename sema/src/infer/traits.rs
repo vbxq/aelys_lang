@@ -489,7 +489,11 @@ impl TypeInference {
                     Some(q) => kept.push(TraitRef { name: q, span: r.span }),
                     None => self.errors.push(TypeError::coded(
                         "E0106",
-                        format!("no trait named `{}`", r.name),
+                        format!(
+                            "no trait named `{}`; a bound is `nogc`, `eq`, `ord`, `Display` or a \
+                             trait in scope, combined with `+`",
+                            r.name
+                        ),
                         "unknown trait",
                         r.span,
                     )),
