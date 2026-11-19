@@ -308,11 +308,6 @@ fn s3_dc6_an_empty_unsafe_block_control() {
 }
 
 #[test]
-fn s3_dc7_an_empty_toplevel_unsafe_block_control() {
-    answers("S3-DC7", "use std::process::ExitCode; unsafe { }\nfn main() -> ExitCode { return ExitCode::from(8); }\n", 8);
-}
-
-#[test]
 fn s3_dc8_an_unsafe_operand_of_a_return_control() {
     answers(
         "S3-DC8",

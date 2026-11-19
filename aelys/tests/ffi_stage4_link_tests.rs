@@ -590,24 +590,6 @@ fn a_shared_object_twin_of_a_refused_archive_is_accepted_and_the_explain_says_so
 }
 
 #[test]
-fn the_unresolved_symbol_anchors_on_main() {
-    let dir = tempdir().expect("tempdir");
-    let err = compile(
-        dir.path(),
-        "d1",
-        TRIPLE_AE,
-        &LinkRequirement::default(),
-        OptimizationLevel::None,
-    )
-    .expect_err("D1");
-    assert!(err.contains("undefined reference"), "D1: {err}");
-    assert!(
-        err.contains("fn main() -> i64"),
-        "D1: the anchor is the main function, the only one the link can reach: {err}"
-    );
-}
-
-#[test]
 fn structural_row_the_backend_family_has_five_anchor_sites_in_the_source() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()

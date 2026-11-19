@@ -282,7 +282,7 @@ inf
 
 ## Lengths and indexing
 
-`.len` is a field, not a call. On a `string` (also spelled `str`) it counts **bytes**. On an array, a `Vec` and a slice it counts elements. `s.bytes` is the byte view of a string, a `&[u8]`. On a `&string` it is refused: pass the `string` itself.
+`.len()` is a method. On a `String` (and a `&str`) it counts **bytes**. On an array, a `Vec` and a slice it counts elements. `s.as_bytes()` is the byte view of a string, a `&[u8]`. Through a `&String` it reads the string the reference points at.
 
 ```rust run
 fn main() {
@@ -310,7 +310,7 @@ fn main() {
 4
 ```
 
-```rust refused E0304
+```rust run
 fn size(s: &String) -> i64 {
     s.len()
 }
@@ -319,6 +319,10 @@ fn main() {
     let t: String = "abc";
     println!("{}", size(&t));
 }
+```
+
+```output
+3
 ```
 
 `v[i]` on a `Vec`, an array or a slice is the element at position `i`, counted from 0. Every index is checked. An index outside the elements, negative included, stops the program with `index out of bounds` and status 134:
@@ -355,10 +359,10 @@ fn main() {
 
 ```diagnostic
 error[E0433]: [const-index] index 3 is outside `[_; 3]`, whose elements are 0 to 2
- --> main.aelys:3:15
+ --> main.aelys:3:22
   |
-3 |     println(a[3])
-  |               ^ this index is outside the array
+3 |     println!("{}", a[3]);
+  |                      ^ this index is outside the array
 
 For more information about this error, try `aelys-cli --explain E0433`
 error: aborting due to 1 previous error
@@ -516,11 +520,11 @@ fn main() {
 ```
 
 ```diagnostic
-error[E0304]: a `string` cannot be indexed by integer; `.len` counts bytes while `s[i]` counted characters, and the two could not both be right
- --> main.aelys:3:13
+error[E0304]: a `string` cannot be indexed by integer; `.len()` counts bytes while `s[i]` counted characters, and the two could not both be right
+ --> main.aelys:3:20
   |
-3 |     println(s[0])
-  |             ^ invalid member access
+3 |     println!("{}", s[0]);
+  |                    ^ invalid member access
    = help: read the characters with `for c in s`, which yields a `char`, or ask for one with `str.char_at(s, i)`
 
 For more information about this error, try `aelys-cli --explain E0304`
@@ -639,12 +643,12 @@ fn main() {
 error[E0711]: [borrow] cannot write to `v` while it is borrowed
  --> main.aelys:4:5
   |
-3 |     let view = v[0..2]
+3 |     let view = v[0..2];
   |                ------- borrow created here
-4 |     Vec::push(v, 4)
+4 |     Vec::push(v, 4);
   |     ^^^^^^^^^^^^^^^ borrow occurs here
-5 |     println(view[0])
-  |     ---------------- borrow last used here
+5 |     println!("{}", view[0]);
+  |     ----------------------- borrow last used here
 
 For more information about this error, try `aelys-cli --explain E0711`
 error: aborting due to 1 previous error
@@ -673,13 +677,13 @@ fn main() {
 error[E0727]: [nogc] function `report` is declared nogc but its inferred effects reach managed memory via `report -> total -> a vec literal`
  --> main.aelys:2:23
   |
-2 |     let v: Vec<i64> = vec[n, n]
-  |                       ^^^^^^^^^ managed memory reached here
+2 |     let v: Vec<i64> = vec![n, n];
+  |                       ^^^^^^^^^^ managed memory reached here
 ...
 6 | nogc fn report(n: i64) -> i64 {
   |      -------------------------- `report` is declared nogc here
-7 |     return total(n)
-  |            -------- calls `total` here
+7 |     total(n)
+  |     -------- calls `total` here
    = help: keep the value on the stack (an array or a `&[T]` slice), make every function on this path nogc, or drop `nogc` from `report`
 
 For more information about this error, try `aelys-cli --explain E0727`
@@ -706,8 +710,8 @@ fn main() -> ExitCode {
 error[E0902]: [rc] closure captures `n` of type `Rc<Node>` which is or contains an `Rc<T>`; capturing an Rc (or a carrier of one) in a closure is not supported
  --> main.aelys:5:13
   |
-5 |     let f = fn() -> i64 { return Rc::get(n).v }
-  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not supported yet
+5 |     let f = move || -> i64 { Rc::get(n).v };
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not supported yet
 
 For more information about this error, try `aelys-cli --explain E0902`
 error: aborting due to 1 previous error
@@ -726,7 +730,7 @@ fn main() {
 error[E0301]: unknown method 'truncate' on Vec; supported: 'new', 'push', 'pop', 'get', 'insert', 'remove', 'clear', 'with_capacity', 'len', 'as_slice', 'try_as_unique_mut_slice'
  --> main.aelys:3:5
   |
-3 |     Vec::truncate(v, 0)
+3 |     Vec::truncate(v, 0);
   |     ^^^^^^^^^^^^^^^^^^^ unknown method 'truncate' on Vec; supported: 'new', 'push', 'pop', 'get', 'insert', 'remove', 'clear', 'with_capacity', 'len', 'as_slice', 'try_as_unique_mut_slice'
 
 For more information about this error, try `aelys-cli --explain E0301`
@@ -809,8 +813,8 @@ fn main() {
 error[E0622]: module 'util' resolves in 2 search roots
  --> main.aelys:1:1
   |
-1 | needs util
-  | ^^^^^^^^^^^ found in more than one search root
+1 | mod util;
+  | ^^^^^^^^^ found in more than one search root
    = note: resolved in: a, b
    = help: drop one of the `-I` roots, or delete the copy that duplicates it
 
@@ -1379,11 +1383,11 @@ fn main() {
 
 ```diagnostic
 error[E0730]: [nogc] type parameter `T` of `largest` is bound `nogc`, but this call instantiates it with `string`, which is not a nogc value
- --> main.aelys:11:21
+ --> main.aelys:11:28
    |
-11 |     println(largest(ss[0..2]))
-   |             ------- `T` of `largest` carries a `nogc` bound
-   |                     ^^^^^^^^ `nogc` bound not satisfied here
+11 |     println!("{}", largest(ss[0..2]));
+   |                    ------- `T` of `largest` carries a `nogc` bound
+   |                            ^^^^^^^^ `nogc` bound not satisfied here
    = help: a nogc value is a primitive, a fixed array, a reference, a `nogc fn`, or a non-generic struct/enum built only from those
 
 For more information about this error, try `aelys-cli --explain E0730`

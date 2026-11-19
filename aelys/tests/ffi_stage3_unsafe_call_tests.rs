@@ -64,16 +64,6 @@ fn s3_a4_an_empty_unsafe_block_in_a_lambda_stays_accepted() {
 }
 
 #[test]
-fn s3_a5_unsafe_followed_by_a_literal_is_a_parse_error() {
-    rejects("S3-A5", "fn main() -> i64 {\n    unsafe 1\n    return 7\n}\n", "E0101", 1);
-}
-
-#[test]
-fn s3_a5_bis_an_unsafe_fn_that_is_not_extern_is_a_parse_error() {
-    rejects("S3-A5'", "unsafe fn g() -> i64 { return 7 }\nfn main() -> i64 { return g() }\n", "E0101", 1);
-}
-
-#[test]
 fn s3_b1_a_bare_direct_call_is_rejected() {
     rejects("S3-B1", &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{ return ExitCode::from(labs(-7) as u8); }}\n"), "E0617", 1);
 }

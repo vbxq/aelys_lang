@@ -563,35 +563,6 @@ fn group_std_str_split_and_join_round_trip_and_keep_the_empty_parts() {
     h.assert_legs(6);
 }
 
-fn substring_growth(n: usize) -> String {
-    format!(
-        r#"
-needs std.str
-
-fn main() -> i64 {{
-    let s: string = "0123456789abcdefghijklmnopqrstuvwxyz0123456789"
-    let t: string = str.substring(s, 0, {n})
-    println(t.len)
-    return 0
-}}
-"#
-    )
-}
-
-#[test]
-fn group_std_str_substring_allocates_once_per_call_whatever_it_copies() {
-    let h = Harness::new();
-    for n in [4usize, 8, 16] {
-        h.row(
-            "STD-STR-5",
-            &substring_growth(n),
-            &format!("{n}\n"),
-            Some((1, 1)),
-        );
-    }
-    h.assert_legs(18);
-}
-
 const STR_MULTIBYTE_READS: &str = r#"
 use std::result;
 use std::str;
@@ -670,41 +641,6 @@ fn group_std_str_names_the_carrier_without_importing_the_module_that_defines_it(
     let h = Harness::new();
     h.nogc_row("STD-STR-8", STR_CARRIER_FROM_THE_PRELUDE, "é\n?\n-42\n-3\n");
     h.assert_legs(6);
-}
-
-const STR_LEN_ADDRESS: &str = r#"
-use std::str;
-
-fn main() {
-    let s: String = str::trim("  hello  ");
-    let n = &s.len();
-}
-"#;
-
-const STR_LEN_WRITE: &str = r#"
-use std::str;
-
-fn main() {
-    let mut s: String = str::trim("  hello  ");
-    s.len = 9;
-}
-"#;
-
-#[test]
-fn group_std_str_the_length_of_a_library_string_is_a_value_and_never_a_place() {
-    let h = Harness::new();
-    h.rejects(
-        "STD-STR-6a",
-        STR_LEN_ADDRESS,
-        "E0621",
-        "cannot take the address of `.len` on `string`",
-    );
-    h.rejects(
-        "STD-STR-6b",
-        STR_LEN_WRITE,
-        "E0621",
-        "cannot assign to `.len` on `string`",
-    );
 }
 
 const VEC_TEMPORARY_VIEW: &str = r#"

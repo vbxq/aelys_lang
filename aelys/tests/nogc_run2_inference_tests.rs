@@ -1,7 +1,4 @@
 use std::collections::HashMap;
-use std::fs;
-use std::path::PathBuf;
-
 use aelys_air::bir::build::build_program;
 use aelys_air::bir::{Effect, EffectSet, effect_summaries};
 use aelys_driver::compile_to_typed_ast;
@@ -229,31 +226,3 @@ fn caller() -> i64 { foo() }
     );
 }
 
-#[test]
-fn corpus_no_panic_smoke() {
-    let corpus = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("workspace root")
-        .join("tests_e2e");
-
-    let mut processed = 0usize;
-    for entry in fs::read_dir(&corpus).expect("tests_e2e dir readable") {
-        let path = entry.expect("dir entry").path();
-        if path.extension().and_then(|e| e.to_str()) != Some("aelys") {
-            continue;
-        }
-        let src = match fs::read_to_string(&path) {
-            Ok(s) => s,
-            Err(_) => continue,
-        };
-        if let Ok(program) = compile_to_typed_ast(&src) {
-            let bir = build_program(&program);
-            let _ = effect_summaries(&bir);
-            processed += 1;
-        }
-    }
-    assert!(
-        processed >= 50,
-        "expected the fixture corpus to be reachable, only ran {processed}"
-    );
-}

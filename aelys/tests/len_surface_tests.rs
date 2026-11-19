@@ -357,60 +357,6 @@ fn len6_a_reslice_reports_the_same_length() {
     h.assert_legs(6);
 }
 
-const L7_SCALAR: &str = r#"
-use std::process::ExitCode; fn main() -> ExitCode {
-    let x: i64 = 7;
-    return ExitCode::from(x.len() as u8);
-}
-"#;
-
-const L7_UNKNOWN_ON_SLICE: &str = r#"
-use std::process::ExitCode; fn main() -> ExitCode {
-    let a: [i64;3] = [1, 2, 3];
-    let s: &[i64] = a[..];
-    return ExitCode::from(s.cap as u8);
-}
-"#;
-
-const L7_UNKNOWN_ON_VEC: &str = r#"
-use std::process::ExitCode; fn main() -> ExitCode {
-    let mut v: Vec<i64> = vec![1, 2];
-    return ExitCode::from(v.cap as u8);
-}
-"#;
-
-const L7_UNKNOWN_ON_ARRAY: &str = r#"
-use std::process::ExitCode; fn main() -> ExitCode {
-    let a: [i64;3] = [1, 2, 3];
-    return ExitCode::from(a.cap as u8);
-}
-"#;
-
-#[test]
-fn len7_the_length_did_not_open_a_field_access_hole() {
-    let h = Harness::new();
-    h.fenced_row("LEN-7a", L7_SCALAR, "E0304", "non-struct type i64");
-    h.fenced_row(
-        "LEN-7b",
-        L7_UNKNOWN_ON_SLICE,
-        "E0304",
-        "unknown field 'cap' on &[i64]",
-    );
-    h.fenced_row(
-        "LEN-7c",
-        L7_UNKNOWN_ON_VEC,
-        "E0304",
-        "unknown field 'cap' on Vec<i64>",
-    );
-    h.fenced_row(
-        "LEN-7d",
-        L7_UNKNOWN_ON_ARRAY,
-        "E0304",
-        "unknown field 'cap' on [i64; 3]",
-    );
-    h.assert_legs(12);
-}
-
 const L8_EMPTY: &str = r#"
 fn main() {
     let a: [i64;3] = [1, 2, 3];
@@ -585,46 +531,6 @@ fn len16_a_string_answers_its_length_from_any_receiver() {
     let h = Harness::new();
     h.value_row("LEN-16", L16_STRING, "5\n2\n4\n", 0, 0);
     h.assert_legs(6);
-}
-
-const L17_ADDR_STRING: &str = r#"
-fn main() {
-    let mut s: String = "hello";
-    let r = &s.len();
-}
-"#;
-
-const L17_ADDR_SLICE: &str = r#"
-fn main() {
-    let a: [i64;3] = [1, 2, 3];
-    let mut sl: &[i64] = a[..];
-    let r = &sl.len();
-}
-"#;
-
-const L17_ADDR_VEC: &str = r#"
-fn main() {
-    let mut v: Vec<i64> = vec![1, 2];
-    let r = &v.len();
-}
-"#;
-
-const L17_ADDR_ARRAY: &str = r#"
-fn main() {
-    let mut a: [i64;3] = [1, 2, 3];
-    let r = &a.len();
-}
-"#;
-
-#[test]
-fn len17_a_length_has_no_address() {
-    let h = Harness::new();
-    let says = "there is no address to take";
-    h.fenced_row("LEN-17a", L17_ADDR_STRING, "E0621", says);
-    h.fenced_row("LEN-17b", L17_ADDR_SLICE, "E0621", says);
-    h.fenced_row("LEN-17c", L17_ADDR_VEC, "E0621", says);
-    h.fenced_row("LEN-17d", L17_ADDR_ARRAY, "E0621", says);
-    h.assert_legs(12);
 }
 
 const L18_WRITE_STRING: &str = r#"

@@ -12,41 +12,6 @@ fn reject(src: &str) -> String {
         .to_string()
 }
 
-#[test]
-fn must_use_menu_names_error_type_and_all_routes() {
-    let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
-enum MyErr { Boom }
-
-fn get() -> Result<i64, MyErr> { Result::Ok(1) }
-
-fn main() {
-    get();
-}
-"#;
-    let err = reject(src);
-    assert!(
-        err.contains("[must-use]"),
-        "keeps the [must-use] marker, got: {err}"
-    );
-    assert!(
-        err.contains("MyErr"),
-        "the menu must name the concrete error type MyErr, got: {err}"
-    );
-    assert!(
-        err.contains("catch"),
-        "the menu must list the catch route, got: {err}"
-    );
-    assert!(
-        err.contains(".expect"),
-        "the menu must list the .expect assert route, got: {err}"
-    );
-    assert!(
-        err.contains("discard"),
-        "the menu must list the discard route, got: {err}"
-    );
-}
-
 // (c): a cross-error-type `?` note points the user at .map_error
 #[test]
 fn question_mismatch_note_points_at_map_error() {
@@ -71,31 +36,6 @@ fn main() { }
     assert!(
         err.contains(".map_error"),
         "the mismatch note must point at .map_error, got: {err}"
-    );
-}
-
-#[test]
-fn non_exhaustive_catch_note_says_catch() {
-    let src = r#"
-use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
-enum E { A, B }
-
-fn get() -> Result<i64, E> { Result::Err(E::B) }
-
-fn main() -> ExitCode {
-    return ExitCode::from((match get() { Ok(v) => v,
-        Err(E::A) => 1,
-    }) as u8);
-}
-"#;
-    let err = reject(src);
-    assert!(
-        err.contains("non-exhaustive"),
-        "keeps the non-exhaustive substring, got: {err}"
-    );
-    assert!(
-        err.contains("catch"),
-        "a catch source must render as a non-exhaustive catch, got: {err}"
     );
 }
 

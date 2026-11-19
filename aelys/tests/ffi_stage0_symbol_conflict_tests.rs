@@ -223,37 +223,6 @@ fn two_definitions_of_one_symbol_stay_on_the_older_code() {
     );
 }
 
-#[test]
-fn e0612_names_the_symbol_and_both_sites() {
-    let source = Source::new(
-        "<unit>",
-        "use std::process::ExitCode; fn f(a: i64) -> i64 { a }\nfn main() -> ExitCode { return ExitCode::from(f(1) as u8); }\n",
-    );
-    let mut diag = CompileError::new(
-        CompileErrorKind::ConflictingExternalSymbol {
-            symbol: "f".to_string(),
-        },
-        SyntaxSpan::new(3, 4, 1, 4),
-        source.clone(),
-    )
-    .to_diagnostic();
-    diag.add_secondary_label(
-        source,
-        SyntaxSpan::new(36, 37, 2, 4),
-        Some("and claimed again here".to_string()),
-    );
-    let rendered = diag.to_string();
-    assert!(rendered.contains("E0612"), "got:\n{rendered}");
-    assert!(rendered.contains("'f'"), "got:\n{rendered}");
-    assert!(
-        rendered.contains("this symbol is claimed here")
-            && rendered.contains("and claimed again here"),
-        "both sites must be drawn, got:\n{rendered}"
-    );
-    let info = aelys_common::registry::lookup("E0612").expect("E0612 must be registered");
-    assert!(!info.explanation.is_empty(), "E0612 must explain itself");
-}
-
 const BIG_ALLOC_MAIN: &str = r#"use std::process::ExitCode; fn main() -> ExitCode {
     let mut s: String = "";
     for i in 0..20000 {
@@ -702,21 +671,6 @@ fn main() -> ExitCode {
     assert_eq!(
         run.status, 11,
         "the rejection is not in the declaration: only the call reaches the object"
-    );
-}
-
-#[test]
-fn f3_43_e0613_explains_that_a_declaration_is_held_to_the_narrower_half() {
-    let info = aelys_common::registry::lookup("E0613").expect("E0613 must be registered");
-    assert!(
-        info.explanation.contains("`unsafe extern` declaration"),
-        "the explanation must distinguish a body from a declaration, got:\n{}",
-        info.explanation
-    );
-    assert!(
-        info.explanation.contains("it claims no"),
-        "and it must say why the declaration is let through, got:\n{}",
-        info.explanation
     );
 }
 

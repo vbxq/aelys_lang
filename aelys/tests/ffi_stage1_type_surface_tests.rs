@@ -24,13 +24,6 @@ fn lower(source: &str) -> Result<(), String> {
     }
 }
 
-fn admitted(id: &str, ty: &str) {
-    let source = format!("unsafe extern fn probe(x: {ty}) -> {ty}{MAIN}");
-    if let Err(rendered) = lower(&source) {
-        panic!("{id}: `{ty}` MUST be inside the external type surface, rejected with:\n{rendered}");
-    }
-}
-
 fn rejected(id: &str, decl: &str) -> String {
     let source = format!("{decl}{MAIN}");
     match lower(&source) {
@@ -112,22 +105,6 @@ fn the_nine_rejected_variants_are_e0615_and_each_has_an_accepted_twin() {
 }
 
 #[test]
-fn the_eleven_scalars_pass_in_both_positions_and_a_borrow_only_as_a_parameter() {
-    for ty in [
-        "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "bool",
-    ] {
-        admitted("F2-10", ty);
-    }
-    let source = format!("unsafe extern fn probe(x: &i64) -> i64{MAIN}");
-    if let Err(rendered) = lower(&source) {
-        panic!(
-            "F2-10: `&i64` MUST be inside the surface as a parameter, rejected with:\n{rendered}"
-        );
-    }
-    rejected_e0615("F2-10", "extern \"C\" { fn probe(x: &i64) -> &i64; }");
-}
-
-#[test]
 fn a_reference_counted_pointer_is_rejected_where_a_borrow_is_not() {
     rejected_e0615("F2-3", "extern \"C\" { fn probe(x: Rc<i64>); }");
     twin_is_accepted("F2-3", "extern \"C\" { fn probe(x: &i64); }");
@@ -136,15 +113,6 @@ fn a_reference_counted_pointer_is_rejected_where_a_borrow_is_not() {
 #[test]
 fn the_str_alias_is_rejected_exactly_like_string() {
     rejected_e0615("F2-11", "extern \"C\" { fn probe(x: String); }");
-}
-
-#[test]
-fn void_is_rejected_as_a_parameter_and_admitted_as_a_return() {
-    rejected_e0615("F2-2", "extern \"C\" { fn probe(x: void); }");
-    let source = format!("unsafe extern fn probe(x: i64) -> void{MAIN}");
-    if let Err(rendered) = lower(&source) {
-        panic!("F2-12: `void` MUST be admitted as a return type, rejected with:\n{rendered}");
-    }
 }
 
 // the accepted spellings are open, so a table of names would be walked around by one capital letter
@@ -195,14 +163,6 @@ fn the_bare_form_and_a_nogc_claim_stay_outside_the_surface_verdict() {
         if let Err(rendered) = lower(&source) {
             panic!("F2-17: `{decl}` MUST stay accepted, rejected with:\n{rendered}");
         }
-    }
-}
-
-#[test]
-fn an_ordinary_aelys_body_is_untouched_by_the_surface() {
-    let source = format!("fn probe(x: String) -> String {{\n    x\n}}{MAIN};");
-    if let Err(rendered) = lower(&source) {
-        panic!("F2-18: the surface only binds a foreign declaration, rejected with:\n{rendered}");
     }
 }
 

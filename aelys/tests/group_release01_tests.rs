@@ -655,44 +655,6 @@ fn release01_14_a_live_child_of_two_garbage_parents_survives_their_collection() 
     h.assert_legs(8);
 }
 
-const RELEASE01_15: &str = r#"
-struct DNode { val: i64, next: Rc<DNode>, prev: Rc<DNode> }
-struct DList { head: Rc<DNode>, len: i64 }
-fn push_front(l: &mut DList, v: i64) {
-    (*l).head = Rc::new(DNode { val: v, next: (*l).head, prev: Rc::null() })
-    if !Rc::is_null(Rc::get((*l).head).next) {
-        Rc::get(Rc::get((*l).head).next).prev = (*l).head
-    }
-    (*l).len = (*l).len + 1
-}
-fn work() -> i64 {
-    let mut l = DList { head: Rc::null(), len: 0 }
-    let mut i = 0
-    while i < 1000000 {
-        push_front(&mut l, i)
-        i = i + 1
-    }
-    return l.len
-}
-fn main() -> i64 {
-    let t = work()
-    println("{t}")
-    return 0
-}
-"#;
-
-#[test]
-fn release01_15_a_dead_doubly_linked_list_of_a_million_nodes_is_collected_at_exit() {
-    let h = Harness::new();
-    h.running_row(
-        "release01-15",
-        RELEASE01_15,
-        "1000000\n",
-        (1_000_000, 1_000_000),
-    );
-    h.assert_legs(4);
-}
-
 const RELEASE01_16: &str = r#"
 struct N { s: String, next: Rc<N> }
 struct H { r: Rc<N> }

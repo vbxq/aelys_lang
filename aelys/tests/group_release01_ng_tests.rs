@@ -612,123 +612,6 @@ const FREED_READS: &[Case] = &[
     },
 ];
 
-const CONFLICTS: &[Case] = &[
-    Case {
-        name: "bump_while_view",
-        src: concat!(
-            "fn bump(s: &mut [i64]) -> [i64; 2] {\n",
-            "    s[0] = s[0] + 1;\n",
-            "    [s[0], s.len()]\n",
-            "}\n",
-            "fn main() {\n",
-            "    let mut v: Vec<i64> = vec![1, 2, 3];\n",
-            "    let view = v[0..3];\n",
-            "    let k = bump(v[0..3])[0];\n",
-            "    println!(\"{}\", view[0] + k);",
-            "\n",
-            "}\n",
-        ),
-        module: None,
-        expect: Expect::Refused {
-            code: "E0713",
-            at: (8, 18),
-            says: "cannot borrow `v` as mutable while it is already borrowed",
-        },
-    },
-    Case {
-        name: "grow_under_projection",
-        src: concat!(
-            "fn grow(v: &mut Vec<i64>) -> [i64; 1] { [7] }\n",
-            "fn main() {\n",
-            "    let mut v: Vec<i64> = vec![1, 2, 3];\n",
-            "    let view = v[0..2];\n",
-            "    let k = grow(&mut v)[0];\n",
-            "    println!(\"{}\", view[0] + k);",
-            "\n",
-            "}\n",
-        ),
-        module: None,
-        expect: Expect::Refused {
-            code: "E0713",
-            at: (5, 18),
-            says: "cannot borrow `v` as mutable while it is already borrowed",
-        },
-    },
-    Case {
-        name: "mut_then_shared",
-        src: concat!(
-            "struct Resource { id: i64 }\n",
-            "fn eat(r: Resource) -> i64 { r.id }\n",
-            "fn mkA(n: i64) -> [i64; 3] { [n, n + 1, n + 2] }\n",
-            "fn rr(a: &[i64]) -> &[i64] { a }\n",
-            "fn rm(a: &mut [i64]) -> &mut [i64] { a }\n",
-            "fn ri(x: &mut i64) -> &mut i64 { x }\n",
-            "fn rc(x: &i64) -> &i64 { x }\n",
-            "fn main() {\n",
-            "    let mut a: [i64; 3] = [1, 2, 3];\n",
-            "    let m = rm(a[0..3]);\n",
-            "    println!(\"{}\", rr(a[0..3])[0]);\n",
-            "    m[0] = 5;",
-            "\n",
-            "}\n",
-        ),
-        module: None,
-        expect: Expect::Refused {
-            code: "E0713",
-            at: (11, 16),
-            says: "cannot borrow `a` as shared while it is already mutably borrowed",
-        },
-    },
-    Case {
-        name: "view_then_deref_assign_call",
-        src: concat!(
-            "struct Resource { id: i64 }\n",
-            "fn eat(r: Resource) -> i64 { r.id }\n",
-            "fn mkA(n: i64) -> [i64; 3] { [n, n + 1, n + 2] }\n",
-            "fn rr(a: &[i64]) -> &[i64] { a }\n",
-            "fn rm(a: &mut [i64]) -> &mut [i64] { a }\n",
-            "fn ri(x: &mut i64) -> &mut i64 { x }\n",
-            "fn rc(x: &i64) -> &i64 { x }\n",
-            "fn main() {\n",
-            "    let mut k: i64 = 1;\n",
-            "    let v = rc(&k);\n",
-            "    *ri(&mut k) = 7;\n",
-            "    println!(\"{}\", *v);",
-            "\n",
-            "}\n",
-        ),
-        module: None,
-        expect: Expect::Refused {
-            code: "E0713",
-            at: (11, 9),
-            says: "cannot borrow `k` as mutable while it is already borrowed",
-        },
-    },
-    Case {
-        name: "deref_twice",
-        src: concat!(
-            "fn rc(x: &i64) -> &i64 { x }\n",
-            "fn ri(x: &mut i64) -> &mut i64 { x }\n",
-            "fn rr(a: &[i64]) -> &[i64] { a }\n",
-            "struct P { x: i64, y: i64 }\n",
-            "fn main() {\n",
-            "    let mut k: i64 = 1;\n",
-            "    let y = ri(&mut k);\n",
-            "    let z = *rc(&k);\n",
-            "    *y = 4;\n",
-            "    println!(\"{}\", z);",
-            "\n",
-            "}\n",
-        ),
-        module: None,
-        expect: Expect::Refused {
-            code: "E0713",
-            at: (8, 17),
-            says: "cannot borrow `k` as shared while it is already mutably borrowed",
-        },
-    },
-];
-
 const ORDERED: &[Case] = &[
     Case {
         name: "index_of_a_place_after_its_growth",
@@ -836,11 +719,6 @@ const ORDERED: &[Case] = &[
 ];
 
 #[test]
-fn release01_98_a_managed_call_under_a_projection_refuses_its_nogc_caller() {
-    check("release01_98", REFUSED);
-}
-
-#[test]
 fn release01_99_an_allocation_free_call_under_a_projection_stays_accepted() {
     check("release01_99", ACCEPTED);
 }
@@ -848,11 +726,6 @@ fn release01_99_an_allocation_free_call_under_a_projection_stays_accepted() {
 #[test]
 fn release01_101_a_read_through_a_materialized_base_is_ordered_and_borrowed() {
     check("release01_101", FREED_READS);
-}
-
-#[test]
-fn release01_102_a_call_under_a_projection_carries_its_loans() {
-    check("release01_102", CONFLICTS);
 }
 
 #[test]

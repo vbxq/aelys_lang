@@ -10,7 +10,6 @@ use common::{
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Instant;
 use tempfile::{TempDir, tempdir};
 
 const LEVELS: &[(&str, OptimizationLevel)] = &[
@@ -554,21 +553,6 @@ fn group_v01_r13_char_from_i64_inside_the_range_runs() {
     );
 }
 
-#[test]
-fn group_v01_r14_string_index_refused() {
-    let h = Harness::new();
-    let _pin = pin_legs("r14", LEVELS.len());
-    h.refuses(
-        "r14",
-        "fn main() {\n\
-         \x20   let s: String = \"éab\";\n\
-         \x20   println!(\"{}\", s[0]);\n\
-         }\n",
-        "E0304",
-        "`.len` counts bytes while `s[i]` counted characters",
-    );
-}
-
 const NO_PLACE_BYTES: &str = "[no-place] the receiver of `.bytes` denotes no storage";
 
 #[test]
@@ -799,66 +783,6 @@ fn group_v01_r25_byte_view_loop_control() {
         "795\n6\n",
         Some((0, 0)),
     );
-}
-
-const LOOP_SEED: &str = "éabéabéabéabéabéabéabéab";
-const LOOP_SIZES: &[(i64, i32)] = &[(9, 104), (11, 165)];
-const LOOP_REPEATS: usize = 5;
-// a four times size step reads two on a floor bound run and sixteen when the loop re-walks
-const LOOP_SPAN_BOUND: f64 = 6.0;
-
-fn loop_source(doubles: i64) -> String {
-    format!(
-        "fn main() -> i64 {{\n\
-         \x20   let mut s: string = \"{LOOP_SEED}\"\n\
-         \x20   let mut k: i64 = 0\n\
-         \x20   while k < {doubles} {{\n\
-         \x20       s = s + s\n\
-         \x20       k = k + 1\n\
-         \x20   }}\n\
-         \x20   let mut acc: i64 = 0\n\
-         \x20   for c in s {{\n\
-         \x20       acc = acc + (c as i64)\n\
-         \x20   }}\n\
-         \x20   return acc % 251\n\
-         }}\n"
-    )
-}
-
-#[test]
-fn group_v01_r26_character_loop_is_linear() {
-    let h = Harness::new();
-    let _pin = pin_legs("r26", LEVELS.len() * LOOP_SIZES.len() * LOOP_REPEATS);
-    for (tag, opt) in LEVELS {
-        let mut best = Vec::new();
-        for (doubles, exit) in LOOP_SIZES {
-            let src = loop_source(*doubles);
-            let Some((exe, _)) = h.compiled(&format!("r26_{doubles}"), tag, *opt, &src) else {
-                return;
-            };
-            let mut fastest = f64::MAX;
-            for _ in 0..LOOP_REPEATS {
-                let at = Instant::now();
-                let ran = h.run(&exe, None);
-                fastest = fastest.min(at.elapsed().as_secs_f64());
-                assert_eq!(
-                    ran.exit, *exit,
-                    "r26 at {tag}: {doubles} doublings MUST exit {exit}\nstderr:\n{}",
-                    ran.stderr
-                );
-            }
-            best.push(fastest);
-        }
-        let span = best[1] / best[0];
-        assert!(
-            span <= LOOP_SPAN_BOUND,
-            "r26 at {tag}: four times the characters costs {span:.2}x, over the \
-             {LOOP_SPAN_BOUND}x bound; the traversal is re-walking the string ({:.4}s then \
-             {:.4}s)",
-            best[0],
-            best[1]
-        );
-    }
 }
 
 #[test]

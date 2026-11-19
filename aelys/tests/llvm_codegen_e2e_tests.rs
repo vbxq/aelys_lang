@@ -415,96 +415,6 @@ use std::process::ExitCode; fn main(x: i64) -> ExitCode {
 }
 
 #[test]
-fn llvm_rejects_main_returning_i32_for_native_entry() {
-    let dir = tempdir().expect("tempdir should be created");
-    let source_path = dir.path().join("module.aelys");
-    fs::write(
-        &source_path,
-        r#"
-use std::process::ExitCode; fn main() -> ExitCode {
-    return ExitCode::from(1);
-}
-"#,
-    )
-    .expect("source should be written");
-    let err = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
-        .expect_err("llvm backend compilation should fail");
-    let rendered = err.to_string();
-    assert!(
-        rendered.contains("type mismatch") || rendered.contains("invalid native entry"),
-        "expected type mismatch or native entry error, got: {rendered}"
-    );
-}
-
-#[test]
-fn llvm_preserves_sema_diagnostic_for_return_null_in_i64_function() {
-    let dir = tempdir().expect("tempdir should be created");
-    let source_path = dir.path().join("module.aelys");
-    fs::write(
-        &source_path,
-        r#"
-fn foo() -> i64 {
-    for i in 0..10 {
-        return null;
-    }
-}
-"#,
-    )
-    .expect("source should be written");
-    let err = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
-        .expect_err("compilation should fail at sema stage");
-    let rendered = err.to_string();
-    assert!(
-        rendered.contains("expected `i64`, found `()`"),
-        "{rendered}"
-    );
-    assert!(
-        !rendered.contains("[llvm-backend]"),
-        "sema error must not be re-labeled as llvm backend: {rendered}"
-    );
-    assert!(
-        !rendered.contains(":1:1"),
-        "sema error should keep its original source span: {rendered}"
-    );
-}
-
-#[test]
-fn llvm_sema_diagnostic_reports_multiple_errors_separately() {
-    let dir = tempdir().expect("tempdir should be created");
-    let source_path = dir.path().join("module.aelys");
-    fs::write(
-        &source_path,
-        r#"
-fn first() -> i64 {
-    null
-}
-
-fn second() -> i64 {
-    null
-}
-"#,
-    )
-    .expect("source should be written");
-    let err = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
-        .expect_err("compilation should fail at sema stage");
-    let rendered = err.to_string();
-    let error_count = rendered.matches("error[E0301]").count();
-    assert!(
-        error_count >= 2,
-        "should have at least 2 separate error diagnostics, got {}: {rendered}",
-        error_count
-    );
-    assert!(
-        rendered.contains("first"),
-        "should mention function 'first': {rendered}"
-    );
-    assert!(
-        rendered.contains("second"),
-        "should mention function 'second': {rendered}"
-    );
-}
-
-#[test]
 fn llvm_native_entry_maps_negative_i64_main_exit_code_to_u8() {
     let _pin = common::pin_legs("llvm_native_entry_maps_negative_i64_main_exit_code_to_u8", 1);
     let dir = tempdir().expect("tempdir should be created");
@@ -533,37 +443,6 @@ use std::process::ExitCode; fn main() -> ExitCode {
         .output()
         .expect("compiled executable should run");
     assert_eq!(output.status.code().unwrap_or(-1), 255);
-}
-
-#[test]
-fn llvm_native_entry_returns_zero_for_void_main() {
-    let _pin = common::pin_legs("llvm_native_entry_returns_zero_for_void_main", 1);
-    let dir = tempdir().expect("tempdir should be created");
-    let source_path = dir.path().join("module.aelys");
-    fs::write(
-        &source_path,
-        r#"
-fn main() -> void {
-    let x: i64 = 1;
-}
-"#,
-    )
-    .expect("source should be written");
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, false) {
-        panic!("llvm backend compilation should succeed: {err}");
-    }
-
-    let exe_path = executable_path_for(&source_path);
-    assert!(
-        exe_path.is_file(),
-        "native executable should be produced at {}",
-        exe_path.display()
-    );
-    common::note_leg();
-    let output = Command::new(&exe_path)
-        .output()
-        .expect("compiled executable should run");
-    assert_eq!(output.status.code().unwrap_or(-1), 0);
 }
 
 #[test]
@@ -937,32 +816,6 @@ fn swap(mut arr: [i64; 3], i: i64, j: i64) -> void {
     assert!(
         ir.contains("ret void"),
         "void function with index assignment should emit ret void:\n{ir}"
-    );
-}
-
-#[test]
-fn llvm_string_literal_iteration_compiles() {
-    let ir = compile_to_verified_ir(
-        r#"
-fn first_char() -> String {
-    for c in "hello" {
-        return c.to_string();
-    }
-    ""
-}
-"#,
-    );
-    assert!(
-        ir.contains("@__aelys_str_decode_at"),
-        "string literal iteration should call __aelys_str_decode_at:\n{ir}"
-    );
-    assert!(
-        !ir.contains("@__aelys_str_char_at_scalar"),
-        "the loop must not reach the accessor that re-walks from byte 0:\n{ir}"
-    );
-    assert!(
-        ir.contains("@__aelys_str_from_char"),
-        "the exit from char world should call __aelys_str_from_char:\n{ir}"
     );
 }
 

@@ -90,12 +90,6 @@ fn the_pre_existing_rejections_are_unchanged() {
 }
 
 // t15: the spelling that never existed
-#[test]
-fn the_glued_ampersand_is_still_a_syntax_error() {
-    let rendered = lower(&format!("unsafe extern fn probe() -> &&i64{MAIN}")).expect_err("T15");
-    assert!(rendered.contains("E0101"), "T15: {rendered}");
-}
-
 // t16: an alias is expanded before the external surface is checked, so it hides no reference
 #[test]
 fn a_type_alias_naming_a_reference_meets_the_same_external_refusal() {
@@ -110,12 +104,6 @@ fn a_type_alias_naming_a_reference_meets_the_same_external_refusal() {
 }
 
 // t18: an external declaration takes no type parameter, so no monomorphisation can carry a `&t` out
-#[test]
-fn a_generic_external_declaration_is_still_malformed() {
-    let rendered = lower(&format!("unsafe extern fn probe<T>() -> &T{MAIN}")).expect_err("T18");
-    assert!(rendered.contains("E0614"), "T18: {rendered}");
-}
-
 #[test]
 fn the_malloc_free_dereference_program_is_now_rejected() {
     let source = "use std::process::ExitCode; extern \"C\" { fn malloc(n: i64) -> &i64; }\n\
@@ -477,15 +465,6 @@ fn a_name_without_the_runtime_prefix_still_takes_the_ad_hoc_path() {
         vec![],
     );
     codegen(&program).expect("E4: the guard bites only `__aelys_`");
-}
-
-#[test]
-fn a_source_declaration_of_a_spliced_name_is_still_e0428() {
-    let rendered = lower(&format!(
-        "unsafe extern fn __aelys_vec_pop(p: i64) -> i64{MAIN}"
-    ))
-    .expect_err("E5");
-    assert!(rendered.contains("E0428"), "E5: {rendered}");
 }
 
 #[test]

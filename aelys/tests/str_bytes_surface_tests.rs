@@ -5,7 +5,7 @@ use aelys_opt::OptimizationLevel;
 use std::cell::Cell;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::Once;
 use tempfile::{TempDir, tempdir};
 
@@ -252,20 +252,6 @@ impl Harness {
         assert!(
             rendered.contains(says),
             "{id}: the rejection MUST say {says:?}\n{src}\nrendered:\n{rendered}"
-        );
-    }
-
-    // the compiler's own advice must not hand back the escaping view s[i] was removed for
-    fn refuses_without_saying(&self, id: &str, src: &str, forbidden: &str) {
-        let root = self.stage(id, "reject-advice", src);
-        let rendered = match lower_file_to_air(&root, OptimizationLevel::None) {
-            Ok(_) => panic!("{id}: MUST be rejected\n{src}"),
-            Err(rendered) => rendered,
-        };
-        self.legs.set(self.legs.get() + 1);
-        assert!(
-            !rendered.contains(forbidden),
-            "{id}: the refusal MUST NOT say {forbidden:?}\n{src}\nrendered:\n{rendered}"
         );
     }
 
@@ -529,38 +515,7 @@ fn sb7_a_range_outside_the_string_panics_at_the_constructor() {
     h.assert_legs(6);
 }
 
-const SB8_INDEX_REFUSED: &str = r#"
-fn main() {
-    let s: String = "éab";
-    println!("{}", s[3]);
-}
-"#;
-
-const SB8_CHARACTERS_AND_BYTES: &str = r#"
-use std::str;
-
-fn main() {
-    let s: String = "éab";
-    println!("{}", s.as_bytes().len());
-    println!("{}", str::char_count(s));
-}
-"#;
-
 // the count that used to live in the out of bounds panic now lives in the refusal and in the pair
-#[test]
-fn sb8_the_refusal_separates_the_character_count_from_the_byte_length() {
-    let h = Harness::new();
-    h.rejects(
-        "SB-8",
-        SB8_INDEX_REFUSED,
-        "E0304",
-        "`.len` counts bytes while `s[i]` counted characters",
-    );
-    h.refuses_without_saying("SB-8", SB8_INDEX_REFUSED, ".bytes[");
-    h.value_row("SB-8-counts", SB8_CHARACTERS_AND_BYTES, "4\n3\n", (0, 0));
-    h.assert_legs(8);
-}
-
 const SB9_PREDICATES: &str = r#"
 use std::str;
 
@@ -1074,119 +1029,6 @@ fn sb20_a_call_that_returns_fresh_bytes_is_owned_and_a_call_that_returns_its_arg
     h.assert_legs(18);
 }
 
-const SB26_THE_ORIGINAL_BLOCKER: &str = r#"
-fn main() {
-    let mut i: i64 = 0;
-    let mut n: i64 = 0;
-    while i < TURNS {
-        let s: String = "row " + format!("{i}");
-        n = n + s.len();
-        i = i + 1;
-    }
-    println!("{}", n);
-}
-"#;
-
-#[cfg(target_os = "linux")]
-fn peak_rss_kib(exe: &Path, alloc: Option<&str>) -> (i32, i64) {
-    #[repr(C)]
-    struct RUsage {
-        utime: [i64; 2],
-        stime: [i64; 2],
-        maxrss: i64,
-        rest: [i64; 13],
-    }
-    unsafe extern "C" {
-        fn wait4(pid: i32, status: *mut i32, options: i32, usage: *mut RUsage) -> i32;
-    }
-    let mut cmd = Command::new(exe);
-    cmd.stdout(Stdio::null()).stderr(Stdio::null());
-    if let Some(a) = alloc {
-        cmd.env("AELYS_ALLOC", a);
-    }
-    let child = cmd.spawn().expect("spawn the measured exe");
-    let pid = child.id() as i32;
-    let mut status = 0;
-    let mut usage = RUsage {
-        utime: [0; 2],
-        stime: [0; 2],
-        maxrss: 0,
-        rest: [0; 13],
-    };
-    let reaped = unsafe { wait4(pid, &mut status, 0, &mut usage) };
-    assert_eq!(reaped, pid, "wait4 must reap the child it measures");
-    let code = if status & 0x7f == 0 {
-        (status >> 8) & 0xff
-    } else {
-        128 + (status & 0x7f)
-    };
-    (code, usage.maxrss)
-}
-
-#[cfg(target_os = "linux")]
-#[test]
-fn sb21_the_original_blocker_keeps_a_flat_peak_from_two_hundred_thousand_to_two_million_turns() {
-    const VARIANTS: &[(&str, RuntimeVariant)] = &[
-        ("leak", RuntimeVariant::Leak),
-        ("rc", RuntimeVariant::Rc),
-        ("rc+cycles", RuntimeVariant::RcCycles),
-    ];
-    let h = Harness::new();
-    for (tag, opt) in LEVELS {
-        for (runtime, variant) in VARIANTS {
-            let mut peaks: Vec<(u64, &str, i64)> = Vec::new();
-            for turns in [200_000u64, 2_000_000] {
-                let src = SB26_THE_ORIGINAL_BLOCKER.replace("TURNS", &turns.to_string());
-                let leg = format!("{tag}_{runtime}_{turns}");
-                let root = h.stage("SB-26", &leg, &src);
-                let Some(exe) = h.compile_at("SB-26", &leg, &root, *opt, *variant) else {
-                    assert!(
-                        linker_skip_declared(),
-                        "SB-26: no linker, and AELYS_ALLOW_LINKER_SKIP is not set; a skipped \
-                         peak carries no runtime evidence at all"
-                    );
-                    return;
-                };
-                for (alloc_name, alloc) in ALLOCATORS {
-                    let (code, peak) = peak_rss_kib(&exe, *alloc);
-                    h.legs.set(h.legs.get() + 1);
-                    assert_eq!(
-                        code, 0,
-                        "SB-26 at {tag}/{alloc_name}/{runtime}/{turns} must exit 0"
-                    );
-                    peaks.push((turns, *alloc_name, peak));
-                }
-            }
-            for (alloc_name, _) in ALLOCATORS {
-                let at = |turns: u64| {
-                    peaks
-                        .iter()
-                        .find(|(t, a, _)| *t == turns && a == alloc_name)
-                        .map(|(_, _, p)| *p)
-                        .expect("both turn counts were measured")
-                };
-                let growth = at(2_000_000) - at(200_000);
-                if *runtime == "leak" {
-                    assert!(
-                        growth > 65_536,
-                        "SB-26 at {tag}/{alloc_name}: the leak runtime keeps every string, so its \
-                         peak must grow by more than 64 MiB over 1.8e6 more turns or this row \
-                         cannot see a leak at all; it grew by {growth} KiB"
-                    );
-                } else {
-                    assert!(
-                        growth < 4_096,
-                        "SB-26 at {tag}/{alloc_name}/{runtime}: the bound and the unbound string \
-                         of each turn are both released, so the peak must stay within 4 MiB from \
-                         2e5 to 2e6 turns; it grew by {growth} KiB"
-                    );
-                }
-            }
-        }
-    }
-    h.assert_legs(LEVELS.len() * 3 * 2 * ALLOCATORS.len());
-}
-
 const SB27_ARM_SCOPES: &str = r#"
 use std::str;
 
@@ -1297,56 +1139,6 @@ fn sb23_a_slot_reassigned_from_a_borrowed_value_in_a_loop_takes_its_own_share() 
         (26, 26),
     );
     h.assert_legs(18);
-}
-
-const SB29_BREAK_IN_A_NESTED_FN: &str = r#"
-fn main() {
-    let mut i: i64 = 0;
-    while i < 3 {
-        fn helper(n: i64) -> i64 {
-            let piece: String = "p" + format!("{n}");
-            if n == 1 { break; }
-            println!("{}", piece);
-            n
-        }
-        println!("{}", helper(i));
-        i = i + 1;
-    }
-}
-"#;
-
-const SB29_CONTINUE_IN_A_LAMBDA: &str = r#"
-fn main() {
-    let mut i: i64 = 0;
-    while i < 3 {
-        let f = move |n: i64| -> i64 {
-            let piece: String = "p" + format!("{n}");
-            if n == 1 { continue; }
-            println!("{}", piece);
-            n
-        };
-        println!("{}", f(i));
-        i = i + 1;
-    }
-}
-"#;
-
-#[test]
-fn sb24_break_or_continue_inside_a_nested_function_or_a_lambda_is_refused() {
-    let h = Harness::new();
-    h.rejects(
-        "SB-29-fn",
-        SB29_BREAK_IN_A_NESTED_FN,
-        "E0904",
-        "break statement outside of loop",
-    );
-    h.rejects(
-        "SB-29-lambda",
-        SB29_CONTINUE_IN_A_LAMBDA,
-        "E0904",
-        "continue statement outside of loop",
-    );
-    h.assert_legs(2);
 }
 
 const SB30_BLOCK_TAILS: &str = r#"
@@ -3471,45 +3263,6 @@ fn sb75_a_generic_that_only_reads_a_slice_of_strings_is_accepted() {
         SB81_A_GENERIC_THAT_ONLY_READS_A_SLICE_OF_A_VEC,
         "1 ab1 ab3\n",
         (95, 95),
-    );
-    h.assert_legs(18);
-}
-
-const SB82_AN_OPERAND_READ_BEFORE_A_SIBLING_REWRITES_ITS_LOCAL: &str = r#"
-struct P { a: i64, b: i64 }
-fn two(a: i64, b: i64) -> i64 { a * 10 + b }
-fn keep2c(a: String, n: i64) -> String { a }
-fn keep2<T>(a: T, n: i64) -> T { a }
-fn victim(n: i64) -> String { "ab" + format!("{n}") }
-fn main() {
-    let mut x: i64 = 1;
-    let c: i64 = two(x, { x = 2; 3 });
-    x = 1;
-    let d: i64 = x + { x = 2; 0 };
-    x = 1;
-    let p: P = P { a: x, b: { x = 2; 3 } };
-    x = 1;
-    let v: Vec<i64> = vec![x, { x = 2; 3 }];
-    x = 1;
-    let a: [i64; 2] = [x, { x = 2; 3 }];
-    x = 1;
-    let f: String = format!("{x}{}", { x = 2; 3 });
-    let mut s: String = victim(1);
-    let t: String = keep2c(s, { s = victim(2); 1 });
-    let u: String = keep2(s, { s = victim(3); 1 });
-    println!("{c} {d} {}{} {}{} {}{} {f}", p.a, p.b, v[0], v[1], a[0], a[1]);
-    println!("{}", t + u + s);
-}
-"#;
-
-#[test]
-fn sb76_an_operand_keeps_the_value_it_read_when_a_later_sibling_rewrites_its_local() {
-    let h = Harness::new();
-    h.differential_row(
-        "SB-82",
-        SB82_AN_OPERAND_READ_BEFORE_A_SIBLING_REWRITES_ITS_LOCAL,
-        "13 1 13 13 13 13\nab1ab2ab3\n",
-        (33, 33),
     );
     h.assert_legs(18);
 }

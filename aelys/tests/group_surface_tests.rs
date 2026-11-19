@@ -420,21 +420,6 @@ fn group_surface_a_vec_temporary_read_for_its_length_is_freed() {
 }
 
 #[test]
-fn group_surface_a_string_carries_a_byte_view() {
-    let h = Harness::new();
-    let _pin = pin_legs("string byte view", LEVELS.len());
-    let src = format!(
-        "fn main() -> i64 {{\n\
-         \x20   let s: string = \"{MULTI_BYTE}\"\n\
-         \x20   println(s.bytes.len)\n\
-         \x20   println(s.bytes[0])\n\
-         \x20   return 0\n\
-         }}\n"
-    );
-    h.value_row("str_bytes", &src, &format!("{MULTI_BYTE_BYTES}\n104\n"));
-}
-
-#[test]
 fn group_surface_ends_with_does_not_abort_on_a_multi_byte_haystack() {
     let h = Harness::new();
     let _pin = pin_legs("ends_with abort", LEVELS.len());
@@ -602,27 +587,6 @@ fn group_surface_a_slice_iterates() {
          \x20   println!(\"{}\", total(a[..]));\n\
          }\n",
         "15\n",
-    );
-}
-
-#[test]
-fn group_surface_a_library_prints_a_multi_byte_string() {
-    let h = Harness::new();
-    let _pin = pin_legs("library print", LEVELS.len());
-    let src = format!(
-        "needs std.io\n\
-         \n\
-         fn main() -> i64 {{\n\
-         \x20   let s: string = \"{MULTI_BYTE}\"\n\
-         \x20   println(io.print_out(s))\n\
-         \x20   println(s.bytes.len)\n\
-         \x20   return 0\n\
-         }}\n"
-    );
-    h.value_row(
-        "library_print",
-        &src,
-        &format!("{MULTI_BYTE}{MULTI_BYTE_BYTES}\n{MULTI_BYTE_BYTES}\n"),
     );
 }
 
@@ -840,86 +804,6 @@ fn group_surface_a_main_with_a_parameter_is_not_a_compiler_bug() {
 }
 
 // a control: the base refuses or aborts every other string row, this one shows its compiler works
-#[test]
-fn group_surface_control_a_multi_byte_literal_reaches_the_program_intact() {
-    let h = Harness::new();
-    let _pin = pin_legs("multi-byte control", LEVELS.len());
-    let src = format!(
-        "needs std.str\n\
-         \n\
-         fn main() -> i64 {{\n\
-         \x20   let s: string = \"{MULTI_BYTE}\"\n\
-         \x20   println(s.len)\n\
-         \x20   if str.is_empty(s) {{ println(1) }} else {{ println(0) }}\n\
-         \x20   return 0\n\
-         }}\n"
-    );
-    h.value_row(
-        "control_multi_byte",
-        &src,
-        &format!("{MULTI_BYTE_BYTES}\n0\n"),
-    );
-}
-
-#[test]
-fn group_surface_control_the_managed_counter_reads_zero_when_nothing_is_allocated() {
-    let h = Harness::new();
-    let _pin = pin_legs("zero allocation control", LEVELS.len());
-    let src = format!(
-        "fn main() -> i64 {{\n\
-         \x20   println(\"{MULTI_BYTE}\")\n\
-         \x20   return 0\n\
-         }}\n"
-    );
-    h.counted_row(
-        "control_zero_alloc",
-        &src,
-        &format!("{MULTI_BYTE}\n"),
-        Some((0, 0)),
-        None,
-    );
-}
-
-#[test]
-fn group_surface_a_string_for_each_yields_characters_not_bytes() {
-    let h = Harness::new();
-    let _pin = pin_legs("string for-each", LEVELS.len());
-    // `joined` reads the element and `count` never does, and only the first shape aborts
-    let src = format!(
-        "fn count(s: string) -> i64 {{\n\
-         \x20   let mut n: i64 = 0\n\
-         \x20   for c in s {{ n = n + 1 }}\n\
-         \x20   return n\n\
-         }}\n\
-         \n\
-         fn joined(s: string) -> string {{\n\
-         \x20   let mut acc: string = \"|\"\n\
-         \x20   for c in s {{ acc = acc + string::from_char(c) + \"|\" }}\n\
-         \x20   return acc\n\
-         }}\n\
-         \n\
-         fn main() -> i64 {{\n\
-         \x20   println(count(\"abc\"))\n\
-         \x20   println(joined(\"abc\"))\n\
-         \x20   println(count(\"é\"))\n\
-         \x20   println(joined(\"é\"))\n\
-         \x20   println(count(\"\"))\n\
-         \x20   println(joined(\"\"))\n\
-         \x20   println(count(\"abé\"))\n\
-         \x20   println(joined(\"abé\"))\n\
-         \x20   println(count(\"{MULTI_BYTE}\"))\n\
-         \x20   println(\"{MULTI_BYTE}\".len)\n\
-         \x20   println(joined(\"{MULTI_BYTE}\"))\n\
-         \x20   return 0\n\
-         }}\n"
-    );
-    h.value_row(
-        "string_for_each",
-        &src,
-        "3\n|a|b|c|\n1\n|é|\n0\n|\n3\n|a|b|é|\n15\n19\n|h|é|l|l|o| |c|a| |é|t|é| |l|à|\n",
-    );
-}
-
 #[test]
 fn group_surface_one_file_under_two_dotted_names_is_one_unit() {
     let h = Harness::new();

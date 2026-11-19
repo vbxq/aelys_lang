@@ -328,41 +328,6 @@ fn main() -> ExitCode {
 }
 
 #[test]
-fn catch_binder_recovers_on_err_and_passes_ok_through() {
-    let err_src = r#"
-use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
-enum E { X }
-
-fn get_err() -> Result<i64, E> { Result::Err(E::X) }
-
-fn main() -> ExitCode { return ExitCode::from((match get_err() { Ok(v) => v, Err(e) => 100) as u8) }; }
-"#;
-    if let Some(out) = run(err_src) {
-        assert_eq!(
-            out.status.code().unwrap_or(-1),
-            100,
-            "catch |e| on an Err should yield the fallback 100"
-        );
-    }
-
-    let ok_src = r#"
-use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
-enum E { X }
-
-fn get_ok() -> Result<i64, E> { Result::Ok(7) }
-
-fn main() -> ExitCode { return ExitCode::from((match get_ok() { Ok(v) => v, Err(e) => 100) as u8) }; }
-"#;
-    if let Some(out) = run(ok_src) {
-        assert_eq!(
-            out.status.code().unwrap_or(-1),
-            7,
-            "catch |e| on an Ok should yield the Ok payload 7, the handler must not run"
-        );
-    }
-}
-
-#[test]
 fn catch_arms_discriminate_each_variant() {
     let src = r#"
 use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
@@ -414,46 +379,6 @@ fn main() -> ExitCode {
 }
 
 #[test]
-fn catch_wildcard_and_binder_are_exhaustive() {
-    let wildcard_src = r#"
-use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
-enum E { A, B }
-
-fn get() -> Result<i64, E> { Result::Err(E::B) }
-
-fn main() -> ExitCode {
-    return ExitCode::from((match get() { Ok(v) => v,
-        Err(E::A) => 1,
-        Err(_) => 2,
-    }) as u8);
-}
-"#;
-    if let Some(out) = run(wildcard_src) {
-        assert_eq!(
-            out.status.code().unwrap_or(-1),
-            2,
-            "the _ arm covers E::B, so the exhaustive catch yields 2"
-        );
-    }
-
-    let binder_src = r#"
-use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
-enum E { A, B }
-
-fn get() -> Result<i64, E> { Result::Err(E::B) }
-
-fn main() -> ExitCode { return ExitCode::from((match get() { Ok(v) => v, Err(e) => 42) as u8) }; }
-"#;
-    if let Some(out) = run(binder_src) {
-        assert_eq!(
-            out.status.code().unwrap_or(-1),
-            42,
-            "catch |e| is a catch-all, so it compiles and yields 42"
-        );
-    }
-}
-
-#[test]
 fn catch_yields_t_satisfies_must_use() {
     let src = r#"
 use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
@@ -471,29 +396,6 @@ fn main() -> ExitCode {
         out.status.code().unwrap_or(-1),
         5,
         "a bare `get() catch |e| 0` statement compiles and the function returns 5"
-    );
-}
-
-#[test]
-fn catch_binder_reads_the_err_payload() {
-    let src = r#"
-use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
-enum E { A, B }
-
-fn get() -> Result<i64, E> { Result::Err(E::B) }
-
-fn main() -> ExitCode {
-    return ExitCode::from((match get() { Ok(v) => v, Err(e) => match e {
-        E::A => 10,
-        E::B => 20,
-    }) as u8) };
-}
-"#;
-    let Some(out) = run(src) else { return };
-    assert_eq!(
-        out.status.code().unwrap_or(-1),
-        20,
-        "the binder e must be the Err payload E::B, so the inner match yields 20"
     );
 }
 

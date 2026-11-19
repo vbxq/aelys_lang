@@ -547,7 +547,7 @@ fn v35_return_of_an_indirect_producer_rejects_e0412() {
     let err = reject_e0412(
         r#"
 use std::process::ExitCode; fn pick(a: Vec<i64>, c: i64) -> Vec<i64> {
-    if c == 1 { a } else { a }
+    return if c == 1 { a } else { a };
 }
 fn main() -> ExitCode {
     let v = vec![1, 2, 3];

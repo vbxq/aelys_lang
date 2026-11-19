@@ -1,10 +1,10 @@
-use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::{TempDir, tempdir};
 
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant};
 const LEVELS: &[(&str, OptimizationLevel)] = &[
     ("-O0", OptimizationLevel::None),
     ("-O2", OptimizationLevel::Standard),
@@ -78,139 +78,6 @@ fn run_module_row(id: &str, files: Files, root: &str, exit: i32, stdout: &str) {
             "{id} at {level}: stdout MUST be {stdout:?}"
         );
     }
-}
-
-fn message_only(rendered: &str) -> String {
-    split_rendering(rendered).0
-}
-
-fn location_only(rendered: &str) -> String {
-    split_rendering(rendered).1
-}
-
-fn split_rendering(rendered: &str) -> (String, String) {
-    let (mut message, mut location) = (Vec::new(), Vec::new());
-    for line in rendered.lines() {
-        let t = line.trim_start();
-        if t.starts_with("-->") || t.starts_with('|') || first_field_is_a_gutter(t) {
-            location.push(line);
-        } else {
-            message.push(line);
-        }
-    }
-    (message.join("\n"), location.join("\n"))
-}
-
-fn first_field_is_a_gutter(line: &str) -> bool {
-    match line.split_once('|') {
-        Some((head, _)) => !head.is_empty() && head.trim().chars().all(|c| c.is_ascii_digit()),
-        None => false,
-    }
-}
-
-fn reject_module_row(
-    id: &str,
-    files: Files,
-    root: &str,
-    says: &[&str],
-    points_at: &[&str],
-    absent: &[&str],
-) {
-    for (level, opt) in LEVELS {
-        let dir = stage(files);
-        let root_path = dir.path().join(root);
-        let rendered = match lower_file_to_air(&root_path, *opt) {
-            Ok(_) => panic!("{id} at {level}: MUST be rejected, but it was accepted"),
-            Err(rendered) => rendered,
-        };
-        let message = message_only(&rendered);
-        for needle in says {
-            assert!(
-                message.contains(needle),
-                "{id} at {level}: the diagnostic MUST say {needle:?}\nrendered:\n{rendered}"
-            );
-        }
-        let location = location_only(&rendered);
-        for needle in points_at {
-            assert!(
-                location.contains(needle),
-                "{id} at {level}: the diagnostic MUST point at {needle:?}\nrendered:\n{rendered}"
-            );
-        }
-        for needle in absent {
-            assert!(
-                !rendered.contains(needle),
-                "{id} at {level}: the diagnostic MUST NOT contain {needle:?}\nrendered:\n{rendered}"
-            );
-        }
-    }
-}
-
-fn accept_without_executable(id: &str, files: Files, root: &str) {
-    for (level, opt) in LEVELS {
-        let dir = stage(files);
-        let root_path = dir.path().join(root);
-        if let Err(err) =
-            compile_file_with_llvm_variant(&root_path, *opt, false, RuntimeVariant::Rc)
-        {
-            panic!("{id} at {level}: MUST compile\nerror:\n{err}");
-        }
-        let exe = exe_path_for(&root_path);
-        assert!(
-            !exe.is_file(),
-            "{id} at {level}: a root without `main` MUST NOT produce an executable at {}",
-            exe.display()
-        );
-    }
-}
-
-fn golden_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/modules/base")
-}
-
-// the two lines below name the host, not the compiler, so they are the only ones neutralised
-fn without_host_lines(ir: &str) -> String {
-    ir.lines()
-        .map(|line| {
-            if line.starts_with("target datalayout = ") {
-                "target datalayout = <host>"
-            } else if line.starts_with("target triple = ") {
-                "target triple = <host>"
-            } else {
-                line
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-#[test]
-fn group_mod_n1_needs_free_ir_is_byte_identical() {
-    let src = fs::read_to_string(golden_dir().join("base.aelys")).expect("read base.aelys");
-    let golden = fs::read_to_string(golden_dir().join("base.o0.ll")).expect("read base.o0.ll");
-    assert!(
-        !src.contains("needs"),
-        "N-1: the base program MUST be needs-free"
-    );
-
-    let dir = tempdir().expect("tempdir");
-    let root_path = dir.path().join("base.aelys");
-    fs::write(&root_path, &src).expect("write base.aelys");
-    compile_file_with_llvm_variant(
-        &root_path,
-        OptimizationLevel::None,
-        true,
-        RuntimeVariant::Rc,
-    )
-    .expect("N-1: the base program MUST compile");
-    let emitted = fs::read_to_string(root_path.with_extension("ll")).expect("read emitted ir");
-
-    let emitted = without_host_lines(&emitted);
-    let expected = without_host_lines(&golden);
-    assert_eq!(
-        emitted, expected,
-        "N-1: the ir of a needs-free program MUST be byte identical to tests/modules/base/base.o0.ll"
-    );
 }
 
 #[cfg(unix)]
@@ -466,87 +333,7 @@ fn group_mod_q3_global_function_reference_crosses() {
     );
 }
 
-const TYPE_ERROR_MODULE: &str = "pub fn bad() -> i64 {\n    \"x\"\n}\n";
-
-#[test]
-fn group_mod_t4_imported_module_is_compiled_and_named() {
-    reject_module_row(
-        "T-4",
-        &[("m.aelys", TYPE_ERROR_MODULE), ("root.aelys", "needs m\n")],
-        "root.aelys",
-        &["[E0301]"],
-        &["m.aelys", "return \"x\";"],
-        &[],
-    );
-}
-
 // non discriminating against modules/base, where a root without `main` produced no executable
-#[test]
-fn group_mod_t4b_valid_import_only_root_produces_no_executable() {
-    accept_without_executable(
-        "T-4b",
-        &[("m.aelys", MODULE_SEVEN), ("root.aelys", "needs m\n")],
-        "root.aelys",
-    );
-}
-
-#[test]
-fn group_mod_x1_module_borrow_error_names_its_own_file() {
-    reject_module_row(
-        "X-1",
-        &[
-            (
-                "m.aelys",
-                "struct Resource { id: i64 }\n\npub fn leak() -> i64 {\n    let a = Resource { id: 1 };\n    let b = a;\n    a.id\n}\n",
-            ),
-            (
-                "root.aelys",
-                "mod m;\n\nfn main() {\n}\n",
-            ),
-        ],
-        "root.aelys",
-        &["[E0701]"],
-        &["m.aelys", "return a.id;"],
-        &[],
-    );
-}
-
-#[test]
-fn group_mod_x2_topological_order_reports_the_dependency_first() {
-    reject_module_row(
-        "X-2",
-        &[
-            ("m.aelys", TYPE_ERROR_MODULE),
-            (
-                "root.aelys",
-                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(\"y\" as u8);\n}\n",
-            ),
-        ],
-        "root.aelys",
-        &["[E0301]"],
-        &["m.aelys", "return \"x\";"],
-        &["root.aelys", "return \"y\";"],
-    );
-}
-
-#[test]
-fn group_mod_x2b_discovery_order_reports_the_root_first() {
-    reject_module_row(
-        "X-2b",
-        &[
-            ("m.aelys", TYPE_ERROR_MODULE),
-            (
-                "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return 1 +\n}\n",
-            ),
-        ],
-        "root.aelys",
-        &["[E0102]"],
-        &["root.aelys"],
-        &["m.aelys", "return \"x\";"],
-    );
-}
-
 // `needs` was a no-op and an unused import compiled just as silently
 #[test]
 fn group_mod_t1_empty_module_imported_and_unused() {

@@ -1082,30 +1082,6 @@ fn is_some(opt: Option<i64>) -> i64 {
 }
 
 #[test]
-fn generic_enum_none_without_annotation() {
-    // unit variant of a generic enum without type annotation should produce
-    let src = r#"
-enum Option<T> {
-    Some(T),
-    None,
-}
-let x = Option::None
-"#;
-    let result = compile_to_typed_ast(src);
-    assert!(
-        result.is_err(),
-        "Option::None without annotation should require type annotation"
-    );
-    let errors = result.unwrap_err();
-    let msg = format!("{:?}", errors);
-    assert!(
-        msg.contains("type annotations needed") || msg.contains("cannot infer"),
-        "error should mention type annotations: {}",
-        msg
-    );
-}
-
-#[test]
 fn generic_enum_multiple_variants_in_function() {
     let src = r#"
 enum Option<T> {

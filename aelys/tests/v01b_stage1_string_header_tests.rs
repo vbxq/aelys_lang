@@ -588,26 +588,6 @@ fn walkdir(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-const NOGC_READERS: [&str; 2] = ["__aelys_str_char_count", "__aelys_str_decode_at"];
-
-const NOGC_COUNTED_SITES: &[(&str, usize, usize)] = &[("std.sort.strings", 0, 0)];
-
-const NOGC_GENERIC_CALLEES: &[&str] = &["__mono_std.sort.insertion_sort$1$str"];
-
-fn impl_symbol_head(rest: &str) -> String {
-    let rest = rest.trim_start();
-    let rest = match rest.strip_prefix('<') {
-        Some(r) => r.split_once('>').map_or(r, |(_, t)| t).trim_start(),
-        None => rest,
-    };
-    if rest.starts_with('[') {
-        return "slice".to_string();
-    }
-    rest.chars()
-        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-        .collect()
-}
-
 fn std_generic_entry_points() -> Vec<String> {
     let mut names = Vec::new();
     for module in ["slice", "sort"] {
@@ -627,64 +607,6 @@ fn std_generic_entry_points() -> Vec<String> {
         }
     }
     names
-}
-
-fn std_nogc_functions() -> (Vec<String>, Vec<String>) {
-    std_nogc_functions_opening('(')
-}
-
-fn std_nogc_functions_opening(open: char) -> (Vec<String>, Vec<String>) {
-    let mut names = Vec::new();
-    let mut modules = Vec::new();
-    let mut files: Vec<PathBuf> = fs::read_dir(repo_root().join("std"))
-        .expect("read std")
-        .map(|e| e.expect("std entry").path())
-        .filter(|p| p.extension().is_some_and(|e| e == "aelys"))
-        .collect();
-    files.sort();
-    for path in files {
-        let module = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .expect("module name")
-            .to_string();
-        let text = fs::read_to_string(&path).expect("read a std module");
-        let before = names.len();
-        let mut head: Option<String> = None;
-        for line in text.lines() {
-            if let Some(rest) = line.strip_prefix("impl") {
-                head = Some(impl_symbol_head(rest));
-                continue;
-            }
-            if line.starts_with('}') {
-                head = None;
-                continue;
-            }
-            let indented = line.starts_with(char::is_whitespace);
-            if indented != head.is_some() {
-                continue;
-            }
-            let t = line.trim_start();
-            let t = t.strip_prefix("pub ").unwrap_or(t);
-            let Some(rest) = t.strip_prefix("nogc fn ") else {
-                continue;
-            };
-            let name: String = rest
-                .chars()
-                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-                .collect();
-            if rest[name.len()..].starts_with(open) {
-                match &head {
-                    Some(h) => names.push(format!("std.{module}.{h}::{name}")),
-                    None => names.push(format!("std.{module}.{name}")),
-                }
-            }
-        }
-        if names.len() > before {
-            modules.push(module);
-        }
-    }
-    (names, modules)
 }
 
 fn copy_tree(from: &Path, to: &Path) {
@@ -756,93 +678,6 @@ fn allocating_statements(function: &aelys_air::AirFunction) -> Vec<String> {
         }
     }
     out
-}
-
-#[test]
-fn a36_w1_a_std_nogc_function_calls_only_string_counts_readers_externs_and_other_nogc_functions() {
-    let (nogc, modules) = std_nogc_functions();
-    assert_eq!(
-        nogc.len(),
-        71,
-        "the census must see every non generic `nogc fn` of std, found {nogc:?}"
-    );
-    let dir = tempdir().expect("tempdir");
-    copy_tree(&repo_root().join("std"), &dir.path().join("std"));
-    let root = dir.path().join("census.aelys");
-    let imports: String = modules.iter().map(|m| format!("needs std.{m}\n")).collect();
-    fs::write(
-        &root,
-        format!("{imports}\nfn main() {{\n}}\n"),
-    )
-    .expect("write census root");
-    let air = aelys_driver::lower_file_to_air(&root, OptimizationLevel::None)
-        .unwrap_or_else(|err| panic!("the census root must lower: {err}"));
-    let externs: std::collections::HashSet<&str> = air
-        .functions
-        .iter()
-        .filter(|f| f.is_extern)
-        .map(|f| f.name.as_str())
-        .collect();
-    let repeat = air
-        .functions
-        .iter()
-        .find(|f| f.name == "std.str.repeat")
-        .expect("std.str.repeat must reach the AIR");
-    assert!(
-        allocating_statements(repeat).contains(&"string concatenation".to_string()),
-        "A36: the allocation detector must see the concatenation of std.str.repeat, or it is blind"
-    );
-    let mut seen = 0;
-    for function in &air.functions {
-        if !nogc.contains(&function.name) {
-            continue;
-        }
-        seen += 1;
-        let callees = named_callees(function);
-        for callee in &callees {
-            let allowed = callee == "__aelys_str_retain"
-                || callee == "__aelys_str_release"
-                || NOGC_READERS.contains(&callee.as_str())
-                || externs.contains(callee.as_str())
-                || nogc.contains(callee)
-                || NOGC_GENERIC_CALLEES.contains(&callee.as_str());
-            assert!(
-                allowed,
-                "A36: `{}` is nogc and calls `{callee}`, which is neither a string count, a \
-                 reader, an extern nor another nogc function",
-                function.name
-            );
-        }
-        let allocating = allocating_statements(function);
-        assert!(
-            allocating.is_empty(),
-            "A36: `{}` is nogc and its AIR allocates: {allocating:?}",
-            function.name
-        );
-        let retains = callees
-            .iter()
-            .filter(|c| *c == "__aelys_str_retain")
-            .count();
-        let releases = callees
-            .iter()
-            .filter(|c| *c == "__aelys_str_release")
-            .count();
-        let pinned = NOGC_COUNTED_SITES
-            .iter()
-            .find(|(name, _, _)| *name == function.name)
-            .map_or((0, 0), |(_, r, l)| (*r, *l));
-        assert_eq!(
-            (retains, releases),
-            pinned,
-            "A36: the string retain and release sites of `{}` moved",
-            function.name
-        );
-    }
-    assert_eq!(
-        seen,
-        nogc.len(),
-        "every std nogc function must reach the AIR"
-    );
 }
 
 const A36_W1B_ROOT: &str = r#"

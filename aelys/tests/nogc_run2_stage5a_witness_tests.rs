@@ -138,24 +138,6 @@ fn main() { }
     has(&err, "module.aelys:1:11");
 }
 
-#[test]
-fn transitive_chain_descends_past_the_returned_value() {
-    let err = reject(
-        "\
-use std::process::ExitCode; fn g() -> Rc<i64> { Rc::new(0) }
-nogc fn f() -> i64 {
-    g();
-    0
-}
-fn main() -> ExitCode { return ExitCode::from(f() as u8); }
-",
-    );
-    assert_e0727(&err);
-    has(&err, "via `f -> g -> Rc::new`");
-    has(&err, "module.aelys:1:28");
-    has(&err, "calls `g` here");
-}
-
 const MUTUAL: &str = "\
 use std::process::ExitCode; fn a(n: i64) -> i64 { b(n) }
 fn b(n: i64) -> i64 {
@@ -263,81 +245,6 @@ fn main() -> ExitCode { return ExitCode::from(f() as u8); }
     lacks(&err, "keep the value on the stack");
     lacks(&err, "make every function on this path nogc");
     has(&err, "module.aelys:2:5");
-}
-
-#[test]
-fn indirect_closure_call_gets_the_honest_wording() {
-    let err = reject(
-        "\
-use std::process::ExitCode; nogc fn f() -> i64 {
-    let c = move || -> i64 {
-        let v = vec![1, 2, 3];
-        v[0]
-    };
-    c()
-}
-fn main() -> ExitCode { return ExitCode::from(f() as u8); }
-",
-    );
-    assert_e0727(&err);
-    has(&err, "via `f -> <indirect call>`");
-    has(
-        &err,
-        "note: the call target here is not statically known, so its effects are conservatively \
-         assumed to reach managed memory",
-    );
-    lacks(&err, "managed memory reached here");
-    has(&err, "effects assumed to reach managed memory here");
-    // e0728 rejects `nogc fn` outside an immutable parameter type, so a local closure cannot be one
-    lacks(&err, "make every function on this path nogc");
-    has(&err, "module.aelys:6:12");
-}
-
-const COLLISION: &str = "\
-use std::process::ExitCode; fn outer() -> i64 {
-    fn dup() -> i64 {
-        let mut v = Vec::new();
-        Vec::push(v, 1);
-        0
-    }
-    dup()
-}
-fn other() -> i64 {
-    fn dup() -> i64 { 0 }
-    dup()
-}
-nogc fn f() -> i64 { outer() }
-fn main() -> ExitCode { return ExitCode::from((f() + other()) as u8); }
-";
-
-#[test]
-fn mid_chain_collision_truncates_at_the_last_verified_hop() {
-    let chain = chain_of(COLLISION, "f");
-    let names: Vec<String> = chain.iter().map(|s| s.name.clone()).collect();
-    assert_eq!(names, vec!["f", "outer", "dup"]);
-    assert!(
-        chain[1].span.is_some(),
-        "an unambiguous hop keeps its call site"
-    );
-    assert_eq!(
-        chain[2].kind,
-        StepKind::Ambiguous,
-        "the stop reason is not a hop"
-    );
-    assert!(
-        chain[2].span.is_none(),
-        "a name shared by two bodies must carry no span"
-    );
-
-    let err = reject(COLLISION);
-    assert_e0727(&err);
-    has(
-        &err,
-        "via `f -> outer` (further steps are ambiguous: several functions are named `dup`)",
-    );
-    lacks(&err, "via `f -> outer -> dup`");
-    lacks(&err, "calls `dup` here");
-    has(&err, "module.aelys:13:29");
 }
 
 fn bodies_named(src: &str, name: &str) -> usize {

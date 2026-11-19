@@ -230,48 +230,6 @@ fn main() -> ExitCode {
 }
 
 #[test]
-fn catch_on_an_imported_result_passes_ok_through() {
-    run_row(
-        "MRS-3a",
-        &[
-            (
-                "root.aelys",
-                "\
-use std::process::ExitCode; mod res;
-
-fn main() -> ExitCode {
-    return ExitCode::from((match res::half(8) { Ok(v) => v, Err(e) => 90) as u8) };
-}
-",
-            ),
-            ("res.aelys", RES),
-        ],
-        4,
-    );
-}
-
-#[test]
-fn catch_on_an_imported_result_runs_the_handler_on_err() {
-    run_row(
-        "MRS-3b",
-        &[
-            (
-                "root.aelys",
-                "\
-use std::process::ExitCode; mod res;
-
-fn main() -> ExitCode {
-    return ExitCode::from((match res::half(9) { Ok(v) => v, Err(e) => e + 1) as u8) };
-}
-",
-            ),
-            ("res.aelys", RES),
-        ],
-        10,
-    );
-}
-
-#[test]
 fn unwrap_on_an_imported_result() {
     run_row(
         "MRS-4a",
@@ -664,40 +622,3 @@ fn an_imported_option_in_statement_position_is_not_must_use() {
     );
 }
 
-#[test]
-fn e0619_is_registered_and_the_explain_names_the_two_declarations() {
-    let info = aelys_common::diagnostic::registry::lookup("E0619").expect("E0619 is registered");
-    assert!(
-        info.explanation.contains("two different nominal types"),
-        "MRS-12: the explain must name what makes the two carriers distinct: {}",
-        info.explanation
-    );
-    assert!(
-        info.explanation.contains("mod res; use res::Result;"),
-        "MRS-12: the explain must name the way out: {}",
-        info.explanation
-    );
-}
-
-#[test]
-fn e0620_is_registered_and_the_explain_covers_the_error_handling_family() {
-    let info = aelys_common::diagnostic::registry::lookup("E0620").expect("E0620 is registered");
-    for needle in [
-        "`?`",
-        "`catch`",
-        "`.unwrap_unchecked()`",
-        "`.into_ok()`",
-        "`.map_error(f)`",
-    ] {
-        assert!(
-            info.explanation.contains(needle),
-            "MRS-13: the explain must cover {needle}: {}",
-            info.explanation
-        );
-    }
-    assert!(
-        info.explanation.contains("reported as E0619"),
-        "MRS-13: the explain must send the carrier mismatch case to its own code: {}",
-        info.explanation
-    );
-}

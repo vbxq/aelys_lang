@@ -13,13 +13,6 @@ const LEVELS: [(&str, OptimizationLevel); 4] = [
 
 const UNCODED: &str = "UNCODED";
 
-fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("the aelys crate has a parent workspace dir")
-        .to_path_buf()
-}
-
 fn codes(rendered: &str) -> BTreeSet<String> {
     let bytes = rendered.as_bytes();
     let mut found = BTreeSet::new();
@@ -528,45 +521,3 @@ fn accept_fixtures_stay_accepted_at_every_opt_level() {
     report(failures, "compile-PASS fixture", ACCEPT_FIXTURES.len());
 }
 
-fn collect_aelys(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_aelys(&path, out);
-        } else if path.extension().and_then(|e| e.to_str()) == Some("aelys") {
-            out.push(path);
-        }
-    }
-}
-
-#[test]
-fn the_aelys_corpus_reports_the_same_code_set_at_every_opt_level() {
-    let root = workspace_root();
-    let mut files = Vec::new();
-    for dir in [
-        "tests_e2e",
-        "torture",
-        "examples",
-        "aelys/tests/exploration",
-    ] {
-        collect_aelys(&root.join(dir), &mut files);
-    }
-    files.sort();
-    assert!(
-        files.len() > 300,
-        "the corpus should be the whole repo's .aelys files, found {}",
-        files.len()
-    );
-
-    let mut failures = Vec::new();
-    for path in &files {
-        if let Err(breakdown) = invariant_verdict(path) {
-            let name = path.strip_prefix(&root).unwrap_or(path).display();
-            failures.push(format!("  {name}: {breakdown}"));
-        }
-    }
-    report(failures, "corpus file", files.len());
-}

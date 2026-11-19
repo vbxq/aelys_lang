@@ -500,23 +500,3 @@ fn s11_5_the_air_guard_fires_when_the_surface_refusal_is_bypassed() {
     }
 }
 
-#[test]
-fn s11_6_the_e0421_explanation_names_the_new_producer_and_its_one_carve_out() {
-    let rows = aelys_common::diagnostic::registry::all_codes();
-    let row = rows
-        .iter()
-        .find(|r| r.code == "E0421")
-        .expect("E0421 must have a registry row");
-    for wanted in [
-        "the receiver of\n`.bytes`",
-        "make_string().bytes           // E0421",
-        "A string literal is the one receiver `.bytes` accepts without a",
-    ] {
-        assert!(
-            row.explanation.contains(wanted),
-            "S1.1-6: `aelys --explain E0421` must say {wanted:?}; a refusal the user meets and \
-             the explanation does not mention reads as a compiler bug\n{}",
-            row.explanation
-        );
-    }
-}

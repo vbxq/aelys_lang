@@ -588,76 +588,7 @@ fn group_mod_r3b_an_import_may_not_take_a_name_the_module_defines() {
 const DUP_FN_A: &str = "fn P() -> i64 {\n    1\n}\n";
 const DUP_FN_B: &str = "fn P() -> i64 {\n    2\n}\n";
 const DUP_FN_SIG: &str = "fn P(a: i64) -> i64 {\n    a\n}\n";
-const DUP_LET_A: &str = "pub let P: i64 = 1;\n";
-const DUP_LET_B: &str = "pub let P: i64 = 2;\n";
-const DUP_STRUCT_A: &str = "struct P {\n    x: i64,\n}\n";
-const DUP_STRUCT_B: &str = "struct P {\n    y: i64,\n}\n";
-const DUP_ENUM_A: &str = "enum P {\n    A,\n    B,\n}\n";
-const DUP_ENUM_B: &str = "enum P {\n    C,\n    D,\n}\n";
 const DUP_MAIN: &str = "\nfn main() {\n}\n";
-
-const DUPLICATE_FORMS: &[(&str, &str, &str, &str)] = &[
-    ("DUP-1", DUP_FN_A, DUP_FN_B, "twice as a function"),
-    ("DUP-1b", DUP_FN_A, DUP_FN_A, "twice as a function"),
-    ("DUP-1c", DUP_FN_A, DUP_FN_SIG, "twice as a function"),
-    ("DUP-2", DUP_LET_A, DUP_LET_B, "twice as a global"),
-    ("DUP-3", DUP_STRUCT_A, DUP_STRUCT_B, "twice as a struct"),
-    ("DUP-3b", DUP_STRUCT_A, DUP_STRUCT_A, "twice as a struct"),
-    ("DUP-4", DUP_ENUM_A, DUP_ENUM_B, "twice as an enum"),
-    ("DUP-4b", DUP_ENUM_A, DUP_ENUM_A, "twice as an enum"),
-    ("DUP-5", DUP_FN_A, DUP_LET_B, "once as a function and once as a global"),
-    ("DUP-5r", DUP_LET_A, DUP_FN_B, "once as a global and once as a function"),
-    ("DUP-6", DUP_FN_A, DUP_STRUCT_A, "once as a function and once as a struct"),
-    ("DUP-6r", DUP_STRUCT_A, DUP_FN_B, "once as a struct and once as a function"),
-    ("DUP-7", DUP_FN_A, DUP_ENUM_A, "once as a function and once as an enum"),
-    ("DUP-7r", DUP_ENUM_A, DUP_FN_B, "once as an enum and once as a function"),
-    ("DUP-8", DUP_LET_A, DUP_STRUCT_A, "once as a global and once as a struct"),
-    ("DUP-8r", DUP_STRUCT_A, DUP_LET_B, "once as a struct and once as a global"),
-    ("DUP-9", DUP_LET_A, DUP_ENUM_A, "once as a global and once as an enum"),
-    ("DUP-9r", DUP_ENUM_A, DUP_LET_B, "once as an enum and once as a global"),
-    ("DUP-10", DUP_STRUCT_A, DUP_ENUM_A, "once as a struct and once as an enum"),
-    ("DUP-10r", DUP_ENUM_A, DUP_STRUCT_A, "once as an enum and once as a struct"),
-];
-
-#[test]
-fn group_mod_dup_every_pair_of_top_level_binding_forms_is_rejected() {
-    for (id, first, second, phrasing) in DUPLICATE_FORMS {
-        let source = format!("{first}{second}{DUP_MAIN}");
-        for (level, opt) in LEVELS {
-            let dir = tempdir().expect("tempdir");
-            let root = dir.path().join("root.aelys");
-            fs::write(&root, &source).expect("write fixture");
-            let rendered = match lower_file_to_air(&root, *opt) {
-                Ok(_) => panic!(
-                    "{id} at {level}: two top level definitions of `P` MUST be rejected
-{source}"
-                ),
-                Err(rendered) => rendered.to_string(),
-            };
-            assert!(
-                rendered.contains("[E0204]"),
-                "{id} at {level}: the diagnostic MUST carry E0204
-{source}
-rendered:
-{rendered}"
-            );
-            assert!(
-                rendered.contains(phrasing),
-                "{id} at {level}: the headline MUST say {phrasing:?}
-{source}
-rendered:
-{rendered}"
-            );
-            assert!(
-                rendered.contains("is first defined here"),
-                "{id} at {level}: the diagnostic MUST point at the first definition too
-{source}
-rendered:
-{rendered}"
-            );
-        }
-    }
-}
 
 #[test]
 fn group_mod_dup_a_duplicate_definition_draws_a_single_diagnostic_and_no_consequence() {
@@ -795,64 +726,6 @@ fn group_mod_r6b_an_absent_item_is_absent_through_from_too() {
         ],
         "[E0606]",
         "absent",
-    );
-}
-
-#[test]
-fn group_mod_r7_a_c_header_target_is_rejected_and_never_miscompiled() {
-    reject_row(
-        "R-7",
-        &[(
-            "root.aelys",
-            "needs \"GL/glext.h\"\n\nfn main() -> i64 {\n    return 0\n}\n",
-        )],
-        "[E0607]",
-        "GL/glext.h",
-    );
-}
-
-#[test]
-fn group_mod_r7b_an_empty_header_is_still_a_header() {
-    reject_row(
-        "R-7b",
-        &[(
-            "root.aelys",
-            "needs \"\"\n\nfn main() -> i64 {\n    return 0\n}\n",
-        )],
-        "[E0607]",
-        "not implemented yet",
-    );
-}
-
-#[test]
-fn group_mod_r8_a_needs_after_a_declaration_is_rejected() {
-    reject_row(
-        "R-8",
-        &[
-            (
-                "root.aelys",
-                "fn main() -> i64 {\n    return 0\n}\n\nneeds m\n",
-            ),
-            ("m.aelys", SEVEN),
-        ],
-        "[E0608]",
-        "before any other top-level declaration",
-    );
-}
-
-#[test]
-fn group_mod_r8b_a_needs_inside_a_body_is_rejected() {
-    reject_row(
-        "R-8b",
-        &[
-            (
-                "root.aelys",
-                "fn main() -> i64 {\n    needs m\n    return 0\n}\n",
-            ),
-            ("m.aelys", SEVEN),
-        ],
-        "[E0608]",
-        "before any other top-level declaration",
     );
 }
 

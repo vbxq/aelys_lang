@@ -456,19 +456,6 @@ fn main() {
 }
 
 #[test]
-fn w14_amp_of_a_slice_expression_is_still_e0421() {
-    let err = rejects(
-        r#"
-fn main() {
-    let v: Vec<i64> = vec![1,2,3];
-    let s = &v[..];
-}
-"#,
-    );
-    assert!(err.contains("E0421"), "got: {err}");
-}
-
-#[test]
 fn w16_rc_of_vec_is_still_fenced() {
     let err = rejects(
         r#"

@@ -100,7 +100,7 @@ fn accept_form_vec_new_and_literal_initializers() {
 #[test]
 fn reject_form_conditional_return() {
     reject_e0412(
-        "fn pick(a: vec<i64>, c: i64) -> vec<i64> { if c == 1 { a } else { a } }
+        "fn pick(a: vec<i64>, c: i64) -> vec<i64> { return if c == 1 { a } else { a }; }
 fn main() {
     let mut v = Vec::new();
     Vec::push(v, 1);
