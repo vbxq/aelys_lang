@@ -2,7 +2,7 @@ refuse E0727
 copying a `Vec` in a `nogc fn` could share its buffer; pass a slice or a reference
 :6:5
 :10:37
-:12:47
-:14:43
+:12:40
+:14:36
 :17:5
 !internal

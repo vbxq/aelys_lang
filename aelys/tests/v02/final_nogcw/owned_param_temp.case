@@ -1,32 +1,31 @@
 struct R { screen: Vec<u8>, w: i64 }
 
-nogc fn draw(r: &mut R, x: i64) { r.screen[x] = 7 as u8 }
+nogc fn draw(r: &mut R, x: i64) { r.screen[x] = 7 as u8; }
 
-nogc fn put(v: &mut Vec<i64>, i: i64) { (*v)[i] = 9 }
+nogc fn put(v: &mut Vec<i64>, i: i64) { (*v)[i] = 9; }
 
 fn mk2(n: i64) -> R {
-    let mut r = R { screen: Vec::new(), w: n }
-    for i in 0..n { r.screen.push(1 as u8) }
-    return r
+    let mut r = R { screen: Vec::new(), w: n };
+    for i in 0..n { r.screen.push(1 as u8); }
+    r
 }
 
 fn mk() -> Vec<i64> {
-    let mut v: Vec<i64> = Vec::new()
-    for i in 0..3 { v.push(i) }
-    return v
+    let mut v: Vec<i64> = Vec::new();
+    for i in 0..3 { v.push(i); }
+    v
 }
 
 fn take(mut r: R) -> i64 {
-    draw(&mut r, 1)
-    return r.screen[1] as i64 + r.screen[0] as i64
+    draw(&mut r, 1);
+    r.screen[1] as i64 + r.screen[0] as i64
 }
 
 fn take_vec(mut v: Vec<i64>) -> i64 {
-    put(&mut v, 1)
-    return v[1] + v[2]
+    put(&mut v, 1);
+    v[1] + v[2]
 }
 
-fn main() -> i64 {
-    println("{take(mk2(3))} {take_vec(mk())}")
-    return 0
+fn main() {
+    println!("{} {}", take(mk2(3)), take_vec(mk()));
 }

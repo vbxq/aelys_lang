@@ -1,14 +1,13 @@
 nogc fn poke(r: &mut Vec<i64>, i: i64) -> i64 {
-    (*r)[i] = (*r)[i] * 7 + 1
-    return (*r)[i]
+    (*r)[i] = (*r)[i] * 7 + 1;
+    (*r)[i]
 }
 
-fn main() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    for i in 0..3 { v.push(i + 5) }
-    let a = poke(&mut v, 1)
-    v.make_unique()
-    let b = poke(&mut v, 2)
-    println("{a} {b} {v[0]} {v[1]} {v[2]}")
-    return 0
+fn main() {
+    let mut v: Vec<i64> = Vec::new();
+    for i in 0..3 { v.push(i + 5); }
+    let a = poke(&mut v, 1);
+    v.make_unique();
+    let b = poke(&mut v, 2);
+    println!("{} {} {} {} {}", a, b, v[0], v[1], v[2]);
 }

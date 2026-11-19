@@ -1,21 +1,20 @@
-needs std.slice
+use std::slice;
 
-fn main() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    for i in 0..5 { v.push(i * 10) }
-    let before = v
-    v.swap(0, 4)
-    v.reverse()
-    let mid = v
-    let src: [i64; 5] = [5, 6, 7, 8, 9]
-    v.copy_from_slice(src[0..5])
-    let after_copy = v
-    v.fill(3)
-    let mut m: i64 = -1
+fn main() {
+    let mut v: Vec<i64> = Vec::new();
+    for i in 0..5 { v.push(i * 10); }
+    let before = v;
+    v.swap(0, 4);
+    v.reverse();
+    let mid = v;
+    let src: [i64; 5] = [5, 6, 7, 8, 9];
+    v.copy_from_slice(src[0..5]);
+    let after_copy = v;
+    v.fill(3);
+    let mut m: i64 = -1;
     match after_copy.max() {
         Some(x) => m = x,
-        None => m = -2
+        None => m = -2,
     }
-    println("{before[0]} {before[4]} {mid[0]} {mid[1]} {mid[4]} {after_copy[0]} {after_copy[4]} {v[0]} {v[4]} {m}")
-    return 0
+    println!("{} {} {} {} {} {} {} {} {} {}", before[0], before[4], mid[0], mid[1], mid[4], after_copy[0], after_copy[4], v[0], v[4], m);
 }

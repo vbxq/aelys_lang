@@ -1,10 +1,9 @@
-needs gfx
+mod gfx;
 
-fn main() -> i64 {
-    let mut r = gfx.R { screen: Vec::new(), w: 0 }
-    for i in 0..4 { r.screen.push(1 as u8) }
-    let w = r.screen
-    gfx.draw(&mut r, 0)
-    println("{w[0]} {r.screen[0]}")
-    return 0
+fn main() {
+    let mut r = gfx::R { screen: Vec::new(), w: 0 };
+    for i in 0..4 { r.screen.push(1 as u8); }
+    let w = r.screen;
+    gfx::draw(&mut r, 0);
+    println!("{} {}", w[0], r.screen[0]);
 }

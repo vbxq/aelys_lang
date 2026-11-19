@@ -1,26 +1,25 @@
 struct R { v: Vec<i64>, o: Vec<i64>, w: i64 }
 
-fn sum(v: Vec<i64>) -> i64 { return v[0] }
+fn sum(v: Vec<i64>) -> i64 { v[0] }
 
 nogc fn by_let(r: &mut R) -> i64 {
-    let c = r.v
-    return c[0]
+    let c = r.v;
+    c[0]
 }
 
-nogc fn by_field(r: &mut R) { r.o = r.v }
+nogc fn by_field(r: &mut R) { r.o = r.v; }
 
-nogc fn by_return(r: &R) -> Vec<i64> { return r.v }
+nogc fn by_return(r: &R) -> Vec<i64> { r.v }
 
-nogc fn by_arg(r: &R) -> i64 { return sum(r.v) }
+nogc fn by_arg(r: &R) -> i64 { sum(r.v) }
 
 nogc fn by_struct(r: &R) -> i64 {
-    let s = *r
-    return s.w
+    let s = *r;
+    s.w
 }
 
-fn main() -> i64 {
-    let mut r = R { v: Vec::new(), o: Vec::new(), w: 0 }
-    r.v.push(1)
-    println("{by_let(&mut r)}")
-    return 0
+fn main() {
+    let mut r = R { v: Vec::new(), o: Vec::new(), w: 0 };
+    r.v.push(1);
+    println!("{}", by_let(&mut r));
 }

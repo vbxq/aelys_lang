@@ -1,22 +1,21 @@
 struct M { x: i64 }
 
 impl M {
-    fn bump(&mut self) { self.x = self.x + 1 }
+    fn bump(&mut self) { self.x += 1; }
 }
 
 struct W { ms: Vec<M> }
 
 nogc fn step(w: &mut W) {
-    w.ms[0].bump()
+    w.ms[0].bump();
 }
 
-fn main() -> i64 {
-    let mut w = W { ms: Vec::new() }
-    w.ms.push(M { x: 10 })
-    step(&mut w)
-    let snap = w.ms
-    println("{w.ms[0].x} {snap[0].x}")
-    step(&mut w)
-    println("{w.ms[0].x} {snap[0].x}")
-    return 0
+fn main() {
+    let mut w = W { ms: Vec::new() };
+    w.ms.push(M { x: 10 });
+    step(&mut w);
+    let snap = w.ms;
+    println!("{} {}", w.ms[0].x, snap[0].x);
+    step(&mut w);
+    println!("{} {}", w.ms[0].x, snap[0].x);
 }

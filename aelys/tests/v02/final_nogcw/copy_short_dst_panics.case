@@ -1,16 +1,15 @@
-needs std.slice
+use std::slice;
 
 struct R { dst: Vec<i64>, src: Vec<i64> }
 
-nogc fn cp(r: &mut R, s: &R) { r.dst.copy_from_slice(s.src[0..s.src.len()]) }
+nogc fn cp(r: &mut R, s: &R) { r.dst.copy_from_slice(s.src[0..s.src.len()]); }
 
-fn main() -> i64 {
-    let mut a = R { dst: Vec::new(), src: Vec::new() }
-    let mut b = R { dst: Vec::new(), src: Vec::new() }
-    for i in 0..2 { a.dst.push(0) }
-    for i in 0..5 { b.src.push(i + 1) }
-    println("start")
-    cp(&mut a, &b)
-    println("unreachable {a.dst[0]} {a.dst[1]}")
-    return 0
+fn main() {
+    let mut a = R { dst: Vec::new(), src: Vec::new() };
+    let mut b = R { dst: Vec::new(), src: Vec::new() };
+    for i in 0..2 { a.dst.push(0); }
+    for i in 0..5 { b.src.push(i + 1); }
+    println!("start");
+    cp(&mut a, &b);
+    println!("unreachable {} {}", a.dst[0], a.dst[1]);
 }
