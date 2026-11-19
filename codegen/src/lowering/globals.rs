@@ -17,7 +17,7 @@ use aelys_air::{
 use inkwell::AddressSpace;
 use inkwell::module::Linkage;
 use inkwell::types::StructType;
-use inkwell::values::{BasicValueEnum, IntValue, PointerValue};
+use inkwell::values::{BasicValueEnum, PointerValue};
 
 pub(crate) const GLOBAL_GET_PREFIX: &str = "__aelys_global_get_";
 pub(crate) const GLOBAL_SET_PREFIX: &str = "__aelys_global_set_";
@@ -25,6 +25,14 @@ const GLOBAL_STORAGE_PREFIX: &str = "__aelys_global_";
 
 pub(crate) fn global_storage_name(name: &str) -> String {
     format!("{GLOBAL_STORAGE_PREFIX}{name}")
+}
+
+// a function address is a relocation, so it travels whole until a pointer-wide cell takes it
+#[derive(Clone, Copy)]
+enum Byte {
+    Lit(u8),
+    Addr(PointerValue<'static>),
+    AddrTail,
 }
 
 impl CodegenContext {
@@ -630,19 +638,7 @@ impl CodegenContext {
             }
         };
 
-        let symbol_name = program
-            .functions
-            .iter()
-            .find(|function| function.name == function_name)
-            .map(function_symbol_name)
-            .unwrap_or_else(|| function_name.to_string());
-        let func = self.module.get_function(&symbol_name).ok_or_else(|| {
-            CodegenError::LlvmError(format!(
-                "global '{}' references unknown function '{}'",
-                global_name, function_name
-            ))
-        })?;
-        let fn_ptr = func.as_global_value().as_pointer_value();
+        let fn_ptr = self.function_pointer(global_name, function_name, program)?;
 
         if matches!(conv, aelys_air::CallingConv::Aelys) {
             let null_env = self.context.ptr_type(AddressSpace::default()).const_null();
@@ -658,7 +654,7 @@ impl CodegenContext {
         &self,
         global_name: &str,
         enum_ty: StructType<'static>,
-        bytes: &[IntValue<'static>],
+        bytes: &[Byte],
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
         let cell = enum_ty.get_field_type_at_index(1).ok_or_else(|| {
             CodegenError::UnsupportedType(format!(
@@ -667,22 +663,29 @@ impl CodegenContext {
         })?;
         let element = cell.into_array_type().get_element_type().into_int_type();
         let width = (element.get_bit_width() / 8) as usize;
-        if width <= 1 {
-            return Ok(self.context.i8_type().const_array(bytes).into());
-        }
         let mut cells = Vec::new();
-        for chunk in bytes.chunks(width) {
-            let mut value: u64 = 0;
-            for (index, byte) in chunk.iter().enumerate() {
-                let byte = byte.get_zero_extended_constant().ok_or_else(|| {
-                    CodegenError::UnsupportedInstruction(format!(
-                        "global '{global_name}' serializes a payload byte that is not a plain \
-                         constant"
-                    ))
-                })?;
-                value |= (byte & 0xff) << (8 * index);
-            }
-            cells.push(element.const_int(value, false));
+        for chunk in bytes.chunks(width.max(1)) {
+            let cell = match chunk {
+                [Byte::Addr(ptr), rest @ ..]
+                    if width == 8 && rest.iter().all(|b| matches!(b, Byte::AddrTail)) =>
+                {
+                    ptr.const_to_int(element)
+                }
+                _ => {
+                    let mut value: u64 = 0;
+                    for (index, byte) in chunk.iter().enumerate() {
+                        let Byte::Lit(byte) = byte else {
+                            return Err(CodegenError::UnsupportedInstruction(format!(
+                                "global '{global_name}' places a function pointer where the enum \
+                                 payload cell cannot hold it"
+                            )));
+                        };
+                        value |= u64::from(*byte) << (8 * index);
+                    }
+                    element.const_int(value, false)
+                }
+            };
+            cells.push(cell);
         }
         Ok(element.const_array(&cells).into())
     }
@@ -694,9 +697,9 @@ impl CodegenContext {
         variant: &aelys_air::AirEnumVariant,
         payload: &[AirConst],
         program: &AirProgram,
-    ) -> Result<Vec<IntValue<'static>>, CodegenError> {
+    ) -> Result<Vec<Byte>, CodegenError> {
         let payload_len = enum_max_payload_size(enum_def, &program.struct_sizes);
-        let mut bytes = vec![self.context.i8_type().const_zero(); payload_len as usize];
+        let mut bytes = vec![Byte::Lit(0); payload_len as usize];
         let field_offsets = payload_field_offsets(&variant.payload, &program.struct_sizes);
 
         for (index, (field_ty, field_const)) in
@@ -729,21 +732,40 @@ impl CodegenContext {
         Ok(bytes)
     }
 
+    fn function_pointer(
+        &self,
+        global_name: &str,
+        function_name: &str,
+        program: &AirProgram,
+    ) -> Result<PointerValue<'static>, CodegenError> {
+        let symbol_name = program
+            .functions
+            .iter()
+            .find(|function| function.name == function_name)
+            .map(function_symbol_name)
+            .unwrap_or_else(|| function_name.to_string());
+        let func = self.module.get_function(&symbol_name).ok_or_else(|| {
+            CodegenError::LlvmError(format!(
+                "global '{}' references unknown function '{}'",
+                global_name, function_name
+            ))
+        })?;
+        Ok(func.as_global_value().as_pointer_value())
+    }
+
     fn const_bytes(
         &self,
         name: &str,
         ty: &AirType,
         constant: &AirConst,
         program: &AirProgram,
-    ) -> Result<Vec<IntValue<'static>>, CodegenError> {
+    ) -> Result<Vec<Byte>, CodegenError> {
         match (ty, constant) {
             (AirType::I8 | AirType::U8, AirConst::Int(value, _))
             | (AirType::I8 | AirType::U8, AirConst::IntLiteral(value)) => {
-                Ok(vec![self.context.i8_type().const_int(*value as u64, false)])
+                Ok(vec![Byte::Lit(*value as u8)])
             }
-            (AirType::Bool, AirConst::Bool(value)) => Ok(vec![
-                self.context.i8_type().const_int(u64::from(*value), false),
-            ]),
+            (AirType::Bool, AirConst::Bool(value)) => Ok(vec![Byte::Lit(u8::from(*value))]),
             (AirType::Char, AirConst::Char(cp)) => self.integer_bytes(ty, i64::from(*cp)),
             (
                 AirType::I16
@@ -754,15 +776,21 @@ impl CodegenContext {
                 | AirType::U64,
                 AirConst::Int(value, _) | AirConst::IntLiteral(value),
             ) => self.integer_bytes(ty, *value),
-            (AirType::F32, AirConst::Float(value, _)) => Ok(f32::to_le_bytes(*value as f32)
-                .into_iter()
-                .map(|byte| self.context.i8_type().const_int(byte as u64, false))
-                .collect()),
-            (AirType::F64, AirConst::Float(value, _)) => Ok(f64::to_le_bytes(*value)
-                .into_iter()
-                .map(|byte| self.context.i8_type().const_int(byte as u64, false))
-                .collect()),
-            (AirType::Ptr(_), AirConst::Null) => Ok(vec![self.context.i8_type().const_zero(); 8]),
+            (AirType::F32, AirConst::Float(value, _)) => {
+                Ok(f32::to_le_bytes(*value as f32).map(Byte::Lit).to_vec())
+            }
+            (AirType::F64, AirConst::Float(value, _)) => {
+                Ok(f64::to_le_bytes(*value).map(Byte::Lit).to_vec())
+            }
+            (AirType::Ptr(_), AirConst::Null) => Ok(vec![Byte::Lit(0); 8]),
+            (AirType::FnPtr { conv, .. }, AirConst::FnRef(function)) => {
+                let mut bytes = vec![Byte::Addr(self.function_pointer(name, function, program)?)];
+                bytes.extend([Byte::AddrTail; 7]);
+                if matches!(conv, aelys_air::CallingConv::Aelys) {
+                    bytes.extend([Byte::Lit(0); 8]);
+                }
+                Ok(bytes)
+            }
             (AirType::Enum(r), AirConst::Int(value, _) | AirConst::IntLiteral(value)) => {
                 let enum_name = r.symbol();
                 let tag = u32::try_from(*value).map_err(|_| {
@@ -806,7 +834,7 @@ impl CodegenContext {
         tag: u32,
         payload: &[AirConst],
         program: &AirProgram,
-    ) -> Result<Vec<IntValue<'static>>, CodegenError> {
+    ) -> Result<Vec<Byte>, CodegenError> {
         let enum_def = program
             .enums
             .iter()
@@ -842,7 +870,7 @@ impl CodegenContext {
             )));
         }
 
-        let mut bytes = vec![self.context.i8_type().const_zero(); layout.size as usize];
+        let mut bytes = vec![Byte::Lit(0); layout.size as usize];
         let tag_bytes = self.integer_bytes(&AirType::I32, tag as i64)?;
         bytes[..4].clone_from_slice(&tag_bytes);
         let payload_bytes =
@@ -853,11 +881,7 @@ impl CodegenContext {
         Ok(bytes)
     }
 
-    fn integer_bytes(
-        &self,
-        ty: &AirType,
-        value: i64,
-    ) -> Result<Vec<IntValue<'static>>, CodegenError> {
+    fn integer_bytes(&self, ty: &AirType, value: i64) -> Result<Vec<Byte>, CodegenError> {
         let bytes = match ty {
             AirType::I8 => vec![(value as i8) as u8],
             AirType::U8 => vec![value as u8],
@@ -874,10 +898,7 @@ impl CodegenContext {
                 )));
             }
         };
-        Ok(bytes
-            .into_iter()
-            .map(|byte| self.context.i8_type().const_int(byte as u64, false))
-            .collect())
+        Ok(bytes.into_iter().map(Byte::Lit).collect())
     }
 }
 

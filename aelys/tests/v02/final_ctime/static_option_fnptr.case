@@ -1,0 +1,33 @@
+struct W { calls: i64 }
+struct State { tics: i32, action: Option<fn(&mut W, i64)>, next: i32 }
+
+fn a_add(w: &mut W, m: i64) {
+    w.calls += m;
+}
+
+fn a_double(w: &mut W, _m: i64) {
+    w.calls *= 2;
+}
+
+static STATES: [State; 4] = [
+    State { tics: 1, action: None, next: 1 },
+    State { tics: 2, action: Some(a_add), next: 2 },
+    State { tics: 3, action: Some(a_double), next: 3 },
+    State { tics: 4, action: None, next: 0 },
+];
+static FIRST: Option<fn(&mut W, i64)> = Some(a_add);
+
+fn main() {
+    let mut w = W { calls: 1 };
+    let mut s: i64 = 0;
+    for i in 0..4 {
+        if let Some(f) = STATES[i].action {
+            f(&mut w, i + 10);
+        }
+        s += STATES[i].tics as i64 * 10 + STATES[i].next as i64;
+    }
+    if let Some(f) = FIRST {
+        f(&mut w, 100);
+    }
+    println!("{} {}", s, w.calls);
+}

@@ -663,7 +663,7 @@ impl<'a> LoweringContext<'a> {
             return Some((
                 Fault::Unsupported,
                 format!(
-                    "file-scope let '{name}' uses enum payload values with runtime-backed storage (`str`/`fnptr`), which globals cannot serialize yet"
+                    "file-scope let '{name}' uses enum payload values with runtime-backed storage (`str`), which globals cannot serialize yet"
                 ),
             ));
         }
@@ -683,7 +683,7 @@ impl<'a> LoweringContext<'a> {
 
     fn enum_payload_needs_runtime_storage(init: &AirConst) -> bool {
         match init {
-            AirConst::Str(_) | AirConst::FnRef(_) => true,
+            AirConst::Str(_) => true,
             AirConst::Enum { payload, .. } => {
                 payload.iter().any(Self::enum_payload_needs_runtime_storage)
             }

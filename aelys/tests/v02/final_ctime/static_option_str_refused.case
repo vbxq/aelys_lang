@@ -1,0 +1,7 @@
+static NAME: Option<&str> = Some("imp");
+
+fn main() {
+    if let Some(n) = NAME {
+        println!("{}", n);
+    }
+}

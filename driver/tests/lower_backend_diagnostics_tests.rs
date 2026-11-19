@@ -163,22 +163,3 @@ static gs: Option<String> = Option::Some("hi");
         "file-scope let 'gs' uses enum payload values with runtime-backed storage",
     );
 }
-
-#[test]
-fn file_scope_data_enum_fnptr_payload_is_reported_without_panic() {
-    let src = r#"
-enum Holder<T> {
-    Value(T),
-    Empty,
-}
-
-static gf: Holder<fn() -> i64> = Holder::Value(main);
-
-fn main() {
-}
-"#;
-    assert_lowering_error(
-        src,
-        "file-scope let 'gf' uses enum payload values with runtime-backed storage",
-    );
-}
