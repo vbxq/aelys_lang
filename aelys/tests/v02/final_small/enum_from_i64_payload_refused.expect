@@ -1,0 +1,4 @@
+refuse E0454
+`E::from_i64` needs an enum without data or type parameters, and `E::A` carries data
+`G::from_i64` needs an enum without data or type parameters, and `G` takes type parameters
+!E0310

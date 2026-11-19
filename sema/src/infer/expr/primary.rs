@@ -318,6 +318,29 @@ impl TypeInference {
         {
             return self.infer_enum_from_i64(&def, args, span);
         }
+        if variant == "from_i64"
+            && let Some(def) = self.type_table.get_enum(enum_name).cloned()
+        {
+            let shown = crate::modules::source_type_name(enum_name);
+            let why = match def.variants.iter().find(|v| !v.data.is_empty()) {
+                Some(v) => format!("`{shown}::{}` carries data", v.name),
+                None => format!("`{shown}` takes type parameters"),
+            };
+            self.errors.push(TypeError::coded(
+                "E0454",
+                format!(
+                    "`{shown}::from_i64` needs an enum without data or type parameters, and {why}"
+                ),
+                "not a C-like enum",
+                span,
+            ));
+            for a in args {
+                self.infer_expr(a);
+            }
+            let params = def.type_params.iter().map(|_| self.type_gen.fresh()).collect();
+            let ty = self.option_of(InferType::Enum(def.name, params), span);
+            return (TypedExprKind::Null, ty);
+        }
         let enum_def = self.type_table.get_enum(enum_name).cloned();
         match enum_def {
             Some(def) => {

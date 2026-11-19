@@ -1083,7 +1083,8 @@ discriminant after the last explicit one overflows it.
         explanation: "\
 An explicit discriminant or `@repr(T)` needs an enum whose variants carry
 no data, `T` must be an integer type, and a discriminant is a constant
-integer expression.
+integer expression. `E::from_i64` exists only on an enum without data or
+type parameters.
 
     enum E { A(i64) = 1 }          // E0454
     @repr(f64)
