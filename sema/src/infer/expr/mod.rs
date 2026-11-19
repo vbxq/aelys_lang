@@ -609,11 +609,10 @@ impl TypeInference {
             && !matches!(expr.kind, TypedExprKind::Int(_))
         {
             match self.fold_int_in(expr, target_ty) {
-                Ok(_) => {
+                Ok(_) | Err(const_int::Fold::Reported) => {
                     Self::retype_literal(expr, target_ty);
                     return true;
                 }
-                Err(const_int::Fold::Reported) => return false,
                 Err(const_int::Fold::NotConst) => {}
             }
         }
