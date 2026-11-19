@@ -39,8 +39,9 @@ impl<'a> FunctionCodegen<'a> {
                     _ => {
                         let ptr = self.place_ptr(place)?;
                         let store = self.store_value(ptr, value)?;
-                        if matches!(place, Place::Index(..))
+                        if let Place::Index(root, _) = place
                             && (value.is_int_value() || value.is_float_value())
+                            && self.indexes_a_vec_buffer(*root)?
                         {
                             self.mark_scalar_elem_store(store)?;
                         }
@@ -289,6 +290,14 @@ impl<'a> FunctionCodegen<'a> {
                 self.index_ptr(*local, idx_val, BoundsCheck::Checked)
             }
         }
+    }
+
+    // a slice or an array can be formed over foreign memory, a vec buffer only holds its elements
+    fn indexes_a_vec_buffer(&self, root: LocalId) -> Result<bool, CodegenError> {
+        Ok(match self.local_air_type(root)? {
+            AirType::Ptr(inner) | AirType::Rc(inner) => matches!(**inner, AirType::Vec(_)),
+            ty => matches!(ty, AirType::Vec(_)),
+        })
     }
 
     pub(crate) fn elem_base(&mut self, root: LocalId) -> Result<(ElemBase, AirType), CodegenError> {
