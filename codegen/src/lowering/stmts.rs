@@ -38,9 +38,11 @@ impl<'a> FunctionCodegen<'a> {
                     Place::Local(local) => self.assign_local(*local, value),
                     _ => {
                         let ptr = self.place_ptr(place)?;
-                        self.store_value(ptr, value)?;
-                        if matches!(place, Place::Index(..)) && is_scalar(&expected_ty) {
-                            self.mark_scalar_elem_store()?;
+                        let store = self.store_value(ptr, value)?;
+                        if matches!(place, Place::Index(..))
+                            && (value.is_int_value() || value.is_float_value())
+                        {
+                            self.mark_scalar_elem_store(store)?;
                         }
                         Ok(())
                     }
@@ -611,22 +613,4 @@ impl<'a> FunctionCodegen<'a> {
             }
         }
     }
-}
-
-fn is_scalar(ty: &AirType) -> bool {
-    matches!(
-        ty,
-        AirType::I8
-            | AirType::I16
-            | AirType::I32
-            | AirType::I64
-            | AirType::U8
-            | AirType::U16
-            | AirType::U32
-            | AirType::U64
-            | AirType::F32
-            | AirType::F64
-            | AirType::Bool
-            | AirType::Char
-    )
 }

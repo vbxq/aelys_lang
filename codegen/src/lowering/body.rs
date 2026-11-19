@@ -365,7 +365,8 @@ impl<'a> FunctionCodegen<'a> {
         value: BasicValueEnum<'static>,
     ) -> Result<(), CodegenError> {
         if let Some(ptr) = self.alloca_map.get(&local).copied() {
-            return self.store_value(ptr, value);
+            self.store_value(ptr, value)?;
+            return Ok(());
         }
         if self.local_uses_alloca(local) {
             return Err(CodegenError::LlvmError(format!(

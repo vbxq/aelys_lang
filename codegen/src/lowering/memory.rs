@@ -3,45 +3,37 @@ use crate::lowering::body::FunctionCodegen;
 use crate::types::alignment_of;
 use aelys_air::AirType;
 use inkwell::types::BasicTypeEnum;
-use inkwell::values::{BasicValue, BasicValueEnum, MetadataValue, PointerValue};
+use inkwell::values::{BasicValue, BasicValueEnum, InstructionValue, MetadataValue, PointerValue};
 
 impl<'a> FunctionCodegen<'a> {
-    fn vec_header_scope(&self) -> (MetadataValue<'static>, u32, u32) {
+    fn vec_header_scope(&self) -> MetadataValue<'static> {
         let ctx = self.context;
         let domain = ctx.metadata_node(&[ctx.metadata_string("aelys").into()]);
         let scope = ctx.metadata_node(&[
             ctx.metadata_string("aelys.vec.header").into(),
             domain.into(),
         ]);
-        (
-            ctx.metadata_node(&[scope.into()]),
-            ctx.get_kind_id("alias.scope"),
-            ctx.get_kind_id("noalias"),
-        )
+        ctx.metadata_node(&[scope.into()])
     }
 
     pub(crate) fn mark_vec_header_load(
         &self,
         load: BasicValueEnum<'static>,
     ) -> Result<(), CodegenError> {
-        let (list, scope_kind, _) = self.vec_header_scope();
         if let Some(inst) = load.as_instruction_value() {
-            inst.set_metadata(list, scope_kind)
+            inst.set_metadata(self.vec_header_scope(), self.context.get_kind_id("alias.scope"))
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         }
         Ok(())
     }
 
     // a scalar slot is never a vec header, so llvm may keep headers in registers across this store
-    pub(crate) fn mark_scalar_elem_store(&self) -> Result<(), CodegenError> {
-        let (list, _, noalias_kind) = self.vec_header_scope();
-        let store = self
-            .builder
-            .get_insert_block()
-            .and_then(|b| b.get_last_instruction())
-            .ok_or_else(|| CodegenError::LlvmError("element store not emitted".to_string()))?;
+    pub(crate) fn mark_scalar_elem_store(
+        &self,
+        store: InstructionValue<'static>,
+    ) -> Result<(), CodegenError> {
         store
-            .set_metadata(list, noalias_kind)
+            .set_metadata(self.vec_header_scope(), self.context.get_kind_id("noalias"))
             .map_err(|e| CodegenError::LlvmError(e.to_string()))
     }
 
@@ -49,7 +41,7 @@ impl<'a> FunctionCodegen<'a> {
         &self,
         ptr: PointerValue<'static>,
         value: BasicValueEnum<'static>,
-    ) -> Result<(), CodegenError> {
+    ) -> Result<InstructionValue<'static>, CodegenError> {
         let store = self
             .builder
             .build_store(ptr, value)
@@ -57,7 +49,7 @@ impl<'a> FunctionCodegen<'a> {
         store
             .set_alignment(alignment_of(value.get_type()))
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-        Ok(())
+        Ok(store)
     }
 
     pub(crate) fn load_value(

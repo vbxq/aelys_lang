@@ -20,6 +20,12 @@ use std::collections::HashMap;
 impl CodegenContext {
     pub(crate) fn declare_functions(&self, program: &AirProgram) -> Result<(), CodegenError> {
         self.ensure_no_reserved_bootstrap_builtins(program)?;
+        let target_data = program
+            .functions
+            .iter()
+            .any(derefs_struct_refs)
+            .then(|| self.target_data())
+            .transpose()?;
 
         for function in &program.functions {
             // any c-convention entry point crosses the platform abi boundary, even when
@@ -55,17 +61,25 @@ impl CodegenContext {
             if function.is_extern && matches!(function.calling_conv, AirCallingConv::C) {
                 self.apply_c_integer_extension(fn_value, function, use_sret)?;
             }
-            if function.attributes.no_gc
-                && function.gc_mode != GcMode::Manual
-                && !function.is_extern
-                && matches!(function.calling_conv, AirCallingConv::Aelys)
+            if let Some(td) = &target_data
+                && derefs_struct_refs(function)
             {
                 let offset = u32::from(use_sret) + u32::from(function_has_implicit_env(function));
-                self.mark_struct_refs_dereferenceable(fn_value, function, offset)?;
+                self.mark_struct_refs_dereferenceable(fn_value, function, offset, td)?;
             }
         }
 
         Ok(())
+    }
+
+    fn target_data(&self) -> Result<TargetData, CodegenError> {
+        let layout = self.module.get_data_layout();
+        match layout.as_str().to_str() {
+            Ok(repr) if !repr.is_empty() => Ok(TargetData::create(repr)),
+            _ => Err(CodegenError::LlvmError(
+                "the module has no data layout to size nogc struct references".to_string(),
+            )),
+        }
     }
 
     // nothing a nogc body runs can free the struct behind a reference, so llvm may load from it early
@@ -74,12 +88,8 @@ impl CodegenContext {
         fn_value: FunctionValue<'static>,
         function: &AirFunction,
         offset: u32,
+        td: &TargetData,
     ) -> Result<(), CodegenError> {
-        let layout = self.module.get_data_layout();
-        let Some(repr) = layout.as_str().to_str().ok().filter(|r| !r.is_empty()) else {
-            return Ok(());
-        };
-        let td = TargetData::create(repr);
         let deref = Attribute::get_named_enum_kind_id("dereferenceable_or_null");
         let align = Attribute::get_named_enum_kind_id("align");
         for (index, param) in function.params.iter().enumerate() {
@@ -454,4 +464,11 @@ fn native_entry_type_name(ty: &AirType) -> &'static str {
         AirType::Opaque => "opaque",
         AirType::Void => "void",
     }
+}
+
+fn derefs_struct_refs(function: &AirFunction) -> bool {
+    function.attributes.no_gc
+        && function.gc_mode != GcMode::Manual
+        && !function.is_extern
+        && matches!(function.calling_conv, AirCallingConv::Aelys)
 }
