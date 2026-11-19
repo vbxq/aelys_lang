@@ -3,8 +3,8 @@ use crate::constraint::TypeError;
 use crate::modules::MethodEntry;
 use crate::types::InferType;
 use aelys_syntax::{
-    Expr, ExprKind, FmtStringPart, Function, ImplDecl, MatchArm, Parameter, Pattern,
-    Receiver, RefKind, Span, Stmt, StmtKind, TypeAnnotation, TypeBounds,
+    Expr, ExprKind, FmtStringPart, Function, ImplDecl, MatchArm, Parameter, Pattern, Receiver,
+    RefKind, Span, Stmt, StmtKind, TypeAnnotation, TypeBounds,
 };
 use std::collections::HashSet;
 

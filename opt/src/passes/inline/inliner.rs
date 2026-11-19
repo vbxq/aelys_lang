@@ -116,7 +116,9 @@ impl FunctionInliner {
                 self.locals.truncate(mark);
             }
 
-            TypedStmtKind::Return(Some(e)) | TypedStmtKind::Break(Some(e)) => self.inline_in_expr(e, analysis),
+            TypedStmtKind::Return(Some(e)) | TypedStmtKind::Break(Some(e)) => {
+                self.inline_in_expr(e, analysis)
+            }
 
             TypedStmtKind::Function(f) => {
                 let mark = self.locals.len();

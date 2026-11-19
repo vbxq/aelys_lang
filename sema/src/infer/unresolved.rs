@@ -241,7 +241,9 @@ fn sites_in_stmt(stmt: &TypedStmt, sites: &mut Vec<Site>) {
             push(sites, Rank::Binding, stmt.span, Some(iterator), elem_type);
             sites_in_stmt(body, sites);
         }
-        TypedStmtKind::Return(Some(expr)) | TypedStmtKind::Break(Some(expr)) => sites_in_expr(expr, sites),
+        TypedStmtKind::Return(Some(expr)) | TypedStmtKind::Break(Some(expr)) => {
+            sites_in_expr(expr, sites)
+        }
         TypedStmtKind::Function(func) => sites_in_function(func, sites),
         TypedStmtKind::Return(None)
         | TypedStmtKind::Break(None)

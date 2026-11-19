@@ -238,7 +238,9 @@ fn break_values_in<'e>(expr: &'e TypedExpr, out: &mut Vec<&'e TypedExpr>) {
             break_values_in(then_branch, out);
             break_values_in(else_branch, out);
         }
-        TypedExprKind::Match { arms, .. } => arms.iter().for_each(|a| break_values_in(a.body(), out)),
+        TypedExprKind::Match { arms, .. } => {
+            arms.iter().for_each(|a| break_values_in(a.body(), out))
+        }
         TypedExprKind::Grouping(inner) => break_values_in(inner, out),
         _ => {}
     }

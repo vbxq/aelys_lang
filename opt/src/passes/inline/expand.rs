@@ -406,7 +406,9 @@ impl InlineExpander {
                     .collect(),
                 tail: Box::new(self.substitute_expr(tail, params, span)),
             },
-            TypedExprKind::Loop(body) => TypedExprKind::Loop(Box::new(self.substitute_stmt(body, params, span))),
+            TypedExprKind::Loop(body) => {
+                TypedExprKind::Loop(Box::new(self.substitute_stmt(body, params, span)))
+            }
             TypedExprKind::Match {
                 scrutinee,
                 arms,

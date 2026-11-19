@@ -1110,7 +1110,9 @@ impl TypeInference {
                 }
                 self.validate_expr(tail, generic_scope, declared_type_params);
             }
-            TypedExprKind::Loop(body) => self.validate_stmt(body, generic_scope, declared_type_params),
+            TypedExprKind::Loop(body) => {
+                self.validate_stmt(body, generic_scope, declared_type_params)
+            }
             TypedExprKind::Match {
                 scrutinee,
                 arms,

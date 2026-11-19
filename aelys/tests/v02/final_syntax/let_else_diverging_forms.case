@@ -29,11 +29,6 @@ fn must(n: i64) -> i64 {
     x
 }
 
-fn quit(n: i64) -> i64 {
-    let Some(x) = get(n) else { std::process::exit(3) };
-    x
-}
-
 fn main() {
     println!("{} {} {} {}", both(0), both(-1), both(5), arms(0));
     println!("{} {} {}", arms(-2), spin(6), must(7));
@@ -43,6 +38,4 @@ fn main() {
         found += v;
     }
     println!("{}", found);
-    quit(0);
-    println!("not reached");
 }

@@ -1,0 +1,49 @@
+struct Rec { name: String, items: Vec<String> }
+
+fn tail_string(n: i64) -> String {
+    let mut i = 0;
+    loop {
+        let s = format!("s{}", i);
+        if i == n {
+            break s;
+        }
+        i += 1;
+    }
+}
+
+fn main() {
+    let words = vec!["a".to_string(), "bb".to_string(), "ccc".to_string()];
+    let mut k = 0;
+    let w = loop {
+        if words[k].len() > 1 {
+            break words[k];
+        }
+        k += 1;
+    };
+    let r = loop {
+        let mut items = Vec::new();
+        items.push(w);
+        items.push(tail_string(2));
+        break Rec { name: tail_string(1), items: items };
+    };
+    let joined = loop {
+        let mut acc = "".to_string();
+        let mut j = 0;
+        while j < r.items.len() {
+            acc = format!("{}{}", acc, r.items[j]);
+            j += 1;
+        }
+        break acc;
+    };
+    println!("{} {} {} {}", w, r.name, r.items.len(), joined);
+    let mut tries = 0;
+    let v = loop {
+        tries += 1;
+        let v = vec![tries, tries * 2];
+        if tries < 3 {
+            continue;
+        }
+        break v;
+    };
+    println!("{} {}", v[0], v[1]);
+}

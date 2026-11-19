@@ -4,8 +4,19 @@ use aelys_sema::{InferType, TypedExpr, TypedExprKind, TypedStmt};
 use aelys_syntax::UnaryOp;
 
 impl<'a> LoweringContext<'a> {
-    fn assert_step(&mut self, step: LocalId, op: BinOp, zero: Operand, message: &str, sp: Option<Span>) {
-        let holds = self.emit_rvalue_to_temp(AirType::Bool, Rvalue::BinaryOp(op, Operand::Copy(step), zero), sp);
+    fn assert_step(
+        &mut self,
+        step: LocalId,
+        op: BinOp,
+        zero: Operand,
+        message: &str,
+        sp: Option<Span>,
+    ) {
+        let holds = self.emit_rvalue_to_temp(
+            AirType::Bool,
+            Rvalue::BinaryOp(op, Operand::Copy(step), zero),
+            sp,
+        );
         let ok = self.alloc_block_id();
         let fail = self.alloc_block_id();
         self.seal_block(AirTerminator::Branch {
@@ -89,8 +100,20 @@ impl<'a> LoweringContext<'a> {
                     .map(|s| AirConst::Int(0, s))
                     .unwrap_or(AirConst::IntLiteral(0)),
             );
-            self.assert_step(step_local, BinOp::Ne, zero.clone(), "assertion failed: step != 0", at);
-            self.assert_step(step_local, BinOp::Gt, zero, "assertion failed: step > 0", at);
+            self.assert_step(
+                step_local,
+                BinOp::Ne,
+                zero.clone(),
+                "assertion failed: step != 0",
+                at,
+            );
+            self.assert_step(
+                step_local,
+                BinOp::Gt,
+                zero,
+                "assertion failed: step > 0",
+                at,
+            );
         }
 
         let header_id = self.alloc_block_id();

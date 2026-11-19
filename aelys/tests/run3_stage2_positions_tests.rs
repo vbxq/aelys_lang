@@ -3114,7 +3114,10 @@ const SLOT_COVERAGE: &[(&str, &str)] = &[
     ("Match", "C18 C43"),
     ("ResultAssert", "B22 C26"),
     ("Block", "A19 A28 C46"),
-    ("Loop", "excluded: its value is the value of a break, counted under stmt.Break"),
+    (
+        "Loop",
+        "excluded: its value is the value of a break, counted under stmt.Break",
+    ),
     ("stmt.Expression", "A18 B18"),
     ("stmt.Let", "A05 B09 B19 A21"),
     ("stmt.Block", "A19"),

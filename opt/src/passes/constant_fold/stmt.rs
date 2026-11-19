@@ -44,7 +44,9 @@ impl ConstantFolder {
                 self.optimize_expr(iterable);
                 self.optimize_stmt(body);
             }
-            TypedStmtKind::Return(Some(expr)) | TypedStmtKind::Break(Some(expr)) => self.optimize_expr(expr),
+            TypedStmtKind::Return(Some(expr)) | TypedStmtKind::Break(Some(expr)) => {
+                self.optimize_expr(expr)
+            }
             TypedStmtKind::Function(func) => self.optimize_function(func),
             TypedStmtKind::Return(None)
             | TypedStmtKind::Break(None)

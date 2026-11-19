@@ -369,7 +369,12 @@ impl TypeInference {
         )
     }
 
-    pub(super) fn struct_constructor(&mut self, path: &Expr, args: Option<&[Expr]>, span: Span) -> Option<Expr> {
+    pub(super) fn struct_constructor(
+        &mut self,
+        path: &Expr,
+        args: Option<&[Expr]>,
+        span: Span,
+    ) -> Option<Expr> {
         let (written, qualified) = self.named_struct(path)?;
         let declared = &self.type_table.get_struct(&qualified)?.fields;
         let tuple = declared.first().is_none_or(|f| f.name == "0");
@@ -382,7 +387,10 @@ impl TypeInference {
         if args.len() != arity {
             self.errors.push(TypeError::coded(
                 "E0301",
-                format!("`{written}` has {arity} field(s), but {} value(s) are given", args.len()),
+                format!(
+                    "`{written}` has {arity} field(s), but {} value(s) are given",
+                    args.len()
+                ),
                 "wrong number of fields",
                 span,
             ));
@@ -445,7 +453,10 @@ impl TypeInference {
         if fields.len() != arity {
             self.errors.push(TypeError::coded(
                 "E0301",
-                format!("`{written}` has {arity} field(s), but the pattern has {}", fields.len()),
+                format!(
+                    "`{written}` has {arity} field(s), but the pattern has {}",
+                    fields.len()
+                ),
                 "wrong number of fields",
                 *span,
             ));
@@ -463,7 +474,13 @@ impl TypeInference {
         })
     }
 
-    pub(super) fn struct_update(&mut self, name: &str, fields: &[StructFieldInit], base: &Expr, span: Span) -> Expr {
+    pub(super) fn struct_update(
+        &mut self,
+        name: &str,
+        fields: &[StructFieldInit],
+        base: &Expr,
+        span: Span,
+    ) -> Expr {
         let qualified = self.air_type_name(name, span);
         let declared: Vec<String> = self
             .type_table

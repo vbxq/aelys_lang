@@ -68,7 +68,9 @@ impl TypeInference {
                     (t.kind, t.ty)
                 }
                 None => match self.imported_variant(name) {
-                    Some((enum_name, variant)) => self.infer_enum_variant(&enum_name, &variant, &[], expr.span),
+                    Some((enum_name, variant)) => {
+                        self.infer_enum_variant(&enum_name, &variant, &[], expr.span)
+                    }
                     None => self.infer_identifier_expr(name, expr.span),
                 },
             },
@@ -189,13 +191,15 @@ impl TypeInference {
                 return_type,
                 body,
             } => self.infer_lambda_expr(params, return_type.as_ref(), body, expr.span),
-            ExprKind::Member { object, member } => match self.struct_constructor(expr, None, expr.span) {
-                Some(unit) => {
-                    let t = self.infer_expr(&unit);
-                    (t.kind, t.ty)
+            ExprKind::Member { object, member } => {
+                match self.struct_constructor(expr, None, expr.span) {
+                    Some(unit) => {
+                        let t = self.infer_expr(&unit);
+                        (t.kind, t.ty)
+                    }
+                    None => self.infer_member_expr(object, member, expr.span),
                 }
-                None => self.infer_member_expr(object, member, expr.span),
-            },
+            }
             ExprKind::ArrayLiteral { elements } => {
                 self.infer_array_literal(elements, expect.as_ref())
             }
@@ -1290,7 +1294,11 @@ impl TypeInference {
 }
 
 impl TypeInference {
-    fn infer_loop_expr(&mut self, body: &[aelys_syntax::Stmt], span: aelys_syntax::Span) -> (TypedExprKind, InferType) {
+    fn infer_loop_expr(
+        &mut self,
+        body: &[aelys_syntax::Stmt],
+        span: aelys_syntax::Span,
+    ) -> (TypedExprKind, InferType) {
         self.loop_breaks.push(Some(Vec::new()));
         self.env.push_scope();
         let typed_body = self.infer_stmts(body);
@@ -1304,7 +1312,9 @@ impl TypeInference {
                         t.clone(),
                         first.clone(),
                         span,
-                        ConstraintReason::Other("every `break` of a `loop` gives a value of the same type".to_string()),
+                        ConstraintReason::Other(
+                            "every `break` of a `loop` gives a value of the same type".to_string(),
+                        ),
                     ));
                 }
                 first.clone()

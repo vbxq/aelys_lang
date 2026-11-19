@@ -241,7 +241,9 @@ impl TypeInference {
                 if self.env.lookup(name).is_some() || self.env.lookup_function_ref(name).is_some() {
                     return None;
                 }
-                let qualified = self.imported_type_name(name).unwrap_or_else(|| name.clone());
+                let qualified = self
+                    .imported_type_name(name)
+                    .unwrap_or_else(|| name.clone());
                 (name.clone(), qualified)
             }
             ExprKind::Member { object, member } => {
@@ -251,14 +253,21 @@ impl TypeInference {
                 if !self.is_module_namespace(namespace) {
                     return None;
                 }
-                let Lookup::Found(ty) = self.module_imports.namespaces.get(namespace)?.module_type(member) else {
+                let Lookup::Found(ty) = self
+                    .module_imports
+                    .namespaces
+                    .get(namespace)?
+                    .module_type(member)
+                else {
                     return None;
                 };
                 (format!("{namespace}.{member}"), ty.qualified.clone())
             }
             _ => return None,
         };
-        self.type_table.has_struct(&qualified).then_some((written, qualified))
+        self.type_table
+            .has_struct(&qualified)
+            .then_some((written, qualified))
     }
 
     pub(crate) fn imported_variant(&self, name: &str) -> Option<(String, String)> {

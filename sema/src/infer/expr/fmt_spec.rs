@@ -6,8 +6,7 @@ use aelys_syntax::{Expr, ExprKind, Span};
 
 const MAX_WIDTH: i64 = 4096;
 const MAX_PRECISION: i64 = 64;
-const FORM: &str =
-    "`[[fill]align][0][width][.precision]`, align one of `<`, `>`, `^`, a count written `n`, `n$` or `name$`";
+const FORM: &str = "`[[fill]align][0][width][.precision]`, align one of `<`, `>`, `^`, a count written `n`, `n$` or `name$`";
 
 enum Count {
     Fixed(i64),
@@ -24,7 +23,10 @@ struct FmtSpec {
 
 fn count(chars: &[char], at: &mut usize) -> Option<Count> {
     let start = *at;
-    while chars.get(*at).is_some_and(|c| c.is_alphanumeric() || *c == '_') {
+    while chars
+        .get(*at)
+        .is_some_and(|c| c.is_alphanumeric() || *c == '_')
+    {
         *at += 1;
     }
     if *at > start && chars.get(*at) == Some(&'$') {
@@ -171,7 +173,10 @@ impl TypeInference {
                 }
                 if !arg.ty.is_integer() {
                     this.fmt_spec_error(
-                        format!("a count in `:{text}` is an integer, and this argument is `{}`", arg.ty),
+                        format!(
+                            "a count in `:{text}` is an integer, and this argument is `{}`",
+                            arg.ty
+                        ),
                         span,
                     );
                     return None;

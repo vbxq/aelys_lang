@@ -210,15 +210,18 @@ impl TypeInference {
                 fields,
                 rest,
                 span,
-            } if {
+            } => {
                 let qualified = self.air_type_name(name, *span);
-                self.type_table.has_struct(&qualified)
-            } =>
-            {
-                let qualified = self.air_type_name(name, *span);
+                if !self.type_table.has_struct(&qualified) {
+                    self.refuse_refutable_let(pattern, *span);
+                    return;
+                }
                 let expected = match ty {
                     InferType::Var(_) => {
-                        let params = self.type_table.get_struct(&qualified).map_or(0, |d| d.type_params.len());
+                        let params = self
+                            .type_table
+                            .get_struct(&qualified)
+                            .map_or(0, |d| d.type_params.len());
                         let args = (0..params).map(|_| self.type_gen.fresh()).collect();
                         let expected = InferType::Struct(qualified.clone(), args);
                         self.constraints.push(Constraint::equal(
@@ -232,9 +235,10 @@ impl TypeInference {
                     other => other.clone(),
                 };
                 let declared = match &expected {
-                    InferType::Struct(found, args) if *found == qualified => {
-                        self.type_table.struct_fields(&qualified, args).unwrap_or_default()
-                    }
+                    InferType::Struct(found, args) if *found == qualified => self
+                        .type_table
+                        .struct_fields(&qualified, args)
+                        .unwrap_or_default(),
                     InferType::Dynamic => {
                         self.bind_refused_pattern(pattern);
                         return;
@@ -250,10 +254,16 @@ impl TypeInference {
                         return;
                     }
                 };
-                let unknown = fields.iter().find(|(f, _, _)| !declared.iter().any(|d| d.name == *f));
-                let missing = declared.iter().find(|d| !fields.iter().any(|(f, _, _)| *f == d.name));
+                let unknown = fields
+                    .iter()
+                    .find(|(f, _, _)| !declared.iter().any(|d| d.name == *f));
+                let missing = declared
+                    .iter()
+                    .find(|d| !fields.iter().any(|(f, _, _)| *f == d.name));
                 let detail = match (unknown, missing) {
-                    (Some((field, _, _)), _) => Some(format!("struct `{name}` has no field `{field}`")),
+                    (Some((field, _, _)), _) => {
+                        Some(format!("struct `{name}` has no field `{field}`"))
+                    }
                     (None, Some(d)) if !rest => Some(format!(
                         "this pattern does not mention field `{}` of `{name}`; name it, or write `..` to skip the fields left out",
                         d.name
@@ -284,19 +294,20 @@ impl TypeInference {
             | Pattern::Lit(_, span)
             | Pattern::Range { span, .. }
             | Pattern::ConstRange { span, .. }
-            | Pattern::Struct { span, .. }
-            | Pattern::Or(_, span) => {
-                let mut err = TypeError::coded(
-                    "E0101",
-                    "this pattern can fail to match, so `let` needs an `else`",
-                    "refutable pattern",
-                    *span,
-                );
-                err.help = Some("write `let PATTERN = value else { return; };`".to_string());
-                self.errors.push(err);
-                self.bind_refused_pattern(pattern);
-            }
+            | Pattern::Or(_, span) => self.refuse_refutable_let(pattern, *span),
         }
+    }
+
+    fn refuse_refutable_let(&mut self, pattern: &aelys_syntax::Pattern, span: aelys_syntax::Span) {
+        let mut err = TypeError::coded(
+            "E0101",
+            "this pattern can fail to match, so `let` needs an `else`",
+            "refutable pattern",
+            span,
+        );
+        err.help = Some("write `let PATTERN = value else { return; };`".to_string());
+        self.errors.push(err);
+        self.bind_refused_pattern(pattern);
     }
 
     fn bind_refused_pattern(&mut self, pattern: &aelys_syntax::Pattern) {
@@ -343,7 +354,8 @@ impl TypeInference {
         let kind = match &stmt.kind {
             StmtKind::Expression(expr) | StmtKind::Semi(expr) => {
                 let typed_expr = self.infer_expr(expr);
-                if matches!(stmt.kind, StmtKind::Semi(_)) && matches!(expr.kind, ExprKind::Panic(_)) {
+                if matches!(stmt.kind, StmtKind::Semi(_)) && matches!(expr.kind, ExprKind::Panic(_))
+                {
                     self.constraints.push(Constraint::equal(
                         typed_expr.ty.clone(),
                         InferType::I64,

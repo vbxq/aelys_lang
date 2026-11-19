@@ -1318,7 +1318,7 @@ impl BlockLike {
                 let value = p.body_value(b, required)?;
                 Ok(expr(ExprKind::Unsafe(Box::new(value)), span))
             }
-            BlockLike::Loop(form) if form.is_loop && (required || form.has_value) => {
+            BlockLike::Loop(form) if form.is_loop && (required || form.has_value || !form.exits()) => {
                 if !form.post.is_empty() {
                     return p.fail(
                         126,
@@ -1355,6 +1355,12 @@ impl BlockLike {
                 Ok(unit_block(stmts, span))
             }
         }
+    }
+}
+
+impl LoopForm {
+    fn exits(&self) -> bool {
+        !matches!(&self.stmt.kind, StmtKind::While { body, .. } if !breaks(body))
     }
 }
 
