@@ -484,7 +484,9 @@ impl TypeInference {
             ProjKind::FieldWrite(field) => {
                 self.reject_rc_field_write(field, &projected, object, value, span);
             }
-            ProjKind::IndexWrite => self.reject_vec_into_element(&object.ty, value),
+            ProjKind::IndexWrite => {
+                self.reject_vec_into_element(Self::peel_refs(&object.ty), value)
+            }
             _ => {}
         }
     }

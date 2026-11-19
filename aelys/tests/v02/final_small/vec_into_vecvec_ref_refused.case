@@ -1,0 +1,9 @@
+fn set(xs: &mut Vec<Vec<i64>>, s: Vec<i64>) {
+    xs[0] = s
+}
+
+fn main() -> i64 {
+    let mut xs: Vec<Vec<i64>> = Vec::new()
+    set(&mut xs, vec[1])
+    return 0
+}

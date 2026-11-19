@@ -397,7 +397,7 @@ impl TypeInference {
         self.reject_const_index_out_of_bounds(&typed_object, &typed_index);
 
         // r1-r3 already refuse the construction forms; this is the fail-closed backstop
-        self.reject_vec_into_element(&typed_object.ty, &typed_value);
+        self.reject_vec_into_element(Self::peel_refs(&typed_object.ty), &typed_value);
 
         match Self::peel_refs(&typed_object.ty) {
             InferType::Array(elem_ty, _)

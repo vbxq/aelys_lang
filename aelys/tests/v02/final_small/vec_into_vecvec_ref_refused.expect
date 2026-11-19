@@ -1,0 +1,2 @@
+refuse E0412
+value stored into an element of `Vec<Vec<i64>>`
