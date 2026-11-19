@@ -13,7 +13,7 @@ pub(super) fn is_primitive(name: &str) -> bool {
 
 pub(super) fn canonical_type_name(name: &str) -> &str {
     match name {
-        "String" | "str" => "string",
+        "String" => "string",
         "usize" => "u64",
         "isize" => "i64",
         "ExitCode" => "i64",
@@ -161,10 +161,6 @@ impl Parser {
             let mut ann = TypeAnnotation::slice_referent(element, start.merge(self.previous().span));
             ann.reference = Some(kind);
             return Ok(ann);
-        }
-        if self.check_ident("str") {
-            self.advance();
-            return Ok(TypeAnnotation::new("string".to_string(), start.merge(self.previous().span)));
         }
         let mut referent = self.parse_type()?;
         referent.reference = Some(kind);
