@@ -45,7 +45,6 @@ const CENSUS: &[(&str, Bucket, &str)] = &[
     ("r11_char_literals_and_six_operators", Bucket::Anchor, ""),
     ("r12_char_from_i64_outside_the_range_panics", Bucket::Anchor, ""),
     ("r13_char_from_i64_inside_the_range_runs", Bucket::Anchor, ""),
-    ("r14_string_index_refused", Bucket::Anchor, ""),
     ("r15_bytes_of_a_call_result_refused", Bucket::Anchor, ""),
     ("r16_bytes_through_an_rc_temporary_refused", Bucket::Anchor, ""),
     (
@@ -75,13 +74,6 @@ const CENSUS: &[(&str, Bucket, &str)] = &[
         "r25_byte_view_loop_control",
         Bucket::Neither,
         "declared control: the byte view is the string surface this run did not touch",
-    ),
-    (
-        "r26_character_loop_is_linear",
-        Bucket::Prefix,
-        "the anchor refuses this program, so a cost cannot be measured there; the point that \
-         falsifies it is the stage 2 tip, where the same bytes give the same answers 16 times \
-         slower per doubling pair",
     ),
     (
         "w1_generic_struct_carrier_runs",
