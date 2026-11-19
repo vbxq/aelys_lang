@@ -611,7 +611,7 @@ fn main() {
 #[test]
 fn u1_slice_of_an_array_field_next_to_an_rc_field_needs_a_mut_root() {
     let err = rejects(&format!(
-        r#"{STRUCT_S};
+        r#"{STRUCT_S}
 fn main() {{
     let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
     let s = x.a[..];
@@ -623,7 +623,7 @@ fn main() {{
     assert!(err.contains("E0422"), "got: {err}");
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S};
+            r#"{STRUCT_S}
 fn main() {{
     let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
     let s = x.a[..];
@@ -641,7 +641,7 @@ fn main() {{
 #[test]
 fn u2_that_slice_passed_to_a_writer_needs_a_mut_view() {
     let err = rejects(&format!(
-        r#"{STRUCT_S};
+        r#"{STRUCT_S}
 fn w(s: &[i64]) -> i64 {{
     s[0] = 9;
     s[0]
@@ -656,7 +656,7 @@ fn main() {{
     assert!(err.contains("E0422"), "got: {err}");
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S};
+            r#"{STRUCT_S}
 fn w(s: &mut [i64]) -> i64 {{
     s[0] = 9;
     s[0]
@@ -739,7 +739,7 @@ fn main() {
 #[test]
 fn u7_the_struct_as_a_by_value_parameter_needs_a_mut_parameter() {
     let err = rejects(&format!(
-        r#"{STRUCT_S};
+        r#"{STRUCT_S}
 fn f(x: S) -> i64 {{
     let s = x.a[..];
     s[0] = 9;
@@ -754,7 +754,7 @@ fn main() {{
     assert!(err.contains("E0422"), "got: {err}");
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S};
+            r#"{STRUCT_S}
 fn f(mut x: S) -> i64 {{
     let s = x.a[..];
     s[0] = 9;
@@ -775,7 +775,7 @@ fn main() {{
 #[test]
 fn u8_reslice_off_the_array_field_needs_a_mut_root() {
     let err = rejects(&format!(
-        r#"{STRUCT_S};
+        r#"{STRUCT_S}
 fn main() {{
     let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
     let s = x.a[..];
@@ -788,7 +788,7 @@ fn main() {{
     assert!(err.contains("E0422"), "got: {err}");
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S};
+            r#"{STRUCT_S}
 fn main() {{
     let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
     let s = x.a[..];
@@ -807,32 +807,32 @@ fn main() {{
 #[test]
 fn u9_the_same_field_slice_reached_through_a_shared_reference_is_e0422() {
     let err = rejects(&format!(
-        r#"{STRUCT_S}
+        r#"use std::process::ExitCode; {STRUCT_S}
 fn f(w: &S) -> i64 {{
-    let s = (*w).a[..]
-    s[0] = 9
-    println(s[0])
-    return 0
+    let s = (*w).a[..];
+    s[0] = 9;
+    println!("{{}}", s[0]);
+    0
 }}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    return f(&x)
+fn main() -> ExitCode {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    return ExitCode::from(f(&x) as u8);
 }}
 "#
     ));
     assert!(err.contains("E0422"), "got: {err}");
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S}
+            r#"use std::process::ExitCode; {STRUCT_S}
 fn f(w: &mut S) -> i64 {{
-    let s = (*w).a[..]
-    s[0] = 9
-    println(s[0])
-    return 0
+    let s = (*w).a[..];
+    s[0] = 9;
+    println!("{{}}", s[0]);
+    0
 }}
-fn main() -> i64 {{
-    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    return f(&mut x)
+fn main() -> ExitCode {{
+    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    return ExitCode::from(f(&mut x) as u8);
 }}
 "#
         ),
@@ -873,7 +873,7 @@ fn main() {
 fn u10_borrowing_the_whole_struct_runs() {
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S};
+            r#"{STRUCT_S}
 fn take(w: &S) -> i64 {{ 0 }}
 fn main() {{
     let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
@@ -892,14 +892,14 @@ fn main() {{
 fn u11_a_ref_peeled_place_with_no_field_projection_runs() {
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S}
+            r#"use std::process::ExitCode; {STRUCT_S}
 fn f(w: &S) -> i64 {{
-    let q = &*w
-    return 0
+    let q = &*w;
+    0
 }}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    return f(&x)
+fn main() -> ExitCode {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    return ExitCode::from(f(&x) as u8);
 }}
 "#
         ),
@@ -1096,7 +1096,7 @@ use std::process::ExitCode; fn main() -> ExitCode {
 fn u12_a_used_peeled_ref_runs() {
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S};
+            r#"{STRUCT_S}
 fn f(w: &S) -> i64 {{
     let q = &*w;
     (*q).a[0]
@@ -1197,7 +1197,7 @@ fn main() {
 fn c2r_a_slice_root_is_unknown() {
     assert_class(
         &format!(
-            r#"{STRUCT_S};
+            r#"{STRUCT_S}
 fn main() {{
     let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
     let s = x.a[..];
@@ -1241,7 +1241,7 @@ use std::process::ExitCode; fn main() -> ExitCode {
 fn u1_class_a_field_projection_is_unknown() {
     assert_class(
         &format!(
-            r#"{STRUCT_S};
+            r#"{STRUCT_S}
 fn main() {{
     let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
     let s = x.a[..];
@@ -1272,15 +1272,15 @@ fn main() {
 fn u9_class_agrees_across_the_reference_boundary() {
     assert_class(
         &format!(
-            r#"{STRUCT_S}
+            r#"use std::process::ExitCode; {STRUCT_S}
 fn f(w: &S) -> i64 {{
-    let s = (*w).a[..]
-    println(s[0])
-    return 0
+    let s = (*w).a[..];
+    println!("{{}}", s[0]);
+    0
 }}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    return f(&x)
+fn main() -> ExitCode {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    return ExitCode::from(f(&x) as u8);
 }}
 "#
         ),
@@ -1295,7 +1295,7 @@ fn main() -> i64 {{
 fn u10_class_the_whole_struct_is_managed() {
     assert_class(
         &format!(
-            r#"{STRUCT_S};
+            r#"{STRUCT_S}
 fn take(w: &S) -> i64 {{ 0 }}
 fn main() {{
     let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
@@ -1312,14 +1312,14 @@ fn main() {{
 fn u11_class_a_peeled_ref_with_no_field_is_unknown() {
     assert_class(
         &format!(
-            r#"{STRUCT_S}
+            r#"use std::process::ExitCode; {STRUCT_S}
 fn f(w: &S) -> i64 {{
-    let q = &*w
-    return 0
+    let q = &*w;
+    0
 }}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    return f(&x)
+fn main() -> ExitCode {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    return ExitCode::from(f(&x) as u8);
 }}
 "#
         ),
@@ -1560,21 +1560,21 @@ mod asan {
             (
                 "u1",
                 format!(
-                    "{STRUCT_S}\nfn main() -> i64 {{\n    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }}\n    let s = x.a[..]\n    s[0] = 9\n    return s[0]\n}}\n"
+                    "use std::process::ExitCode; {STRUCT_S}\nfn main() -> ExitCode {{\n    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }};\n    let s = x.a[..];\n    s[0] = 9;\n    return ExitCode::from(s[0] as u8);\n}}\n"
                 ),
                 9,
             ),
             (
                 "u9",
                 format!(
-                    "{STRUCT_S}\nfn f(w: &mut S) -> i64 {{\n    let s = (*w).a[..]\n    s[0] = 9\n    return s[0]\n}}\nfn main() -> i64 {{\n    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }}\n    return f(&mut x)\n}}\n"
+                    "use std::process::ExitCode; {STRUCT_S}\nfn f(w: &mut S) -> i64 {{\n    let s = (*w).a[..];\n    s[0] = 9;\n    s[0]\n}}\nfn main() -> ExitCode {{\n    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }};\n    return ExitCode::from(f(&mut x) as u8);\n}}\n"
                 ),
                 9,
             ),
             (
                 "u12",
                 format!(
-                    "{STRUCT_S}\nfn f(w: &S) -> i64 {{\n    let q = &*w\n    return (*q).a[0]\n}}\nfn main() -> i64 {{\n    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}\n    return f(&x)\n}}\n"
+                    "use std::process::ExitCode; {STRUCT_S}\nfn f(w: &S) -> i64 {{\n    let q = &*w;\n    (*q).a[0]\n}}\nfn main() -> ExitCode {{\n    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};\n    return ExitCode::from(f(&x) as u8);\n}}\n"
                 ),
                 4,
             ),
@@ -1669,7 +1669,7 @@ fn main() -> ExitCode {
             panic!("the ASan tier must build its archive on a machine with clang and ar");
         };
         let src = format!(
-            "{STRUCT_S};\nfn main() {{\n    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }};\n    let s = x.a[..];\n    s[0] = 9;\n    println!(\"{{}}\", s[0]);\n}}\n"
+            "{STRUCT_S}\nfn main() {{\n    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }};\n    let s = x.a[..];\n    s[0] = 9;\n    println!(\"{{}}\", s[0]);\n}}\n"
         );
         let run = |id: &str, src: &str, allocator: &str| {
             let Some(exe) = link_instrumented(dir.path(), id, src) else {
@@ -1726,10 +1726,10 @@ fn main() -> ExitCode {
         };
         let bound = loop_body(
             "",
-            "        static t: String = format!(\"{i}\");\n        static s: String = \"row \" + t;\n",
+            "        let t: String = format!(\"{i}\");\n        let s: String = \"row \" + t;\n",
             "",
         );
-        let unbound = loop_body("", "        static s: String = \"row \" + format!(\"{i}\");\n", "");
+        let unbound = loop_body("", "        let s: String = \"row \" + format!(\"{i}\");\n", "");
 
         // leaksanitizer replaces the program's own exit code, so only a clean leg can answer 25
         let run = |id: &str, src: &str, allocator: &str, clean: bool| {

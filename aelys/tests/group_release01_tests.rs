@@ -156,7 +156,7 @@ impl Harness {
         counted: (i64, i64),
         collections: i64,
     ) {
-        let exit = src.replace("    MID\n", "");
+        let exit = src.replace("    MID;\n", "");
         let mid = src.replace("MID", "__aelys_collect()");
         self.collected_row(&format!("{id}-exit"), &exit, stdout, counted, collections);
         self.collected_row(&format!("{id}-mid"), &mid, stdout, counted, collections + 1);
@@ -1588,7 +1588,7 @@ fn release01_39_no_user_call_or_safepoint_sits_between_a_field_release_and_its_s
         ("release01-24", RELEASE01_24),
         ("release01-25", RELEASE01_25),
         ("release01-26", RELEASE01_26),
-        ("release01-13", &RELEASE01_13.replace("    MID\n", "")),
+        ("release01-13", &RELEASE01_13.replace("    MID;\n", "")),
     ] {
         for (tag, opt) in LEVELS {
             let air = windowed_air(&h, id, tag, *opt, src);

@@ -956,7 +956,7 @@ fn a_nested_module_path_keeps_a_reserved_name_off_the_link() {
         ),
         (
             "root.aelys",
-            "needs a.b.c\n\nfn main() -> i64 {\n    return c.malloc(4)\n}\n",
+            "use std::process::ExitCode; use a::b::c;\n\nfn main() -> ExitCode {\n    return ExitCode::from(c::malloc(4) as u8);\n}\n",
         ),
     ];
     let dir = stage(FILES);

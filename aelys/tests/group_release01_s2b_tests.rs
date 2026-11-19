@@ -79,7 +79,7 @@ fn int_program(ty: &str, width: u32, signed: bool) -> (String, usize) {
     let values = int_values(width, signed);
     let mut lines = vec!["fn main() -> i64 {".to_string()];
     for (i, v) in values.iter().enumerate() {
-        lines.push(format!("    let v{i}: {ty} = {}", int_initializer(ty, *v)));
+        lines.push(format!("    let v{i}: {ty} = {};", int_initializer(ty, *v)));
     }
     let min = -(1i128 << (width - 1));
     let mut ops = 0;
@@ -121,7 +121,7 @@ fn float_program(ty: &str, values: &[&str]) -> (String, usize, usize) {
         .collect();
     let mut lines = vec!["fn main() -> i64 {".to_string()];
     for (i, v) in values.iter().enumerate() {
-        lines.push(format!("    let v{i}: {ty} = {v}"));
+        lines.push(format!("    let v{i}: {ty} = {v};"));
     }
     let mut ops = 0;
     let mut unfolded = 0;
@@ -244,14 +244,14 @@ fn release01_56_a_trap_the_folder_meets_is_left_to_the_runtime() {
             let tag = if op == "/" { "div" } else { "rem" };
             programs.push((
                 format!("{ty}_{tag}_zero"),
-                format!("let a: {ty} = 7\n    let b: {ty} = 0"),
+                format!("let a: {ty} = 7;\n    let b: {ty} = 0;"),
                 "division by zero\n",
             ));
             if *signed {
                 let min = int_initializer(ty, -(1i128 << (width - 1)));
                 programs.push((
                     format!("{ty}_{tag}_min_by_minus_one"),
-                    format!("let a: {ty} = {min}\n    let b: {ty} = -1"),
+                    format!("let a: {ty} = {min};\n    let b: {ty} = -1;"),
                     "division overflow\n",
                 ));
             }

@@ -777,7 +777,7 @@ fn group_mod_q4_no_stage3_rejection_shows_the_qualification_head() {
 const NESTED_COLLIDING: Files = &[
     (
         "root.aelys",
-        "needs app.util\nneeds app\n\nnogc fn pure() -> i64 {\n    return util.helper()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+        "use std::process::ExitCode; use app::util;\nmod app;\n\nnogc fn pure() -> i64 {\n    util::helper()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
     ),
     (
         "util.aelys",
@@ -811,7 +811,7 @@ fn group_mod_k2_the_nested_module_answers_for_itself() {
         &[
             (
                 "root.aelys",
-                "needs app.util\nneeds app\n\nnogc fn pure() -> i64 {\n    return util.helper()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; use app::util;\nmod app;\n\nnogc fn pure() -> i64 {\n    util::helper()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "util.aelys",
@@ -838,7 +838,7 @@ fn group_mod_k3_a_module_that_imports_nothing_republishes_nothing() {
         &[
             (
                 "root.aelys",
-                "needs app.util\nneeds app\n\nnogc fn pure() -> i64 {\n    return util.helper()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; use app::util;\nmod app;\n\nnogc fn pure() -> i64 {\n    util::helper()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "util.aelys",

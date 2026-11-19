@@ -369,12 +369,11 @@ fn group_v01_r05_rc_carrier_from_a_call_runs() {
     h.runs(
         "r05",
         &format!(
-            "{RC_CARRIER}fn mkrc() -> Rc<i64> {{ return Rc::new(7) }}\n\
+            "{RC_CARRIER}fn mkrc() -> Rc<i64> {{ Rc::new(7) }}\n\
              \n\
-             fn main() -> i64 {{\n\
-             \x20   let w: W = W {{ r: mkrc() }}\n\
-             \x20   println(Rc::get(w.r))\n\
-             \x20   return 0\n\
+             fn main() {{\n\
+             \x20   let w: W = W {{ r: mkrc() }};\n\
+             \x20   println!(\"{{}}\", Rc::get(w.r));\n\
              }}\n"
         ),
         0,
@@ -390,13 +389,12 @@ fn group_v01_r06_rc_carrier_from_a_conditional_runs() {
     h.runs(
         "r06",
         &format!(
-            "{RC_CARRIER}fn main() -> i64 {{\n\
-             \x20   let a: Rc<i64> = Rc::new(7)\n\
-             \x20   let b: Rc<i64> = Rc::new(9)\n\
-             \x20   let c: bool = true\n\
-             \x20   let w: W = W {{ r: if c {{ a }} else {{ b }} }}\n\
-             \x20   println(Rc::get(w.r))\n\
-             \x20   return 0\n\
+            "{RC_CARRIER}fn main() {{\n\
+             \x20   let a: Rc<i64> = Rc::new(7);\n\
+             \x20   let b: Rc<i64> = Rc::new(9);\n\
+             \x20   let c: bool = true;\n\
+             \x20   let w: W = W {{ r: if c {{ a }} else {{ b }} }};\n\
+             \x20   println!(\"{{}}\", Rc::get(w.r));\n\
              }}\n"
         ),
         0,
@@ -599,12 +597,11 @@ fn group_v01_r16_bytes_through_an_rc_temporary_refused() {
     h.refuses(
         "r16",
         &format!(
-            "{RC_STRUCT}fn mkrc() -> Rc<N> {{ return Rc::new(N {{ n: \"hello\" }}) }}\n\
+            "{RC_STRUCT}fn mkrc() -> Rc<N> {{ Rc::new(N {{ n: \"hello\" }}) }}\n\
              \n\
-             fn main() -> i64 {{\n\
-             \x20   let s: &[u8] = mkrc().n.bytes\n\
-             \x20   println(s[0])\n\
-             \x20   return 0\n\
+             fn main() {{\n\
+             \x20   let s: &[u8] = mkrc().n.as_bytes();\n\
+             \x20   println!(\"{{}}\", s[0]);\n\
              }}\n"
         ),
         "E0421",
@@ -636,11 +633,10 @@ fn group_v01_r18_bytes_of_a_bound_rc_runs() {
     h.runs(
         "r18",
         &format!(
-            "{RC_STRUCT}fn main() -> i64 {{\n\
-             \x20   let r: Rc<N> = Rc::new(N {{ n: \"hello\" }})\n\
-             \x20   let s: &[u8] = r.n.bytes\n\
-             \x20   println(s[0])\n\
-             \x20   return 0\n\
+            "{RC_STRUCT}fn main() {{\n\
+             \x20   let r: Rc<N> = Rc::new(N {{ n: \"hello\" }});\n\
+             \x20   let s: &[u8] = r.n.as_bytes();\n\
+             \x20   println!(\"{{}}\", s[0]);\n\
              }}\n"
         ),
         0,

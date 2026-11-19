@@ -75,19 +75,19 @@ fn s3_a5_bis_an_unsafe_fn_that_is_not_extern_is_a_parse_error() {
 
 #[test]
 fn s3_b1_a_bare_direct_call_is_rejected() {
-    rejects("S3-B1", &format!("{LABS}fn main() -> i64 {{ return labs(-7) }}\n"), "E0617", 1);
+    rejects("S3-B1", &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{ return ExitCode::from(labs(-7) as u8); }}\n"), "E0617", 1);
 }
 
 #[test]
 fn s3_b1_bis_the_accepted_twin_answers() {
-    answers("S3-B1'", &format!("{LABS}fn main() -> i64 {{ unsafe {{ return labs(-7) }} }}\n"), 7);
+    answers("S3-B1'", &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{ unsafe {{ return ExitCode::from(labs(-7) as u8); }} }}\n"), 7);
 }
 
 #[test]
 fn s3_b2_the_non_terminal_accepted_twin_answers() {
     answers(
         "S3-B2",
-        &format!("{LABS}fn main() -> i64 {{\n    let mut r: i64 = 0\n    unsafe {{ r = labs(-7) }}\n    return r\n}}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{\n    let mut r: i64 = 0;\n    unsafe {{ r = labs(-7); }}\n    return ExitCode::from(r as u8);\n}}\n"),
         7,
     );
 }
@@ -96,7 +96,7 @@ fn s3_b2_the_non_terminal_accepted_twin_answers() {
 fn s3_b3_the_entry_witness_of_the_stage_is_rejected() {
     rejects(
         "S3-B3",
-        &format!("{FREE}fn main() -> i64 {{\n    let x: i64 = 7\n    free(&x)\n    return 0\n}}\n"),
+        &format!("{FREE}fn main() {{\n    let x: i64 = 7;\n    free(&x);\n}}\n"),
         "E0617",
         1,
     );
@@ -104,7 +104,7 @@ fn s3_b3_the_entry_witness_of_the_stage_is_rejected() {
 
 #[test]
 fn s3_b3_bis_the_accepted_twin_crashes_because_the_program_says_so() {
-    let source = format!("{FREE}fn main() -> i64 {{\n    let x: i64 = 7\n    unsafe {{ free(&x) }}\n    return 0\n}}\n");
+    let source = format!("{FREE}fn main() {{\n    let x: i64 = 7;\n    unsafe {{ free(&x); }}\n}}\n");
     let dir = tempdir().expect("tempdir");
     let root = dir.path().join("root.aelys");
     fs::write(&root, &source).expect("write fixture");
@@ -130,7 +130,7 @@ fn s3_b3_bis_the_accepted_twin_crashes_because_the_program_says_so() {
 fn s3_b4_a_bare_call_in_a_lambda_body_is_rejected() {
     rejects(
         "S3-B4",
-        &format!("{LABS}fn main() -> i64 {{\n    let f = fn() -> i64 {{ return labs(-7) }}\n    return f()\n}}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{\n    let f = move || -> i64 {{ labs(-7) }};\n    return ExitCode::from(f() as u8);\n}}\n"),
         "E0617",
         1,
     );
@@ -140,7 +140,7 @@ fn s3_b4_a_bare_call_in_a_lambda_body_is_rejected() {
 fn s3_b4_bis_the_block_inside_the_lambda_body_is_the_accepted_twin() {
     answers(
         "S3-B4'",
-        &format!("{LABS}fn main() -> i64 {{\n    let f = fn() -> i64 {{ unsafe {{ return labs(-7) }} }}\n    return f()\n}}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{\n    let f = move || -> i64 {{ unsafe {{ return labs(-7); }} }};\n    return ExitCode::from(f() as u8);\n}}\n"),
         7,
     );
 }
@@ -149,7 +149,7 @@ fn s3_b4_bis_the_block_inside_the_lambda_body_is_the_accepted_twin() {
 fn s3_b5_the_block_at_the_writing_site_does_not_reach_the_lambda_body() {
     rejects(
         "S3-B5",
-        &format!("{LABS}fn main() -> i64 {{\n    let f = unsafe {{ fn() -> i64 {{ return labs(-7) }} }}\n    return f()\n}}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{\n    let f = unsafe {{ move || -> i64 {{ labs(-7) }} }};\n    return ExitCode::from(f() as u8);\n}}\n"),
         "E0617",
         1,
     );
@@ -159,7 +159,7 @@ fn s3_b5_the_block_at_the_writing_site_does_not_reach_the_lambda_body() {
 fn s3_b6_an_argument_position_call_is_rejected() {
     rejects(
         "S3-B6",
-        &format!("{LABS}fn id(v: i64) -> i64 {{ return v }}\nfn main() -> i64 {{ return id(labs(-7)) }}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn id(v: i64) -> i64 {{ v }}\nfn main() -> ExitCode {{ return ExitCode::from(id(labs(-7)) as u8); }}\n"),
         "E0617",
         1,
     );
@@ -169,7 +169,7 @@ fn s3_b6_an_argument_position_call_is_rejected() {
 fn s3_b6_bis_the_accepted_twin_answers() {
     answers(
         "S3-B6'",
-        &format!("{LABS}fn id(v: i64) -> i64 {{ return v }}\nfn main() -> i64 {{\n    unsafe {{\n        let t: i64 = labs(-7)\n        return id(t)\n    }}\n}}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn id(v: i64) -> i64 {{ v }}\nfn main() -> ExitCode {{\n    unsafe {{\n        let t: i64 = labs(-7);\n        return ExitCode::from(id(t) as u8);\n    }}\n}}\n"),
         7,
     );
 }
@@ -178,7 +178,7 @@ fn s3_b6_bis_the_accepted_twin_answers() {
 fn s3_b7_a_nested_call_is_rejected_once_per_call() {
     rejects(
         "S3-B7",
-        &format!("{LABS}fn main() -> i64 {{ return labs(labs(-7)) }}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{ return ExitCode::from(labs(labs(-7)) as u8); }}\n"),
         "E0617",
         2,
     );
@@ -188,7 +188,7 @@ fn s3_b7_a_nested_call_is_rejected_once_per_call() {
 fn s3_b8_a_call_in_an_if_condition_is_rejected() {
     rejects(
         "S3-B8",
-        &format!("{LABS}fn main() -> i64 {{\n    if labs(-7) > 0 {{ return 7 }}\n    return 0\n}}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{\n    if labs(-7) > 0 {{ return ExitCode::from(7); }}\n    return ExitCode::SUCCESS;\n}}\n"),
         "E0617",
         1,
     );
@@ -198,7 +198,7 @@ fn s3_b8_a_call_in_an_if_condition_is_rejected() {
 fn s3_b9_a_call_as_an_and_operand_is_rejected() {
     rejects(
         "S3-B9",
-        &format!("{LABS}fn main() -> i64 {{\n    if labs(-1) > 0 && labs(-2) > 0 {{ return 7 }}\n    return 0\n}}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{\n    if labs(-1) > 0 && labs(-2) > 0 {{ return ExitCode::from(7); }}\n    return ExitCode::SUCCESS;\n}}\n"),
         "E0617",
         2,
     );
@@ -208,7 +208,7 @@ fn s3_b9_a_call_as_an_and_operand_is_rejected() {
 fn s3_b10_a_call_in_a_for_body_is_rejected() {
     rejects(
         "S3-B10",
-        &format!("{LABS}fn main() -> i64 {{\n    let mut s: i64 = 0\n    for i in 0..2 {{\n        s = s + labs(-1)\n    }}\n    return s\n}}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{\n    let mut s: i64 = 0;\n    for i in 0..2 {{\n        s = s + labs(-1);\n    }}\n    return ExitCode::from(s as u8);\n}}\n"),
         "E0617",
         1,
     );
@@ -218,7 +218,7 @@ fn s3_b10_a_call_in_a_for_body_is_rejected() {
 fn s3_b11_a_call_in_an_array_element_is_rejected() {
     rejects(
         "S3-B11",
-        &format!("{LABS}fn main() -> i64 {{\n    let a = [labs(-7), 0]\n    return a[0]\n}}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{\n    let a = [labs(-7), 0];\n    return ExitCode::from(a[0] as u8);\n}}\n"),
         "E0617",
         1,
     );
@@ -228,7 +228,7 @@ fn s3_b11_a_call_in_an_array_element_is_rejected() {
 fn s3_b12_a_call_in_a_struct_field_is_rejected() {
     rejects(
         "S3-B12",
-        &format!("struct P {{ a: i64 }}\n{LABS}fn main() -> i64 {{\n    let p = P {{ a: labs(-7) }}\n    return p.a\n}}\n"),
+        &format!("use std::process::ExitCode; struct P {{ a: i64 }}\n{LABS}fn main() -> ExitCode {{\n    let p = P {{ a: labs(-7) }};\n    return ExitCode::from(p.a as u8);\n}}\n"),
         "E0617",
         1,
     );
@@ -238,7 +238,7 @@ fn s3_b12_a_call_in_a_struct_field_is_rejected() {
 fn s3_b13_a_call_in_a_formatted_string_is_rejected() {
     rejects(
         "S3-B13",
-        &format!("{LABS}fn main() -> i64 {{\n    let s: string = \"v=${{labs(-7)}}\"\n    if s == \"v=7\" {{ return 7 }}\n    return 0\n}}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{\n    let s: String = format!(\"v=${{}}\", labs(-7));\n    if s == \"v=7\" {{ return ExitCode::from(7); }}\n    return ExitCode::SUCCESS;\n}}\n"),
         "E0617",
         1,
     );
@@ -248,7 +248,7 @@ fn s3_b13_a_call_in_a_formatted_string_is_rejected() {
 fn s3_b14_a_discarded_call_is_rejected() {
     rejects(
         "S3-B14",
-        &format!("{LABS}fn main() -> i64 {{\n    discard labs(-7)\n    return 7\n}}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{\n    let _ = labs(-7);\n    return ExitCode::from(7);\n}}\n"),
         "E0617",
         1,
     );
@@ -258,7 +258,7 @@ fn s3_b14_a_discarded_call_is_rejected() {
 fn s3_b15_a_call_in_a_match_arm_is_rejected() {
     rejects(
         "S3-B15",
-        &format!("enum E {{ X, Y }}\n{LABS}fn main() -> i64 {{\n    let e = E::X\n    match e {{\n        E::X => {{ return labs(-7) }}\n        E::Y => {{ return 0 }}\n    }}\n}}\n"),
+        &format!("use std::process::ExitCode; enum E {{ X, Y }}\n{LABS}fn main() -> ExitCode {{\n    let e = E::X;\n    match e {{\n        E::X => {{ return ExitCode::from(labs(-7) as u8); }}\n        E::Y => {{ return ExitCode::SUCCESS; }}\n    }}\n}}\n"),
         "E0617",
         1,
     );
@@ -268,7 +268,7 @@ fn s3_b15_a_call_in_a_match_arm_is_rejected() {
 fn s3_b16_a_parenthesised_callee_stays_e0616_not_e0617() {
     rejects(
         "S3-B16",
-        &format!("{LABS}fn main() -> i64 {{ return (labs)(-7) }}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{ return ExitCode::from((labs)(-7) as u8); }}\n"),
         "E0616",
         1,
     );
@@ -278,7 +278,7 @@ fn s3_b16_a_parenthesised_callee_stays_e0616_not_e0617() {
 fn s3_b17_the_name_as_a_value_stays_e0616() {
     rejects(
         "S3-B17",
-        &format!("{LABS}fn main() -> i64 {{\n    let f = labs\n    return f(-7)\n}}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{\n    let f = labs;\n    return ExitCode::from(f(-7) as u8);\n}}\n"),
         "E0616",
         1,
     );
@@ -288,7 +288,7 @@ fn s3_b17_the_name_as_a_value_stays_e0616() {
 fn s3_b18_bis_an_aelys_call_beside_a_declared_extern_stays_accepted() {
     answers(
         "S3-B18'",
-        &format!("{LABS}fn id(v: i64) -> i64 {{ return v }}\nfn main() -> i64 {{ return id(7) }}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn id(v: i64) -> i64 {{ v }}\nfn main() -> ExitCode {{ return ExitCode::from(id(7) as u8); }}\n"),
         7,
     );
 }
@@ -317,7 +317,7 @@ fn s3_b21_a_parameter_spelling_an_extern_is_the_callee_and_answers() {
     answers(
         "S3-B21",
         &format!(
-            "{LABS}fn g(labs: fn(i64) -> i64) -> i64 {{ return labs(3) }}\n             fn seven(x: i64) -> i64 {{ return 7 }}\n             fn main() -> i64 {{ return g(seven) }}\n"
+            "use std::process::ExitCode; {LABS}fn g(labs: fn(i64) -> i64) -> i64 {{ labs(3) }}\n             fn seven(x: i64) -> i64 {{ 7 }}\n             fn main() -> ExitCode {{ return ExitCode::from(g(seven) as u8); }}\n"
         ),
         7,
     );
@@ -328,7 +328,7 @@ fn s3_b22_a_let_spelling_an_extern_is_the_callee_and_answers() {
     answers(
         "S3-B22",
         &format!(
-            "{LABS}fn seven(x: i64) -> i64 {{ return 7 }}\n             fn main() -> i64 {{\n    let labs = seven\n    return labs(3)\n}}\n"
+            "use std::process::ExitCode; {LABS}fn seven(x: i64) -> i64 {{ 7 }}\n             fn main() -> ExitCode {{\n    let labs = seven;\n    return ExitCode::from(labs(3) as u8);\n}}\n"
         ),
         7,
     );
@@ -339,7 +339,7 @@ fn s3_b23_the_extern_beyond_the_shadowing_scope_is_still_rejected() {
     rejects(
         "S3-B23",
         &format!(
-            "{LABS}fn g(labs: fn(i64) -> i64) -> i64 {{ return labs(3) }}\n             fn main() -> i64 {{ return labs(-7) }}\n"
+            "use std::process::ExitCode; {LABS}fn g(labs: fn(i64) -> i64) -> i64 {{ labs(3) }}\n             fn main() -> ExitCode {{ return ExitCode::from(labs(-7) as u8); }}\n"
         ),
         "E0617",
         1,

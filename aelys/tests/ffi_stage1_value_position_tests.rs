@@ -37,7 +37,7 @@ fn rejects_as_a_value(id: &str, body: &str) {
 }
 
 fn rejects_as_a_value_n(id: &str, body: &str, hits: usize) {
-    let source = format!("{LABS}\n{body}");
+    let source = format!("{LABS}\n{body};");
     for (level, opt) in LEVELS {
         let dir = tempdir().expect("tempdir");
         let root = dir.path().join("root.aelys");
@@ -77,7 +77,7 @@ fn f3_23_an_unannotated_let_is_a_value_use() {
 // gates the call site on , so the accepted spelling now carries its own block
 #[test]
 fn f3_24_the_direct_call_stays_accepted() {
-    let source = format!("{LABS}\nfn main() -> i64 {{\n    unsafe {{ return labs(-37) }}\n}}\n");
+    let source = format!("use std::process::ExitCode; {LABS}\nfn main() -> ExitCode {{\n    unsafe {{ return ExitCode::from(labs(-37) as u8); }}\n}}\n");
     for (level, opt) in LEVELS {
         let dir = tempdir().expect("tempdir");
         let root = dir.path().join("root.aelys");
@@ -94,7 +94,7 @@ fn f3_24_the_direct_call_stays_accepted() {
 
 #[test]
 fn f3_24_bis_the_old_spelling_of_the_direct_call_is_now_e0617() {
-    let source = format!("{LABS}\nfn main() -> i64 {{\n    return labs(-37)\n}}\n");
+    let source = format!("use std::process::ExitCode; {LABS}\nfn main() -> ExitCode {{\n    return ExitCode::from(labs(-37) as u8);\n}}\n");
     for (level, opt) in LEVELS {
         let dir = tempdir().expect("tempdir");
         let root = dir.path().join("root.aelys");
@@ -187,7 +187,7 @@ fn f3_33_an_unsafe_block_hides_nothing() {
 
 #[test]
 fn f3_34_the_library_route_rejects_it_too() {
-    let source = format!("{LABS}\nfn main() -> i64 {{\n    let g = labs\n    return g(-37)\n}}\n");
+    let source = format!("use std::process::ExitCode; {LABS}\nfn main() -> ExitCode {{\n    let g = labs;\n    return ExitCode::from(g(-37) as u8);\n}}\n");
     let err = aelys_driver::compile_to_typed_ast(&source)
         .expect_err("F3-34: the typed route MUST reject it as well");
     let rendered = err.to_string();
@@ -273,7 +273,7 @@ fn lower_callee_names_two_forms() {
 #[test]
 fn f3_31_a_parameter_spelling_the_declaration_is_not_the_declaration() {
     let source = format!(
-        "{LABS}\nfn g(labs: fn(i64) -> i64) -> i64 {{\n    let f = labs\n    return f(3)\n}}\n         fn seven(x: i64) -> i64 {{ return 7 }}\n         fn main() -> i64 {{ return g(seven) }}\n"
+        "use std::process::ExitCode; {LABS}\nfn g(labs: fn(i64) -> i64) -> i64 {{\n    let f = labs;\n    f(3)\n}}\n         fn seven(x: i64) -> i64 {{ 7 }}\n         fn main() -> ExitCode {{ return ExitCode::from(g(seven) as u8); }}\n"
     );
     for (level, opt) in LEVELS {
         let dir = tempdir().expect("tempdir");

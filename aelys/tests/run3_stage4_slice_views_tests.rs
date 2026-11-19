@@ -544,12 +544,12 @@ const R2_MIXED: &str = "enum W { A, B }\n\
 fn every_position_a_view_can_be_narrowed_in_demotes() {
     let h = Harness::new();
     let arg = r2_row("    println!(\"{}\", rd(v[0..3]));\n");
-    let annotated = r2_row("    static s: &[i64] = v[0..3];\n    println!(\"{}\", s[0]);\n");
+    let annotated = r2_row("    let s: &[i64] = v[0..3];\n    println!(\"{}\", s[0]);\n");
     let branch = r2_row(
-        "    static c: bool = true;\n    static s: &[i64] = if c { v[0..3] } else { v[0..3] };\n    \
+        "    let c: bool = true;\n    let s: &[i64] = if c { v[0..3] } else { v[0..3] };\n    \
          println!(\"{}\", s[0]);\n",
     );
-    let tail = r2_row("    static s: &[i64] = { v[0..3] };\n    println!(\"{}\", s[0]);\n");
+    let tail = r2_row("    let s: &[i64] = { v[0..3] };\n    println!(\"{}\", s[0]);\n");
     for (id, src) in [
         ("S4-R1-call-argument", arg.as_str()),
         ("S4-R2-annotated-let", annotated.as_str()),

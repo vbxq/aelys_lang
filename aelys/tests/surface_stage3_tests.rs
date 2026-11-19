@@ -139,10 +139,10 @@ fn s31_a_program_that_imports_a_library_prints_a_multibyte_string() {
 }
 
 const ABS_7: &str = r#"
-needs lib.math
+use std::process::ExitCode; use lib::math;
 
-fn main() -> i64 {
-    return math.abs(0 - 7)
+fn main() -> ExitCode {
+    return ExitCode::from(math::abs(0 - 7) as u8);
 }
 "#;
 
@@ -214,10 +214,9 @@ fn s32_one_root_written_twice_is_not_ambiguous() {
 }
 
 const NEEDS_NOPE: &str = r#"
-needs lib.nope
+use lib::nope;
 
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#;
 

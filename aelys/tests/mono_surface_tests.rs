@@ -542,12 +542,11 @@ fn a_generic_enum_crossing_a_module_boundary_runs() {
     );
     harness.value_row(
         "generic_enum_across_a_module",
-        "needs boxmod.lib\n\
+        "use boxmod::lib;\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   let b: lib.Box<i64> = lib.Box::Hold(23)\n\
-         \x20   println(lib.peek(b))\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let b: lib::Box<i64> = lib::Box::Hold(23);\n\
+         \x20   println!(\"{}\", lib::peek(b));\n\
          }\n",
         "23\n",
     );

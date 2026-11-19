@@ -696,7 +696,7 @@ fn e0620_is_registered_and_the_explain_covers_the_error_handling_family() {
         );
     }
     assert!(
-        info.explanation.contains("reported as E0619;"),
+        info.explanation.contains("reported as E0619"),
         "MRS-13: the explain must send the carrier mismatch case to its own code: {}",
         info.explanation
     );

@@ -1523,23 +1523,6 @@ fn validate_rejects_opaque_from_tuple_or_range() {
 }
 
 #[test]
-fn validate_accepts_null_typed_local() {
-    let air = lower_source(
-        r#"
-fn use_null() {
-    let x = null;
-}
-"#,
-    );
-    let result = validate_air(&air);
-    assert!(
-        result.is_ok(),
-        "null-typed local (Ptr(Void)) should pass validation, errors: {:?}",
-        result.err()
-    );
-}
-
-#[test]
 fn a_generic_enum_named_without_its_type_arguments_is_refused() {
     let option_enum = AirEnumDef {
         name: "Option".to_string(),

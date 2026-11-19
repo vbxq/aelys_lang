@@ -62,7 +62,7 @@ const A_LABS: &str = "extern \"C\" { fn labs(x: i64) -> i64; }\n\npub fn use_a(x
 const MAIN_TWO: &str = "use std::process::ExitCode; mod a;\nmod b;\n\nfn main() -> ExitCode {\n    return ExitCode::from((a::use_a(-20) + b::use_b(-17)) as u8);\n}\n";
 
 fn b_labs(decl: &str, call: &str) -> String {
-    format!("{decl};\n\npub fn use_b(x: i64) -> i64 {{\n    unsafe {{ return {call}; }}\n}}\n")
+    format!("{decl}\n\npub fn use_b(x: i64) -> i64 {{\n    unsafe {{ return {call}; }}\n}}\n")
 }
 
 // gates the call site on , so the old bare spelling is kept as a rejected twin

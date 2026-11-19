@@ -504,7 +504,7 @@ fn s4c_4_a_binder_that_stays_inside_its_arm_still_runs() {
 }
 
 fn binary_mismatch(body: &str) -> String {
-    format!("fn main() {{\n{body};\n    println!(\"{{}}\", 0);\n}}\n")
+    format!("fn main() {{\n{body}\n    println!(\"{{}}\", 0);\n}}\n")
 }
 
 #[test]
@@ -513,57 +513,57 @@ fn s4c_5_a_binary_operand_mismatch_names_the_left_operand_first() {
     for (id, body, says) in [
         (
             "S4c-5a",
-            "    static x: i64 = 1 + true;",
+            "    let x: i64 = 1 + true;",
             "expected `i64`, found `bool`",
         ),
         (
             "S4c-5b",
-            "    static x: i64 = 1 - true;",
+            "    let x: i64 = 1 - true;",
             "expected `i64`, found `bool`",
         ),
         (
             "S4c-5c",
-            "    static x: i64 = 6 / true;",
+            "    let x: i64 = 6 / true;",
             "expected `i64`, found `bool`",
         ),
         (
             "S4c-5d",
-            "    static x: i64 = 1 % true;",
+            "    let x: i64 = 1 % true;",
             "expected `i64`, found `bool`",
         ),
         (
             "S4c-5e",
-            "    static x: i64 = 1 << true;",
+            "    let x: i64 = 1 << true;",
             "expected `i64`, found `bool`",
         ),
         (
             "S4c-5f",
-            "    static b: bool = 1 < \"a\";",
+            "    let b: bool = 1 < \"a\";",
             "expected `i64`, found `string`",
         ),
         (
             "S4c-5g",
-            "    static x: i64 = 1 + \"a\";",
+            "    let x: i64 = 1 + \"a\";",
             "expected `i64`, found `string`",
         ),
         (
             "S4c-5h",
-            "    static s: String = \"a\" + 1;",
+            "    let s: String = \"a\" + 1;",
             "expected `string`, found `i64`",
         ),
         (
             "S4c-5i",
-            "    static c: char = 'b';\n    static t: String = \"a\" + c;",
+            "    let c: char = 'b';\n    let t: String = \"a\" + c;",
             "expected `string`, found `char`",
         ),
         (
             "S4c-5j",
-            "    static c: char = 'b';\n    static b: bool = c < \"a\";",
+            "    let c: char = 'b';\n    let b: bool = c < \"a\";",
             "expected `char`, found `string`",
         ),
         (
             "S4c-5k",
-            "    static c: char = 'b';\n    static b: bool = \"a\" < c;",
+            "    let c: char = 'b';\n    let b: bool = \"a\" < c;",
             "expected `string`, found `char`",
         ),
     ] {

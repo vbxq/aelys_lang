@@ -238,7 +238,7 @@ fn s3_d21_an_unsafe_block_as_a_binop_operand() {
 fn s3_d22_the_ffi_form_as_an_argument() {
     answers(
         "S3-D22",
-        &format!("{LABS}fn id(v: i64) -> i64 {{ return v }}\nfn main() -> i64 {{ id(unsafe {{ return labs(-7) }}) }}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn id(v: i64) -> i64 {{ v }}\nfn main() -> ExitCode {{ ExitCode::from(id(unsafe {{ return ExitCode::from(labs(-7) as u8); }}) as u8) }}\n"),
         7,
     );
 }
@@ -247,7 +247,7 @@ fn s3_d22_the_ffi_form_as_an_argument() {
 fn s3_d23_the_banal_accepted_twin_of_e0617() {
     answers(
         "S3-D23",
-        &format!("{LABS}fn main() -> i64 {{ unsafe {{ return labs(-7) }} }}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{ unsafe {{ return ExitCode::from(labs(-7) as u8); }} }}\n"),
         7,
     );
 }
@@ -256,7 +256,7 @@ fn s3_d23_the_banal_accepted_twin_of_e0617() {
 fn s3_d24_the_other_banal_accepted_twin() {
     answers(
         "S3-D24",
-        &format!("{LABS}fn main() -> i64 {{\n    unsafe {{\n        let r: i64 = labs(-7)\n        return r\n    }}\n}}\n"),
+        &format!("use std::process::ExitCode; {LABS}fn main() -> ExitCode {{\n    unsafe {{\n        let r: i64 = labs(-7);\n        return ExitCode::from(r as u8);\n    }}\n}}\n"),
         7,
     );
 }
@@ -371,7 +371,7 @@ fn s3_dp4_a_divergent_argument_of_a_call_in_a_condition_answers_at_every_level()
     answers_at_every_level(
         "S3-DP4",
         &format!(
-            "{LABS}fn main() -> i64 {{\n    if unsafe {{ labs(unsafe {{ return 7 }}) }} > 0 {{ return 1 }}\n    return 0\n}}\n"
+            "use std::process::ExitCode; {LABS}fn main() -> ExitCode {{\n    if unsafe {{ labs(unsafe {{ return ExitCode::from(7); }}) }} > 0 {{ return ExitCode::from(1); }}\n    return ExitCode::SUCCESS;\n}}\n"
         ),
         7,
     );

@@ -46,7 +46,7 @@ enum Color {
     Blue,
 }
 
-let c = Color::Red
+static c: Color = Color::Red;
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -65,8 +65,8 @@ enum Color {
     Blue,
 }
 
-let a = Color::Red
-let b = Color::Green
+static a: Color = Color::Red;
+static b: Color = Color::Green;
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -80,7 +80,7 @@ let b = Color::Green
 fn enum_variant_type_error_unknown_variant() {
     let src = r#"
 enum Color { Red, Green, Blue }
-let c = Color::Yellow
+static c: Color = Color::Yellow;
 "#;
     let result = compile_to_typed_ast(src);
     assert!(result.is_err(), "unknown variant should fail type check");
@@ -89,7 +89,7 @@ let c = Color::Yellow
 #[test]
 fn enum_variant_type_error_unknown_enum() {
     let src = r#"
-let c = Bogus::Foo
+let c = Bogus::Foo;
 "#;
     let result = compile_to_typed_ast(src);
     assert!(result.is_err(), "unknown enum should fail type check");
@@ -138,10 +138,10 @@ fn enum_as_function_param() {
 enum Color { Red, Green, Blue }
 
 fn paint(c: Color) -> i64 {
-    return 1
+    1
 }
 
-let x = paint(Color::Red)
+static x: i64 = paint(Color::Red);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -158,9 +158,9 @@ fn data_variant_parse_and_typecheck() {
 enum Message {
     Quit,
     Move(i64, i64),
-    Write(string),
+    Write(String),
 }
-let msg = Message::Write("hello")
+static msg: Message = Message::Write("hello");
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -176,9 +176,9 @@ fn data_variant_unit_still_works() {
 enum Message {
     Quit,
     Move(i64, i64),
-    Write(string),
+    Write(String),
 }
-let msg = Message::Quit
+static msg: Message = Message::Quit;
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -194,9 +194,9 @@ fn data_variant_multiple_fields() {
 enum Message {
     Quit,
     Move(i64, i64),
-    Write(string),
+    Write(String),
 }
-let msg = Message::Move(10, 20)
+static msg: Message = Message::Move(10, 20);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -210,7 +210,7 @@ let msg = Message::Move(10, 20)
 fn data_variant_wrong_arg_count() {
     let src = r#"
 enum Message { Quit, Move(i64, i64) }
-let msg = Message::Move(1)
+static msg: Message = Message::Move(1);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(result.is_err(), "wrong arg count should fail");
@@ -220,7 +220,7 @@ let msg = Message::Move(1)
 fn data_variant_too_many_args() {
     let src = r#"
 enum Message { Quit, Move(i64, i64) }
-let msg = Message::Move(1, 2, 3)
+static msg: Message = Message::Move(1, 2, 3);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(result.is_err(), "too many args should fail");
@@ -229,8 +229,8 @@ let msg = Message::Move(1, 2, 3)
 #[test]
 fn data_variant_wrong_arg_type() {
     let src = r#"
-enum Message { Write(string) }
-let msg = Message::Write(42)
+enum Message { Write(String) }
+static msg: Message = Message::Write(42);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(result.is_err(), "wrong arg type should fail");
@@ -240,7 +240,7 @@ let msg = Message::Write(42)
 fn unit_variant_with_args_fails() {
     let src = r#"
 enum Color { Red, Green }
-let c = Color::Red(42)
+static c: Color = Color::Red(42);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(result.is_err(), "unit variant with args should fail");
@@ -252,14 +252,14 @@ fn data_variant_as_function_param() {
 enum Message {
     Quit,
     Move(i64, i64),
-    Write(string),
+    Write(String),
 }
 
 fn handle(m: Message) -> i64 {
-    return 0
+    0
 }
 
-let result = handle(Message::Write("test"))
+static result: i64 = handle(Message::Write("test"));
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -324,9 +324,9 @@ fn data_variant_unit_in_data_enum_air() {
 enum Message {
     Quit,
     Move(i64, i64),
-    Write(string),
+    Write(String),
 }
-let msg = Message::Quit
+static msg: Message = Message::Quit;
 "#;
     let air = lower_source(src);
     let enum_def = air.enums.iter().find(|e| e.name == "Message");
@@ -346,9 +346,9 @@ fn data_variant_multi_field_air() {
 enum Message {
     Quit,
     Move(i64, i64),
-    Write(string),
+    Write(String),
 }
-let msg = Message::Move(10, 20)
+static msg: Message = Message::Move(10, 20);
 "#;
     let air = lower_source(src);
     let enum_def = air.enums.iter().find(|e| e.name == "Message");
@@ -367,7 +367,7 @@ let msg = Message::Move(10, 20)
 fn simple_enum_still_works_after_data_variant_changes() {
     let src = r#"
 enum Color { Red, Green, Blue }
-let c = Color::Red
+static c: Color = Color::Red;
 "#;
     let air = lower_source(src);
     let enum_def = air.enums.iter().find(|e| e.name == "Color");
@@ -389,7 +389,7 @@ enum Event {
     Click(i64, i64),
     Toggle(bool),
 }
-let e = Event::Toggle(true)
+static e: Event = Event::Toggle(true);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -406,7 +406,7 @@ enum Message {
     Quit,
     Mixed(i64, bool, i64),
 }
-let msg = Message::Mixed(1, true, 3)
+static msg: Message = Message::Mixed(1, true, 3);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -422,13 +422,13 @@ fn data_variant_mixed_types() {
 enum Data {
     IntVal(i64),
     FloatVal(f64),
-    StrVal(string),
+    StrVal(String),
     BoolVal(bool),
 }
-let d1 = Data::IntVal(42)
-let d2 = Data::FloatVal(3.14)
-let d3 = Data::StrVal("hello")
-let d4 = Data::BoolVal(false)
+static d1: Data = Data::IntVal(42);
+static d2: Data = Data::FloatVal(3.14);
+static d3: Data = Data::StrVal("hello");
+static d4: Data = Data::BoolVal(false);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -843,14 +843,14 @@ fn match_in_function_return() {
 enum Color { Red, Green, Blue }
 
 fn to_int(c: Color) -> i64 {
-    return match c {
+    match c {
         Color::Red => 0,
         Color::Green => 1,
         Color::Blue => 2,
     }
 }
 
-let r = to_int(Color::Green)
+static r: i64 = to_int(Color::Green);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -939,7 +939,7 @@ enum Option<T> {
     Some(T),
     None,
 }
-let x = Option::Some(42)
+static x: Option<i64> = Option::Some(42);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -973,7 +973,7 @@ enum Option<T> {
     Some(T),
     None,
 }
-let x = Option::Some("hello")
+static x: Option<String> = Option::Some("hello");
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -990,7 +990,7 @@ enum Option<T> {
     Some(T),
     None,
 }
-let x = Option::Some(true)
+static x: Option<bool> = Option::Some(true);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -1168,7 +1168,7 @@ enum Option<T> {
     Some(T),
     None,
 }
-let x = Option::Some(42)
+static x: Option<i64> = Option::Some(42);
 "#;
     let air = lower_source(src);
     // the generic enum def should exist (with type params)
@@ -1222,7 +1222,7 @@ enum Option<T> {
     Some(T),
     None,
 }
-let x = Option::Some(42)
+static x: Option<i64> = Option::Some(42);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -1467,9 +1467,9 @@ enum Option<T> {
     Some(T),
     None,
 }
-let a = Option::Some(42)
-let b = Option::Some("hello")
-let c: Option<i64> = Option::None
+static a: Option<i64> = Option::Some(42);
+static b: Option<String> = Option::Some("hello");
+static c: Option<i64> = Option::None;
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -1524,13 +1524,13 @@ enum Option<T> {
     None,
 }
 fn test() -> Option<i64> {
-    return Option::None
+    Option::None
 }
-fn test2() -> Option<string> {
-    return Option::None
+fn test2() -> Option<String> {
+    Option::None
 }
-let a = test()
-let b = test2()
+static a: Option<i64> = test();
+static b: Option<String> = test2();
 "#;
     let result = compile_to_typed_ast(src);
     assert!(

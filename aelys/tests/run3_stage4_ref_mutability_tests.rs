@@ -445,7 +445,7 @@ fn e0416_is_registered_and_explainable() {
         "the --explain body must show the distinction it is enforcing"
     );
     assert!(
-        info.explanation.contains("static r: &i64 = &mut x;"),
+        info.explanation.contains("let r: &i64 = &mut x;"),
         "the --explain body must show the weakening that stays accepted, or it reads as a ban \
          on references"
     );

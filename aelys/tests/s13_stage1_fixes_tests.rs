@@ -275,7 +275,7 @@ fn mkrcstr() -> Rc<String> { Rc::new("hello") }
 "#;
 
 fn rc_escape(body: &str) -> String {
-    format!("{RC_PREAMBLE};\nfn main() {{\n{body};\n}}\n")
+    format!("{RC_PREAMBLE}\nfn main() {{\n{body}\n}}\n")
 }
 
 #[test]
@@ -284,19 +284,19 @@ fn s13_1_a_projection_through_an_unbound_rc_temporary_is_not_a_place() {
     for (id, body) in [
         (
             "S1.3-1a",
-            "    static v: &[u8] = mkrc().n.as_bytes();\n    println!(\"{}\", v[0] as i64);",
+            "    let v: &[u8] = mkrc().n.as_bytes();\n    println!(\"{}\", v[0] as i64);",
         ),
         (
             "S1.3-1b",
-            "    static v: &[u8] = Rc::get(mkrc()).n.as_bytes();\n    println!(\"{}\", v[0] as i64);",
+            "    let v: &[u8] = Rc::get(mkrc()).n.as_bytes();\n    println!(\"{}\", v[0] as i64);",
         ),
         (
             "S1.3-1c",
-            "    static v: &[u8] = mkrc().i.n.as_bytes();\n    println!(\"{}\", v[0] as i64);",
+            "    let v: &[u8] = mkrc().i.n.as_bytes();\n    println!(\"{}\", v[0] as i64);",
         ),
         (
             "S1.3-1d",
-            "    static v: &[u8] = Rc::get(mkrcstr()).as_bytes();\n    println!(\"{}\", v[0] as i64);",
+            "    let v: &[u8] = Rc::get(mkrcstr()).as_bytes();\n    println!(\"{}\", v[0] as i64);",
         ),
     ] {
         h.rejects_at_every_level(id, &rc_escape(body), "E0421", NO_PLACE_BYTES);
@@ -304,11 +304,11 @@ fn s13_1_a_projection_through_an_unbound_rc_temporary_is_not_a_place() {
     for (id, body) in [
         (
             "S1.3-1e",
-            "    static q: &String = &mkrc().n;\n    println!(\"{}\", (*q).len());",
+            "    let q: &String = &mkrc().n;\n    println!(\"{}\", (*q).len());",
         ),
         (
             "S1.3-1f",
-            "    static q: &String = &Rc::get(mkrc()).n;\n    println!(\"{}\", (*q).len());",
+            "    let q: &String = &Rc::get(mkrc()).n;\n    println!(\"{}\", (*q).len());",
         ),
     ] {
         h.rejects_at_every_level(id, &rc_escape(body), "E0421", NO_PLACE_REF);

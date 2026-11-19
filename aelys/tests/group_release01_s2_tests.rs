@@ -542,7 +542,7 @@ fn main() { let a: u8 = 250;
 "#,
         module: Some((
             r#"m.aelys"#,
-            r#"pub static K: i64 = 10;
+            r#"pub let K = 10;
 "#,
         )),
         expect: Expect::Runs {
@@ -1239,7 +1239,7 @@ fn main() { let a: u8 = 3;
 "#,
         module: Some((
             r#"m.aelys"#,
-            r#"pub static B: i64 = 1000;
+            r#"pub let B: i64 = 1000;
 "#,
         )),
         expect: Expect::Runs {
@@ -1387,8 +1387,8 @@ fn main() {
 "#,
         module: Some((
             r#"m.aelys"#,
-            r#"pub let K = 5
-pub let J = K
+            r#"pub let K = 5;
+pub let J = K;
 "#,
         )),
         expect: Expect::Refused("E0301"),

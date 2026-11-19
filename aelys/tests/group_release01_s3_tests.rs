@@ -223,9 +223,9 @@ fn check_pairs(row: &str, pairs: &[Pair]) {
 fn release01_82_the_rewrite_of_a_qualified_variant_drops_only_the_prelude_heads() {
     assert_eq!(
         unqualified(
-            "static a: Option<i64> = Option::Some(m.Option::None) + Option::Both + MyOption::None + Result::Err(1);"
+            "let a: Option<i64> = Option::Some(m.Option::None) + Option::Both + MyOption::None + Result::Err(1);"
         ),
-        "static a: Option<i64> = Some(m.Option::None) + Option::Both + MyOption::None + Err(1);"
+        "let a: Option<i64> = Some(m.Option::None) + Option::Both + MyOption::None + Err(1);"
     );
 }
 

@@ -5767,7 +5767,7 @@ fn group_n_block_nested_fails_closed() {
             h.accepts(&twin_id, name, &twin, *opt);
         }
     }
-    assert_eq!(seen.len(), 30, "the block-form enumeration lost a row");
+    assert_eq!(seen.len(), 27, "the block-form enumeration lost a row");
 }
 
 fn marker_lines(rendered: &str, marker: char) -> usize {

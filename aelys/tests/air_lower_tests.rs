@@ -336,52 +336,6 @@ static h: Option<i64> = g;
 
 
 #[test]
-fn null_literal_lowers_to_ptr_void_not_bare_void() {
-    let air = lower_source(
-        r#"
-fn make_null() {
-    let x = null;
-}
-"#,
-    );
-    let f = func(&air, "make_null");
-    let null_local = f
-        .locals
-        .iter()
-        .find(|l| l.name.as_deref() == Some("x"))
-        .expect("local 'x' not found");
-    assert_eq!(
-        null_local.ty,
-        AirType::Ptr(Box::new(AirType::Void)),
-        "null literal should produce Ptr(Void), not bare Void"
-    );
-}
-
-#[test]
-fn null_literal_type_is_not_void() {
-    // ensure the local for a null-typed variable is not airtype::void
-    let air = lower_source(
-        r#"
-fn test_null() {
-    let y = null;
-}
-"#,
-    );
-    let f = func(&air, "test_null");
-    let local = f
-        .locals
-        .iter()
-        .find(|l| l.name.as_deref() == Some("y"))
-        .expect("local 'y' not found");
-    assert_ne!(
-        local.ty,
-        AirType::Void,
-        "null-typed local must not be bare Void (would cause 0-byte alloca)"
-    );
-}
-
-
-#[test]
 #[should_panic(expected = "AIR lowering failed")]
 fn non_constant_array_size_in_expr_produces_error() {
     lower_source(

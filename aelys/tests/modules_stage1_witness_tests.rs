@@ -383,7 +383,7 @@ fn group_mod_q1i_plain_path_import_calls_across() {
             ("a/b.aelys", MODULE_SEVEN),
             (
                 "root.aelys",
-                "needs a.b\n\nfn main() -> i64 {\n    return b.seven()\n}\n",
+                "use std::process::ExitCode; use a::b;\n\nfn main() -> ExitCode {\n    return ExitCode::from(b::seven() as u8);\n}\n",
             ),
         ],
         "root.aelys",
@@ -400,7 +400,7 @@ fn group_mod_q1ii_aliased_path_import_calls_across() {
             ("a/b.aelys", MODULE_SEVEN),
             (
                 "root.aelys",
-                "needs a.b as k\n\nfn main() -> i64 {\n    return k.seven()\n}\n",
+                "use std::process::ExitCode; use a::b as k;\n\nfn main() -> ExitCode {\n    return ExitCode::from(k::seven() as u8);\n}\n",
             ),
         ],
         "root.aelys",
@@ -417,7 +417,7 @@ fn group_mod_q1iii_single_symbol_import_calls_across() {
             ("a/b.aelys", MODULE_SEVEN),
             (
                 "root.aelys",
-                "needs seven from a.b\n\nfn main() -> i64 {\n    return seven()\n}\n",
+                "use std::process::ExitCode; use a::b::seven;\n\nfn main() -> ExitCode {\n    return ExitCode::from(seven() as u8);\n}\n",
             ),
         ],
         "root.aelys",
@@ -437,7 +437,7 @@ fn group_mod_q2_intra_module_call_keeps_its_module() {
             ),
             (
                 "root.aelys",
-                "needs a.b\n\nfn main() -> i64 {\n    return b.tripled()\n}\n",
+                "use std::process::ExitCode; use a::b;\n\nfn main() -> ExitCode {\n    return ExitCode::from(b::tripled() as u8);\n}\n",
             ),
         ],
         "root.aelys",
@@ -457,7 +457,7 @@ fn group_mod_q3_global_function_reference_crosses() {
             ),
             (
                 "root.aelys",
-                "needs a.b\n\nfn main() -> i64 {\n    return b.f()\n}\n",
+                "use std::process::ExitCode; use a::b;\n\nfn main() -> ExitCode {\n    return ExitCode::from(b::f() as u8);\n}\n",
             ),
         ],
         "root.aelys",

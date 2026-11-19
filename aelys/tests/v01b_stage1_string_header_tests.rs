@@ -772,7 +772,7 @@ fn a36_w1_a_std_nogc_function_calls_only_string_counts_readers_externs_and_other
     let imports: String = modules.iter().map(|m| format!("needs std.{m}\n")).collect();
     fs::write(
         &root,
-        format!("{imports};\nfn main() {{\n}}\n"),
+        format!("{imports}\nfn main() {{\n}}\n"),
     )
     .expect("write census root");
     let air = aelys_driver::lower_file_to_air(&root, OptimizationLevel::None)

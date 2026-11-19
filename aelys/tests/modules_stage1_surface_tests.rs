@@ -182,7 +182,7 @@ fn group_mod_d4_a_path_three_segments_deep() {
         &[
             (
                 "root.aelys",
-                "needs a.b.c\n\nfn main() -> i64 {\n    return c.deep()\n}\n",
+                "use std::process::ExitCode; use a::b::c;\n\nfn main() -> ExitCode {\n    return ExitCode::from(c::deep() as u8);\n}\n",
             ),
             ("a/b/c.aelys", "pub fn deep() -> i64 {\n    42\n}\n"),
         ],
@@ -588,8 +588,8 @@ fn group_mod_r3b_an_import_may_not_take_a_name_the_module_defines() {
 const DUP_FN_A: &str = "fn P() -> i64 {\n    1\n}\n";
 const DUP_FN_B: &str = "fn P() -> i64 {\n    2\n}\n";
 const DUP_FN_SIG: &str = "fn P(a: i64) -> i64 {\n    a\n}\n";
-const DUP_LET_A: &str = "pub static P: i64 = 1;\n";
-const DUP_LET_B: &str = "pub static P: i64 = 2;\n";
+const DUP_LET_A: &str = "pub let P: i64 = 1;\n";
+const DUP_LET_B: &str = "pub let P: i64 = 2;\n";
 const DUP_STRUCT_A: &str = "struct P {\n    x: i64,\n}\n";
 const DUP_STRUCT_B: &str = "struct P {\n    y: i64,\n}\n";
 const DUP_ENUM_A: &str = "enum P {\n    A,\n    B,\n}\n";

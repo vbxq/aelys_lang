@@ -298,15 +298,14 @@ fn group_surface_a_partially_concrete_argument_list_monomorphizes() {
     let _pin = pin_legs("is_ok_partial", LEVELS.len());
     let src = format!(
         "{GENERIC_PRELUDE}fn is_ok_partial<T>(r: Res<T, i64>) -> bool {{\n\
-         \x20   match r {{ Res::Ok(v) => {{ return true }} Res::Err(e) => {{ return false }} }}\n\
+         \x20   match r {{ Res::Ok(v) => {{ return true; }} Res::Err(e) => {{ return false; }} }}\n\
          }}\n\
          \n\
-         fn main() -> i64 {{\n\
-         \x20   let a: Res<i64, i64> = Res::Ok(7)\n\
-         \x20   let b: Res<i64, i64> = Res::Err(3)\n\
-         \x20   if is_ok_partial(a) {{ println(1) }} else {{ println(0) }}\n\
-         \x20   if is_ok_partial(b) {{ println(1) }} else {{ println(0) }}\n\
-         \x20   return 0\n\
+         fn main() {{\n\
+         \x20   let a: Res<i64, i64> = Res::Ok(7);\n\
+         \x20   let b: Res<i64, i64> = Res::Err(3);\n\
+         \x20   if is_ok_partial(a) {{ println!(\"{{}}\", 1); }} else {{ println!(\"{{}}\", 0); }}\n\
+         \x20   if is_ok_partial(b) {{ println!(\"{{}}\", 1); }} else {{ println!(\"{{}}\", 0); }}\n\
          }}\n"
     );
     h.value_row("is_ok_partial", &src, "1\n0\n");
@@ -318,16 +317,15 @@ fn group_surface_a_generic_over_two_parameters_monomorphizes_from_its_arguments(
     let _pin = pin_legs("ok_or", LEVELS.len());
     let src = format!(
         "{GENERIC_PRELUDE}fn ok_or<T, E>(o: Opt<T>, e: E) -> Res<T, E> {{\n\
-         \x20   match o {{ Opt::Some(v) => {{ return Res::Ok(v) }} Opt::None => {{ return Res::Err(e) }} }}\n\
+         \x20   match o {{ Opt::Some(v) => {{ return Res::Ok(v); }} Opt::None => {{ return Res::Err(e); }} }}\n\
          }}\n\
          \n\
-         fn main() -> i64 {{\n\
-         \x20   let t: Res<i64, i64> = ok_or(Opt::Some(5), 3)\n\
-         \x20   match t {{ Res::Ok(v) => println(v), Res::Err(e) => println(e) }}\n\
-         \x20   let u: Opt<i64> = Opt::None\n\
-         \x20   let w: Res<i64, i64> = ok_or(u, 4)\n\
-         \x20   match w {{ Res::Ok(v) => println(v), Res::Err(e) => println(e) }}\n\
-         \x20   return 0\n\
+         fn main() {{\n\
+         \x20   let t: Res<i64, i64> = ok_or(Opt::Some(5), 3);\n\
+         \x20   match t {{ Res::Ok(v) => println!(\"{{}}\", v), Res::Err(e) => println!(\"{{}}\", e) }}\n\
+         \x20   let u: Opt<i64> = Opt::None;\n\
+         \x20   let w: Res<i64, i64> = ok_or(u, 4);\n\
+         \x20   match w {{ Res::Ok(v) => println!(\"{{}}\", v), Res::Err(e) => println!(\"{{}}\", e) }}\n\
          }}\n"
     );
     h.value_row("ok_or", &src, "5\n4\n");
@@ -337,12 +335,11 @@ fn group_surface_a_generic_over_two_parameters_monomorphizes_from_its_arguments(
 fn group_surface_a_type_parameter_named_only_by_the_annotation_is_inferred() {
     let h = Harness::new();
     let src = format!(
-        "{GENERIC_PRELUDE}fn ok<T, E>(v: T) -> Res<T, E> {{ return Res::Ok(v) }}\n\
+        "{GENERIC_PRELUDE}fn ok<T, E>(v: T) -> Res<T, E> {{ Res::Ok(v) }}\n\
          \n\
-         fn main() -> i64 {{\n\
-         \x20   let s: Res<i64, bool> = ok(9)\n\
-         \x20   match s {{ Res::Ok(v) => println(v), Res::Err(b) => println(0) }}\n\
-         \x20   return 0\n\
+         fn main() {{\n\
+         \x20   let s: Res<i64, bool> = ok(9);\n\
+         \x20   match s {{ Res::Ok(v) => println!(\"{{}}\", v), Res::Err(b) => println!(\"{{}}\", 0) }}\n\
          }}\n"
     );
     let _pin = pin_legs("ok_two_params", LEVELS.len());
@@ -354,12 +351,11 @@ fn group_surface_a_plain_struct_crossing_a_generic_keeps_its_own_name() {
     let h = Harness::new();
     let _pin = pin_legs("pick", LEVELS.len());
     let src = format!(
-        "{GENERIC_PRELUDE}fn pick<T>(p: P, x: T) -> T {{ return x }}\n\
+        "{GENERIC_PRELUDE}fn pick<T>(p: P, x: T) -> T {{ x }}\n\
          \n\
-         fn main() -> i64 {{\n\
-         \x20   let p: P = P {{ a: 3 }}\n\
-         \x20   println(pick(p, 42))\n\
-         \x20   return 0\n\
+         fn main() {{\n\
+         \x20   let p: P = P {{ a: 3 }};\n\
+         \x20   println!(\"{{}}\", pick(p, 42));\n\
          }}\n"
     );
     h.value_row("pick", &src, "42\n");
@@ -435,7 +431,7 @@ fn group_surface_a_string_carries_a_byte_view() {
          \x20   return 0\n\
          }}\n"
     );
-    h.value_row("str_bytes", &src, &format!("{MULTI_BYTE_BYTES}\n104\n"));
+    h.value_row("str_bytes", &src, &format!("{MULTI_BYTE_BYTES}\n104;\n"));
 }
 
 #[test]
@@ -626,7 +622,7 @@ fn group_surface_a_library_prints_a_multi_byte_string() {
     h.value_row(
         "library_print",
         &src,
-        &format!("{MULTI_BYTE}{MULTI_BYTE_BYTES}\n{MULTI_BYTE_BYTES}\n"),
+        &format!("{MULTI_BYTE}{MULTI_BYTE_BYTES};\n{MULTI_BYTE_BYTES}\n"),
     );
 }
 
@@ -861,7 +857,7 @@ fn group_surface_control_a_multi_byte_literal_reaches_the_program_intact() {
     h.value_row(
         "control_multi_byte",
         &src,
-        &format!("{MULTI_BYTE_BYTES}\n0\n"),
+        &format!("{MULTI_BYTE_BYTES}\n0;\n"),
     );
 }
 
@@ -938,20 +934,19 @@ fn group_surface_one_file_under_two_dotted_names_is_one_unit() {
          \n\
          pub fn label() -> String {{ \"{MULTI_BYTE}\" }}\n"
     );
-    let expected = format!("3\n3\n{MULTI_BYTE}\n");
+    let expected = format!("3;\n3;\n{MULTI_BYTE}\n");
 
     for (tag, opt) in LEVELS {
-        let nested_src = "needs lib.counter as a\n\
-                          needs counter as b\n\
+        let nested_src = "use lib::counter as a;\n\
+                          mod counter; use counter as b;\n\
                           \n\
-                          fn main() -> i64 {\n\
-                          \x20   a.bump()\n\
-                          \x20   a.bump()\n\
-                          \x20   a.bump()\n\
-                          \x20   println(a.read())\n\
-                          \x20   println(b.read())\n\
-                          \x20   println(b.label())\n\
-                          \x20   return 0\n\
+                          fn main() {\n\
+                          \x20   a::bump();\n\
+                          \x20   a::bump();\n\
+                          \x20   a::bump();\n\
+                          \x20   println!(\"{}\", a::read());\n\
+                          \x20   println!(\"{}\", b::read());\n\
+                          \x20   println!(\"{}\", b::label());\n\
                           }\n";
         let nested = h.dir.path().join(slug("two_names_nested", tag)).join("lib");
         fs::create_dir_all(&nested).expect("nested root dir");
@@ -969,17 +964,16 @@ fn group_surface_one_file_under_two_dotted_names_is_one_unit() {
 
         #[cfg(unix)]
         {
-            let symlink_src = "needs pkg.counter as a\n\
-                               needs pkg.sub.counter as b\n\
+            let symlink_src = "use pkg::counter as a;\n\
+                               use pkg::sub::counter as b;\n\
                                \n\
-                               fn main() -> i64 {\n\
-                               \x20   a.bump()\n\
-                               \x20   a.bump()\n\
-                               \x20   a.bump()\n\
-                               \x20   println(a.read())\n\
-                               \x20   println(b.read())\n\
-                               \x20   println(b.label())\n\
-                               \x20   return 0\n\
+                               fn main() {\n\
+                               \x20   a::bump();\n\
+                               \x20   a::bump();\n\
+                               \x20   a::bump();\n\
+                               \x20   println!(\"{}\", a::read());\n\
+                               \x20   println!(\"{}\", b::read());\n\
+                               \x20   println!(\"{}\", b::label());\n\
                                }\n";
             let pkg = h
                 .dir
