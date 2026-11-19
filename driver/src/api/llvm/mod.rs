@@ -146,8 +146,6 @@ struct ModuleFront {
     chains: std::collections::HashMap<String, Vec<aelys_air::bir::Step>>,
     externs: std::collections::HashMap<String, aelys_air::bir::ForeignSig>,
     warnings: Vec<Warning>,
-    // reached only through a prelude that exports no value, so nothing can call its functions
-    functions_unreachable: bool,
 }
 
 fn import_chains_and_externs(bir_imports: &mut aelys_air::bir::Imports, front: &ModuleFront) {
@@ -296,67 +294,6 @@ fn names_a_std_module(path: &str) -> bool {
     dir.file_name().is_some_and(|d| d == "std")
         && dir.join("prelude.aelys").is_file()
         && crate::EMBEDDED_STD.iter().any(|(name, _)| stem == *name)
-}
-
-fn called_names(function: &aelys_air::AirFunction, out: &mut HashSet<String>) {
-    use aelys_air::{AirStmtKind, AirTerminator, Callee, Rvalue};
-    let mut take = |callee: &Callee| {
-        if let Callee::Named(name) | Callee::Extern(name, _) = callee {
-            out.insert(name.clone());
-        }
-    };
-    for block in &function.blocks {
-        for stmt in &block.stmts {
-            match &stmt.kind {
-                AirStmtKind::CallVoid { func, .. } => take(func),
-                AirStmtKind::Assign {
-                    rvalue: Rvalue::Call { func, .. },
-                    ..
-                } => take(func),
-                _ => {}
-            }
-        }
-        if let AirTerminator::Invoke { func, .. } = &block.terminator {
-            take(func);
-        }
-    }
-}
-
-// a prelude-only module is reached through its types alone, so only what another module calls survives
-fn drop_unreached_prelude_functions(
-    fronts: &[ModuleFront],
-    programs: &mut [aelys_air::AirProgram],
-) {
-    if !fronts.iter().any(|front| front.functions_unreachable) {
-        return;
-    }
-    let mut wanted: HashSet<String> = HashSet::new();
-    for (front, program) in fronts.iter().zip(programs.iter()) {
-        if !front.functions_unreachable {
-            for function in &program.functions {
-                called_names(function, &mut wanted);
-            }
-        }
-    }
-    for (front, program) in fronts.iter().zip(programs.iter_mut()) {
-        if !front.functions_unreachable {
-            continue;
-        }
-        loop {
-            let before = wanted.len();
-            for function in &program.functions {
-                if wanted.contains(&function.name) {
-                    called_names(function, &mut wanted);
-                }
-            }
-            if wanted.len() == before {
-                break;
-            }
-        }
-        program
-            .functions
-            .retain(|function| wanted.contains(&function.name));
-    }
 }
 
 // a prelude name loses, silently, to anything the unit binds itself in the same namespace
@@ -565,7 +502,6 @@ fn front_stage(
             chains,
             externs,
             warnings: sourced(warnings, &src),
-            functions_unreachable: false,
         },
         checked,
     ))
@@ -722,7 +658,6 @@ fn air_stage(
         }
     }
 
-    drop_unreached_prelude_functions(fronts, &mut programs);
     let std_functions: HashSet<String> = fronts
         .iter()
         .zip(&programs)
@@ -959,14 +894,6 @@ fn lower_file_to_air_with_source(
             import_chains_and_externs(&mut bir_imports, &front);
             fronts.push(front);
             checked.push(unit_checked);
-        }
-    }
-    if prelude_scope
-        .as_ref()
-        .is_some_and(|scope| scope.values.is_empty() && scope.namespaces.is_empty())
-    {
-        for (front, unit) in fronts.iter_mut().zip(&graph.units) {
-            front.functions_unreachable = unit.prelude_only;
         }
     }
 

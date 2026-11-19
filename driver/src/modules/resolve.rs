@@ -88,22 +88,6 @@ pub(crate) fn discover(
     }
 
     let root = discovery.load(&ModuleFile::Disk(root_file.to_path_buf()), String::new())?;
-    let mut reached = vec![false; discovery.units.len()];
-    let mut pending = vec![root];
-    while let Some(index) = pending.pop() {
-        if std::mem::replace(&mut reached[index], true) {
-            continue;
-        }
-        pending.extend(
-            discovery.units[index]
-                .imports
-                .iter()
-                .map(ResolvedImport::target),
-        );
-    }
-    for (unit, reached) in discovery.units.iter_mut().zip(reached) {
-        unit.prelude_only = !reached;
-    }
 
     let mut order = Order::of(&discovery.units, prelude.into_iter().chain([root]));
     if order.cyclic.contains(&root)
@@ -338,7 +322,6 @@ impl Discovery {
             imports: Vec::new(),
             bound_types: HashSet::new(),
             bound_values: HashSet::new(),
-            prelude_only: false,
         });
         self.by_path.insert(dotted, index);
         self.by_file.insert(identity, index);
