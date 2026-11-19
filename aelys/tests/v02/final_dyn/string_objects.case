@@ -1,25 +1,24 @@
 trait Named {
-    fn name(&self) -> string
-    fn greet(&self, who: string) -> string { return self.name() + " greets " + who }
+    fn name(&self) -> String;
+    fn greet(&self, who: String) -> String { self.name() + " greets " + who }
 }
-struct Dog { nick: string, age: i64 }
-struct Cat { tag: string }
+struct Dog { nick: String, age: i64 }
+struct Cat { tag: String }
 impl Named for Dog {
-    fn name(&self) -> string { return "dog " + self.nick }
+    fn name(&self) -> String { "dog " + self.nick }
 }
 impl Named for Cat {
-    fn name(&self) -> string { return self.tag }
-    fn greet(&self, who: string) -> string { return self.tag + " ignores " + who }
+    fn name(&self) -> String { self.tag }
+    fn greet(&self, who: String) -> String { self.tag + " ignores " + who }
 }
-fn main() -> i64 {
-    let mut zoo: Vec<Rc<dyn Named>> = Vec::new()
-    zoo.push(Rc::new(Dog { nick: "rex" + "!", age: 3 }))
-    zoo.push(Rc::new(Cat { tag: "tom" }))
-    let mut i = 0
+fn main() {
+    let mut zoo: Vec<Rc<dyn Named>> = Vec::new();
+    zoo.push(Rc::new(Dog { nick: "rex" + "!", age: 3 }));
+    zoo.push(Rc::new(Cat { tag: "tom" }));
+    let mut i = 0;
     while i < zoo.len() {
-        println(zoo[i].name())
-        println(zoo[i].greet("ann"))
-        i = i + 1
+        println!("{}", zoo[i].name());
+        println!("{}", zoo[i].greet("ann"));
+        i = i + 1;
     }
-    return 0
 }

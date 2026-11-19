@@ -1,31 +1,30 @@
 trait Area {
-    fn area(&self) -> i64
+    fn area(&self) -> i64;
 }
 trait Label {
-    fn label(&self) -> i64
-    fn twice(&self) -> i64 { return self.label() * 2 }
+    fn label(&self) -> i64;
+    fn twice(&self) -> i64 { self.label() * 2 }
 }
 struct Sq { s: i64 }
 struct Pt { x: i64 }
 impl Area for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 impl Label for Sq {
-    fn label(&self) -> i64 { return 100 + self.s }
+    fn label(&self) -> i64 { 100 + self.s }
 }
 impl Label for Pt {
-    fn label(&self) -> i64 { return self.x }
+    fn label(&self) -> i64 { self.x }
 }
-fn main() -> i64 {
-    let filler = Rc::new(Pt { x: 0 })
-    let s = Rc::new(Sq { s: 3 })
-    let a: Rc<dyn Area> = s
-    let l: Rc<dyn Label> = s
-    let p: Rc<dyn Label> = Rc::new(Pt { x: 5 })
-    println(a.area())
-    println(l.label())
-    println(l.twice())
-    println(p.twice())
-    println(filler.x)
-    return 0
+fn main() {
+    let filler = Rc::new(Pt { x: 0 });
+    let s = Rc::new(Sq { s: 3 });
+    let a: Rc<dyn Area> = s;
+    let l: Rc<dyn Label> = s;
+    let p: Rc<dyn Label> = Rc::new(Pt { x: 5 });
+    println!("{}", a.area());
+    println!("{}", l.label());
+    println!("{}", l.twice());
+    println!("{}", p.twice());
+    println!("{}", filler.x);
 }

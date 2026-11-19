@@ -1,22 +1,21 @@
 trait Calc {
-    fn mix(&self, a: f64, b: bool, p: Pt, s: string) -> Pt
-    fn ratio(&self) -> f64
+    fn mix(&self, a: f64, b: bool, p: Pt, s: String) -> Pt;
+    fn ratio(&self) -> f64;
 }
 struct Pt { x: i64, y: i64 }
 struct K { k: i64 }
 impl Calc for K {
-    fn mix(&self, a: f64, b: bool, p: Pt, s: string) -> Pt {
-        let extra = if b { s.len() } else { 0 }
-        return Pt { x: p.x * self.k + extra, y: p.y + (a as i64) }
+    fn mix(&self, a: f64, b: bool, p: Pt, s: String) -> Pt {
+        let extra = if b { s.len() } else { 0 };
+        Pt { x: p.x * self.k + extra, y: p.y + (a as i64) }
     }
-    fn ratio(&self) -> f64 { return (self.k as f64) / 4.0 }
+    fn ratio(&self) -> f64 { (self.k as f64) / 4.0 }
 }
-fn main() -> i64 {
-    let k = K { k: 3 }
-    let c: &dyn Calc = &k
-    let r = c.mix(2.5, true, Pt { x: 4, y: 1 }, "hello")
-    println(r.x)
-    println(r.y)
-    println(c.ratio())
-    return 0
+fn main() {
+    let k = K { k: 3 };
+    let c: &dyn Calc = &k;
+    let r = c.mix(2.5, true, Pt { x: 4, y: 1 }, "hello");
+    println!("{}", r.x);
+    println!("{}", r.y);
+    println!("{}", c.ratio());
 }

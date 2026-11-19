@@ -1,19 +1,18 @@
 trait Area {
-    nogc fn area(&self) -> i64
-    fn describe(&self) -> i64 { return 0 }
+    nogc fn area(&self) -> i64;
+    fn describe(&self) -> i64 { 0 }
 }
 struct Sq { s: i64 }
 struct Rect { w: i64, h: i64 }
 impl Area for Sq {
-    nogc fn area(&self) -> i64 { return self.s * self.s }
+    nogc fn area(&self) -> i64 { self.s * self.s }
 }
 impl Area for Rect {
-    nogc fn area(&self) -> i64 { return self.w * self.h }
+    nogc fn area(&self) -> i64 { self.w * self.h }
 }
-nogc fn sum(a: &dyn Area, b: &dyn Area) -> i64 { return a.area() + b.area() }
-fn main() -> i64 {
-    let a = Sq { s: 3 }
-    let b = Rect { w: 4, h: 5 }
-    println(sum(&a, &b))
-    return 0
+nogc fn sum(a: &dyn Area, b: &dyn Area) -> i64 { a.area() + b.area() }
+fn main() {
+    let a = Sq { s: 3 };
+    let b = Rect { w: 4, h: 5 };
+    println!("{}", sum(&a, &b));
 }

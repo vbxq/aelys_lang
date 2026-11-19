@@ -1,9 +1,9 @@
 trait Grow {
-    fn grow(&mut self)
+    fn grow(&mut self);
 }
 struct Sq { s: i64 }
 impl Grow for Sq {
-    fn grow(&mut self) { self.s = self.s + 1 }
+    fn grow(&mut self) { self.s = self.s + 1; }
 }
-fn f(g: &dyn Grow) { g.grow() }
-fn main() -> i64 { return 0 }
+fn f(g: &dyn Grow) { g.grow(); }
+fn main() { }

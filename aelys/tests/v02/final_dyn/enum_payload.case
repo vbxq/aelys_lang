@@ -1,13 +1,13 @@
 trait Shape {
-    fn area(&self) -> i64
+    fn area(&self) -> i64;
 }
 struct Sq { s: i64 }
 struct Rect { w: i64, h: i64 }
 impl Shape for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 impl Shape for Rect {
-    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+    fn area(&self) -> i64 { self.w * self.h + 1000 }
 }
 enum Slot { Full(Rc<dyn Shape>), Empty }
 fn weigh(s: &Slot) -> i64 {
@@ -16,12 +16,11 @@ fn weigh(s: &Slot) -> i64 {
         Slot::Empty => return -1,
     }
 }
-fn main() -> i64 {
-    let a = Slot::Full(Rc::new(Sq { s: 2 }))
-    let b = Slot::Empty
-    let c = Slot::Full(Rc::new(Rect { w: 3, h: 3 }))
-    println(weigh(&a))
-    println(weigh(&b))
-    println(weigh(&c))
-    return 0
+fn main() {
+    let a = Slot::Full(Rc::new(Sq { s: 2 }));
+    let b = Slot::Empty;
+    let c = Slot::Full(Rc::new(Rect { w: 3, h: 3 }));
+    println!("{}", weigh(&a));
+    println!("{}", weigh(&b));
+    println!("{}", weigh(&c));
 }

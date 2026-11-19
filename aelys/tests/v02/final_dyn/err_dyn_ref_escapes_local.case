@@ -1,13 +1,13 @@
 trait Shape {
-    fn area(&self) -> i64
+    fn area(&self) -> i64;
 }
 struct Sq { s: i64 }
 impl Shape for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 
 fn f() -> &dyn Shape {
-    let s = Sq { s: 1 }
-    return &s
+    let s = Sq { s: 1 };
+    &s
 }
-fn main() -> i64 { return 0 }
+fn main() { }

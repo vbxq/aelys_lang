@@ -1,20 +1,19 @@
 trait Tr {
-    fn m(&self, v: &mut Vec<Rc<dyn Tr>>) -> i64
+    fn m(&self, v: &mut Vec<Rc<dyn Tr>>) -> i64;
 }
 struct S { n: i64 }
 impl Tr for S {
     fn m(&self, v: &mut Vec<Rc<dyn Tr>>) -> i64 {
-        v.remove(0)
-        v.push(Rc::new(S { n: 999 }))
-        let junk = Rc::new(S { n: 555 })
-        let junk2 = Rc::new(S { n: 444 })
-        return self.n + junk.n - junk.n + junk2.n - junk2.n
+        v.remove(0);
+        v.push(Rc::new(S { n: 999 }));
+        let junk = Rc::new(S { n: 555 });
+        let junk2 = Rc::new(S { n: 444 });
+        self.n + junk.n - junk.n + junk2.n - junk2.n
     }
 }
-fn main() -> i64 {
-    let mut v: Vec<Rc<dyn Tr>> = Vec::new()
-    v.push(Rc::new(S { n: 7 }))
-    println(v[0].m(&mut v))
-    println(v[0].m(&mut v))
-    return 0
+fn main() {
+    let mut v: Vec<Rc<dyn Tr>> = Vec::new();
+    v.push(Rc::new(S { n: 7 }));
+    println!("{}", v[0].m(&mut v));
+    println!("{}", v[0].m(&mut v));
 }

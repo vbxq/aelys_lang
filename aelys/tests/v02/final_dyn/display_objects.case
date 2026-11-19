@@ -1,23 +1,22 @@
-struct P { x: i64, y: i64 }
-impl Display for P {
-    fn to_string(&self) -> string { return "({self.x}, {self.y})" }
+use std::fmt; struct P { x: i64, y: i64 }
+impl fmt::Display for P {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "({}, {})", self.x, self.y) }
 }
 fn show(d: &dyn Display) {
-    println(d)
-    println("got {d}")
+    println!("{}", d);
+    println!("got {d}");
 }
-fn main() -> i64 {
-    let mut v: Vec<Rc<dyn Display>> = Vec::new()
-    v.push(Rc::new(P { x: 1, y: 2 }))
-    v.push(Rc::new(42))
-    v.push(Rc::new("hi"))
-    let mut i = 0
+fn main() {
+    let mut v: Vec<Rc<dyn Display>> = Vec::new();
+    v.push(Rc::new(P { x: 1, y: 2 }));
+    v.push(Rc::new(42));
+    v.push(Rc::new("hi"));
+    let mut i = 0;
     while i < v.len() {
-        println(v[i])
-        println(v[i].to_string() + "!")
-        i = i + 1
+        println!("{}", v[i]);
+        println!("{}", v[i].to_string() + "!");
+        i = i + 1;
     }
-    let p = P { x: 3, y: 4 }
-    show(&p)
-    return 0
+    let p = P { x: 3, y: 4 };
+    show(&p);
 }

@@ -1,17 +1,17 @@
-needs a
-pub const P0: i64 = a.A0 + 1
-pub const P1: i64 = a.A1 + 1
-pub const P2: i64 = a.A2 + 1
-pub const P3: i64 = a.A3 + 1
-pub const P4: i64 = a.A4 + 1
-pub const P5: i64 = a.A5 + 1
-pub const P6: i64 = a.A6 + 1
-pub const P7: i64 = a.A7 + 1
-pub const P8: i64 = a.A8 + 1
-pub const P9: i64 = a.A9 + 1
-pub const P10: i64 = a.A10 + 1
-pub const P11: i64 = a.A11 + 1
-pub const P12: i64 = 0
+mod a;
+pub const P0: i64 = a::A0 + 1;
+pub const P1: i64 = a::A1 + 1;
+pub const P2: i64 = a::A2 + 1;
+pub const P3: i64 = a::A3 + 1;
+pub const P4: i64 = a::A4 + 1;
+pub const P5: i64 = a::A5 + 1;
+pub const P6: i64 = a::A6 + 1;
+pub const P7: i64 = a::A7 + 1;
+pub const P8: i64 = a::A8 + 1;
+pub const P9: i64 = a::A9 + 1;
+pub const P10: i64 = a::A10 + 1;
+pub const P11: i64 = a::A11 + 1;
+pub const P12: i64 = 0;
 fn main() {
-    println(P0)
+    println!("{}", P0);
 }

@@ -1,23 +1,22 @@
 trait Link {
-    fn val(&self) -> i64
+    fn val(&self) -> i64;
 }
 struct Node { v: i64, next: Rc<dyn Link> }
 impl Link for Node {
-    fn val(&self) -> i64 { return self.v }
+    fn val(&self) -> i64 { self.v }
 }
 fn churn(i: i64) -> i64 {
-    let a = Rc::new(Node { v: i, next: Rc::null() })
-    let b = Rc::new(Node { v: 2, next: a })
-    a.next = b
-    return a.next.val() + b.next.val()
+    let a = Rc::new(Node { v: i, next: Rc::null() });
+    let b = Rc::new(Node { v: 2, next: a });
+    a.next = b;
+    a.next.val() + b.next.val()
 }
-fn main() -> i64 {
-    let mut i = 0
-    let mut n = 0
+fn main() {
+    let mut i = 0;
+    let mut n = 0;
     while i < 500 {
-        n = n + churn(i)
-        i = i + 1
+        n = n + churn(i);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }

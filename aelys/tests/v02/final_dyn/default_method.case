@@ -1,28 +1,27 @@
 trait Shape {
-    fn area(&self) -> i64
-    fn tagged(&self) -> i64 { return self.area() * 10 + 1 }
-    fn twice(&self) -> i64 { return self.tagged() * 2 }
+    fn area(&self) -> i64;
+    fn tagged(&self) -> i64 { self.area() * 10 + 1 }
+    fn twice(&self) -> i64 { self.tagged() * 2 }
 }
 struct Sq { s: i64 }
 struct Rect { w: i64, h: i64 }
 impl Shape for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 impl Shape for Rect {
-    fn area(&self) -> i64 { return self.w * self.h }
-    fn tagged(&self) -> i64 { return 7 }
+    fn area(&self) -> i64 { self.w * self.h }
+    fn tagged(&self) -> i64 { 7 }
 }
 fn show(s: &dyn Shape) {
-    println(s.area())
-    println(s.tagged())
-    println(s.twice())
+    println!("{}", s.area());
+    println!("{}", s.tagged());
+    println!("{}", s.twice());
 }
-fn main() -> i64 {
-    let a = Sq { s: 3 }
-    let b = Rect { w: 2, h: 5 }
-    show(&a)
-    show(&b)
-    let r: Rc<dyn Shape> = Rc::new(Sq { s: 2 })
-    println(r.twice())
-    return 0
+fn main() {
+    let a = Sq { s: 3 };
+    let b = Rect { w: 2, h: 5 };
+    show(&a);
+    show(&b);
+    let r: Rc<dyn Shape> = Rc::new(Sq { s: 2 });
+    println!("{}", r.twice());
 }

@@ -1,17 +1,17 @@
 pub trait Shape {
-    fn area(&self) -> i64
-    fn tagged(&self) -> i64 { return self.area() + 1 }
+    fn area(&self) -> i64;
+    fn tagged(&self) -> i64 { self.area() + 1 }
 }
 pub struct Sq { pub s: i64 }
 impl Shape for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 pub fn total(v: Vec<Rc<dyn Shape>>) -> i64 {
-    let mut t = 0
-    let mut i = 0
+    let mut t = 0;
+    let mut i = 0;
     while i < v.len() {
-        t = t + v[i].tagged()
-        i = i + 1
+        t = t + v[i].tagged();
+        i = i + 1;
     }
-    return t
+    t
 }

@@ -1,33 +1,32 @@
 trait Shape {
-    fn area(&self) -> i64
+    fn area(&self) -> i64;
 }
 struct Sq { s: i64 }
 struct Rect { w: i64, h: i64 }
 impl Shape for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 impl Shape for Rect {
-    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+    fn area(&self) -> i64 { self.w * self.h + 1000 }
 }
 fn make(k: i64) -> Rc<dyn Shape> {
     if k % 2 == 0 {
-        return Rc::new(Sq { s: k })
+        return Rc::new(Sq { s: k });
     }
-    let r = Rc::new(Rect { w: k, h: 2 })
-    return r
+    let r = Rc::new(Rect { w: k, h: 2 });
+    r
 }
-fn view(s: &Sq) -> &dyn Shape { return s }
-fn main() -> i64 {
-    let mut i = 0
-    let mut total = 0
+fn view(s: &Sq) -> &dyn Shape { s }
+fn main() {
+    let mut i = 0;
+    let mut total = 0;
     while i < 6 {
-        let s = make(i)
-        total = total + s.area()
-        i = i + 1
+        let s = make(i);
+        total = total + s.area();
+        i = i + 1;
     }
-    println(total)
-    let q = Sq { s: 7 }
-    let v = view(&q)
-    println(v.area())
-    return 0
+    println!("{}", total);
+    let q = Sq { s: 7 };
+    let v = view(&q);
+    println!("{}", v.area());
 }

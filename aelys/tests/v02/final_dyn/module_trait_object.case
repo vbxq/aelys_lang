@@ -1,16 +1,15 @@
-needs geo
-needs Shape, Sq from geo
+mod geo;
+use geo::{Shape, Sq};
 struct Tri { b: i64, h: i64 }
 impl Shape for Tri {
-    fn area(&self) -> i64 { return self.b * self.h / 2 }
+    fn area(&self) -> i64 { self.b * self.h / 2 }
 }
-fn main() -> i64 {
-    let mut v: Vec<Rc<dyn geo.Shape>> = Vec::new()
-    v.push(Rc::new(Sq { s: 3 }))
-    v.push(Rc::new(Tri { b: 4, h: 5 }))
-    let one: Rc<dyn Shape> = Rc::new(Tri { b: 2, h: 2 })
-    v.push(one)
-    println(geo.total(v))
-    println(one.tagged())
-    return 0
+fn main() {
+    let mut v: Vec<Rc<dyn geo::Shape>> = Vec::new();
+    v.push(Rc::new(Sq { s: 3 }));
+    v.push(Rc::new(Tri { b: 4, h: 5 }));
+    let one: Rc<dyn Shape> = Rc::new(Tri { b: 2, h: 2 });
+    v.push(one);
+    println!("{}", geo::total(v));
+    println!("{}", one.tagged());
 }

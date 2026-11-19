@@ -1,14 +1,13 @@
 trait Tr {
-    fn v(&self) -> i64
+    fn v(&self) -> i64;
 }
 struct S { n: i64 }
 impl Tr for S {
-    fn v(&self) -> i64 { return self.n }
+    fn v(&self) -> i64 { self.n }
 }
 struct H { d: Rc<dyn Tr> }
-fn main() -> i64 {
-    let h = H { d: Rc::null() }
-    println(1)
-    println(h.d.v())
-    return 0
+fn main() {
+    let h = H { d: Rc::null() };
+    println!("{}", 1);
+    println!("{}", h.d.v());
 }

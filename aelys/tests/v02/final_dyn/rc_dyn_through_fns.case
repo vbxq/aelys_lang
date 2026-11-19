@@ -1,31 +1,30 @@
 trait Shape {
-    fn area(&self) -> i64
+    fn area(&self) -> i64;
 }
 struct Sq { s: i64 }
 impl Shape for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 fn keep(v: Vec<Rc<dyn Shape>>, s: Rc<dyn Shape>) -> Vec<Rc<dyn Shape>> {
-    let mut out = v
-    out.push(s)
-    out.push(s)
-    return out
+    let mut out = v;
+    out.push(s);
+    out.push(s);
+    out
 }
 fn sum(v: Vec<Rc<dyn Shape>>) -> i64 {
-    let mut t = 0
-    let mut i = 0
+    let mut t = 0;
+    let mut i = 0;
     while i < v.len() {
-        t = t + v[i].area()
-        i = i + 1
+        t = t + v[i].area();
+        i = i + 1;
     }
-    return t
+    t
 }
-fn main() -> i64 {
-    let mut v: Vec<Rc<dyn Shape>> = Vec::new()
-    let one: Rc<dyn Shape> = Rc::new(Sq { s: 2 })
-    v = keep(v, one)
-    v = keep(v, Rc::new(Sq { s: 3 }))
-    println(v.len())
-    println(sum(v))
-    return 0
+fn main() {
+    let mut v: Vec<Rc<dyn Shape>> = Vec::new();
+    let one: Rc<dyn Shape> = Rc::new(Sq { s: 2 });
+    v = keep(v, one);
+    v = keep(v, Rc::new(Sq { s: 3 }));
+    println!("{}", v.len());
+    println!("{}", sum(v));
 }

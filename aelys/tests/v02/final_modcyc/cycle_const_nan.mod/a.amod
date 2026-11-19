@@ -1,3 +1,3 @@
-needs prog
-pub const N: f64 = prog.Z / prog.Z
-pub const K: i64 = 7
+use crate::prog;
+pub const N: f64 = prog::Z / prog::Z;
+pub const K: i64 = 7;

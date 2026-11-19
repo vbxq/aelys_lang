@@ -1,13 +1,12 @@
 trait Shape {
-    fn area(&self) -> i64
+    fn area(&self) -> i64;
 }
 struct Sq { s: i64 }
 impl Shape for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 
-fn f(s: &dyn Shape) -> i64 { return s.area() }
-fn main() -> i64 {
-    println(f(&5))
-    return 0
+fn f(s: &dyn Shape) -> i64 { s.area() }
+fn main() {
+    println!("{}", f(&5));
 }

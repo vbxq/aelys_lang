@@ -1,26 +1,25 @@
 trait Shape {
-    fn area(&self) -> i64
+    fn area(&self) -> i64;
 }
 struct Sq { s: i64 }
 struct Rect { w: i64, h: i64 }
 impl Shape for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 impl Shape for Rect {
-    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+    fn area(&self) -> i64 { self.w * self.h + 1000 }
 }
-fn up<T: Shape>(x: Rc<T>) -> Rc<dyn Shape> { return x }
+fn up<T: Shape>(x: Rc<T>) -> Rc<dyn Shape> { x }
 fn look<T: Shape>(x: &T) -> i64 {
-    let d: &dyn Shape = x
-    return d.area()
+    let d: &dyn Shape = x;
+    d.area()
 }
-fn main() -> i64 {
-    let a = up(Rc::new(Sq { s: 9 }))
-    let b = up(Rc::new(Rect { w: 1, h: 2 }))
-    println(a.area() + b.area())
-    let p = Sq { s: 2 }
-    let q = Rect { w: 2, h: 2 }
-    println(look(&p))
-    println(look(&q))
-    return 0
+fn main() {
+    let a = up(Rc::new(Sq { s: 9 }));
+    let b = up(Rc::new(Rect { w: 1, h: 2 }));
+    println!("{}", a.area() + b.area());
+    let p = Sq { s: 2 };
+    let q = Rect { w: 2, h: 2 };
+    println!("{}", look(&p));
+    println!("{}", look(&q));
 }

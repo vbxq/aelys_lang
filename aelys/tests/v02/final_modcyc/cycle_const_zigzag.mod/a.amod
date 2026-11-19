@@ -1,6 +1,6 @@
-needs prog
-pub const A0: i64 = prog.P1 + 1
-pub const A1: i64 = prog.P2 + 1
-pub const A2: i64 = prog.P3 + 1
-pub const A3: i64 = prog.P4 + 1
-pub const A4: i64 = prog.P5 + 1
+use crate::prog;
+pub const A0: i64 = prog::P1 + 1;
+pub const A1: i64 = prog::P2 + 1;
+pub const A2: i64 = prog::P3 + 1;
+pub const A3: i64 = prog::P4 + 1;
+pub const A4: i64 = prog::P5 + 1;
