@@ -1,0 +1,9 @@
+needs m
+struct Inner { y: string, z: i64 }
+fn main() {
+    let p = m.mk()
+    let q: m.Pair<Inner, i64> = m.Pair { a: Inner { y: "lo" + "cal", z: 7 }, b: 1 }
+    println(p.a.x + p.b)
+    println(q.a.y)
+    println(q.a.z + q.b)
+}

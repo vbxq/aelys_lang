@@ -1,0 +1,6 @@
+fn f() -> Result<i64, i64> {
+    return Result::Ok(1)
+}
+fn main() {
+    let x = f()?
+}

@@ -1,0 +1,5 @@
+fn main() -> i64 {
+    let a: [i64; 4] = [1, 2, 3, 4]
+    println(a[7])
+    return 0
+}

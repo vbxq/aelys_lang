@@ -1,0 +1,3 @@
+refuse E0727
+[nogc]
+Vec::insert

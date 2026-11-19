@@ -1,0 +1,12 @@
+fn get(x: i64) -> i64 {
+    return 999
+}
+
+fn outer(k: i64) -> i64 {
+    let run = fn(get: fn(i64) -> i64) -> i64 { return get(k) }
+    return run(fn(x: i64) -> i64 { return x * 3 })
+}
+
+fn main() {
+    println(outer(5))
+}

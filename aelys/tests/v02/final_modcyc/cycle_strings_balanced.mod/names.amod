@@ -1,0 +1,3 @@
+needs prog
+pub fn make(n: string, a: i64) -> prog.Person { return prog.Person { name: n + "!", age: a } }
+pub fn label(p: prog.Person) -> string { return prog.greet(p) + " " + "{p.age}" }

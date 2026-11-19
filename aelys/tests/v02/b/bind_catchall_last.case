@@ -1,0 +1,9 @@
+fn f(n: i64) -> i64 {
+    return match n { 0 => 100, other => other * 2 }
+}
+
+fn main() -> i64 {
+    println(f(0))
+    println(f(21))
+    return 0
+}

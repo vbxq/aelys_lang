@@ -1,0 +1,8 @@
+fn f(p: bool, q: bool) -> i64 {
+    return match (p, q) { (true, true) => 1, (true, false) => 2, (false, _) => 3 }
+}
+
+fn main() -> i64 {
+    println("{f(true, true)} {f(true, false)} {f(false, true)} {f(false, false)}")
+    return 0
+}

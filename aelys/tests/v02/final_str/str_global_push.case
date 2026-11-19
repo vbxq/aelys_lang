@@ -1,0 +1,11 @@
+let mut glob: String = "g"
+
+fn bump() {
+    glob.push_str("+")
+}
+
+fn main() {
+    bump()
+    bump()
+    println(glob)
+}

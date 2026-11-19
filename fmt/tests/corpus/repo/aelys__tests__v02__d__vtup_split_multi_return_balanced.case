@@ -1,0 +1,30 @@
+fn mk(n: i64) -> Vec<i64> {
+    let mut d: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < n { Vec::push(d, i * 10);
+        i = i + 1; }
+    d
+}
+
+fn split(v: Vec<i64>) -> (Vec<i64>, Vec<i64>) {
+    let mut a: Vec<i64> = Vec::new();
+    let mut b: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < v.len() {
+        let x = v[i];
+        if x % 20 == 0 { Vec::push(a, x); } else { Vec::push(b, x); }
+        i = i + 1;
+    }
+    (a, b)
+}
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
+    while i < 200 {
+        let (e, o) = split(mk(i % 9));
+        let pair = split(mk(5));
+        t = t + e.len() * 10 + o.len() + pair.0.len() * 1000 + pair.1[1];
+        i = i + 1;
+    }
+    println!("{}", t);
+}

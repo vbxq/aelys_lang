@@ -1,0 +1,5 @@
+struct P { x: i64 }
+type P = i64
+fn main() {
+    let x: P = 1
+}

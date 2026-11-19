@@ -1,12 +1,14 @@
-// Octal literal support contributed by Keggek (ported to rust)
-// https://codeberg.org/gek
+// octal literal support contributed by keggek (ported to rust)
 
 use super::{Lexer, Result};
 use aelys_common::error::{AelysError, CompileErrorKind};
-use aelys_syntax::TokenKind;
+use aelys_syntax::{Span, Token, TokenKind};
 
 impl Lexer {
     pub(super) fn number(&mut self) -> Result<()> {
+        if matches!(self.tokens.last().map(|t| &t.kind), Some(TokenKind::Dot)) {
+            return self.tuple_element();
+        }
         if self.chars.get(self.start) == Some(&'0') {
             if self.match_char('x') || self.match_char('X') {
                 return self.hex_number();
@@ -61,6 +63,20 @@ impl Lexer {
         } else {
             match text.parse::<i64>() {
                 Ok(n) => self.add_token(TokenKind::Int(n)),
+                Err(_) if text == LEAST_I64_MAGNITUDE && self.negates_what_follows() => {
+                    let minus = self.tokens.pop().expect("negates_what_follows saw it");
+                    self.tokens.push(Token::new(
+                        TokenKind::Int(i64::MIN),
+                        Span::new(
+                            minus.span.start,
+                            self.current,
+                            minus.span.line,
+                            minus.span.column,
+                        ),
+                    ));
+                    self.pending_semicolon = true;
+                }
+                Err(_) if self.unsigned_only(&text, 10) => {}
                 Err(_) => {
                     return Err(AelysError::Compile(
                         self.error(CompileErrorKind::InvalidNumber(text)),
@@ -70,6 +86,46 @@ impl Lexer {
         }
 
         Ok(())
+    }
+
+    fn tuple_element(&mut self) -> Result<()> {
+        while self.peek().is_alphanumeric() || self.peek() == '_' {
+            self.advance();
+        }
+        let text: String = self.chars[self.start..self.current].iter().collect();
+        let plain = text.chars().all(|c| c.is_ascii_digit()) && (text == "0" || !text.starts_with('0'));
+        match text.parse::<i64>() {
+            Ok(n) if plain => {
+                self.add_token(TokenKind::Int(n));
+                Ok(())
+            }
+            _ => Err(AelysError::Compile(self.error(CompileErrorKind::ParseRule {
+                code: 101,
+                message: format!(
+                    "`{text}` is not a tuple element; a tuple element is written in decimal digits, like `t.0`"
+                ),
+                help: None,
+            }))),
+        }
+    }
+
+    // the magnitude of the least i64 has no positive value, so it is a literal only under a minus
+    fn negates_what_follows(&self) -> bool {
+        let mut back = self.tokens.iter().rev();
+        if !matches!(back.next().map(|t| &t.kind), Some(TokenKind::Minus)) {
+            return false;
+        }
+        !back.next().is_some_and(|t| ends_an_expression(&t.kind))
+    }
+
+    fn unsigned_only(&mut self, digits: &str, radix: u32) -> bool {
+        match u64::from_str_radix(digits, radix) {
+            Ok(n) if !self.negates_what_follows() => {
+                self.add_token(TokenKind::UInt(n));
+                true
+            }
+            _ => false,
+        }
     }
 
     fn hex_number(&mut self) -> Result<()> {
@@ -84,6 +140,7 @@ impl Lexer {
 
         match i64::from_str_radix(&text, 16) {
             Ok(n) => self.add_token(TokenKind::Int(n)),
+            Err(_) if self.unsigned_only(&text, 16) => {}
             Err(_) => {
                 let full: String = self.chars[self.start..self.current].iter().collect();
                 return Err(AelysError::Compile(
@@ -107,6 +164,7 @@ impl Lexer {
 
         match i64::from_str_radix(&text, 2) {
             Ok(n) => self.add_token(TokenKind::Int(n)),
+            Err(_) if self.unsigned_only(&text, 2) => {}
             Err(_) => {
                 let full: String = self.chars[self.start..self.current].iter().collect();
                 return Err(AelysError::Compile(
@@ -130,6 +188,7 @@ impl Lexer {
 
         match i64::from_str_radix(&text, 8) {
             Ok(n) => self.add_token(TokenKind::Int(n)),
+            Err(_) if self.unsigned_only(&text, 8) => {}
             Err(_) => {
                 let full: String = self.chars[self.start..self.current].iter().collect();
                 return Err(AelysError::Compile(
@@ -140,4 +199,27 @@ impl Lexer {
 
         Ok(())
     }
+}
+
+const LEAST_I64_MAGNITUDE: &str = "9223372036854775808";
+
+fn ends_an_expression(kind: &TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::Identifier(_)
+            | TokenKind::Int(_)
+            | TokenKind::UInt(_)
+            | TokenKind::Float(_)
+            | TokenKind::String(_)
+            | TokenKind::FmtString(_)
+            | TokenKind::True
+            | TokenKind::False
+            | TokenKind::Null
+            | TokenKind::RParen
+            | TokenKind::RBracket
+            | TokenKind::RBrace
+            | TokenKind::PlusPlus
+            | TokenKind::MinusMinus
+            | TokenKind::Question
+    )
 }

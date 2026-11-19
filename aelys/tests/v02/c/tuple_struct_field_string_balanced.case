@@ -1,0 +1,10 @@
+struct Rec { kv: (string, i64) }
+fn main() {
+    let mut n = 0
+    for i in 0..50 {
+        let r = Rec { kv: ("r{i}", i) }
+        let s = r
+        n = n + s.kv.0.len + r.kv.1
+    }
+    println(n)
+}

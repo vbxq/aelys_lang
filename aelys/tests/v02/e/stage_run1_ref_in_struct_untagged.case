@@ -1,0 +1,5 @@
+struct R { r: &i64 }
+fn main() {
+    let x = 1
+    let s = R { r: &x }
+}

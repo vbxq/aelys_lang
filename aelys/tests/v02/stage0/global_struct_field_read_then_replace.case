@@ -1,0 +1,13 @@
+struct S { s: string }
+let mut g = S { s: "first" }
+fn replace(i: i64) -> i64 {
+    g.s = "r" + "{i}"
+    return i
+}
+fn main() {
+    g.s = "k" + "{7}"
+    let kept = g.s
+    let n = replace(1)
+    println("{kept} {g.s} {n}")
+    g.s = "end"
+}

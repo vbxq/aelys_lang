@@ -1,0 +1,14 @@
+struct K { key: i64, pay: i64 }
+
+impl eq for K {
+    fn eq(&self, o: &K) -> bool { return self.key == o.key }
+}
+
+fn same<T>(a: T, b: T) -> bool where T: eq { return a == b }
+
+fn main() -> i64 {
+    println(same(K { key: 1, pay: 2 }, K { key: 1, pay: 3 }))
+    println(same(K { key: 1, pay: 2 }, K { key: 4, pay: 2 }))
+    println(same(4, 5))
+    return 0
+}

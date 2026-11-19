@@ -1,0 +1,6 @@
+fn main() {
+    let y: u8 = 1
+    let z: u16 = 2
+    let a = [y, z]
+    println(0)
+}

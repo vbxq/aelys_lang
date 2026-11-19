@@ -1,0 +1,11 @@
+fn f(o: Option<i64>) -> string {
+    let x: i64 = 100
+    return match o { Some(x) if x > 50 => "big", Some(x) => "small{x}", None => "none{x}" }
+}
+
+fn main() -> i64 {
+    println(f(Some(7)))
+    println(f(Some(60)))
+    println(f(None))
+    return 0
+}

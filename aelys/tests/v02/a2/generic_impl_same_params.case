@@ -1,0 +1,15 @@
+struct Pair<A, B> { a: A, b: B }
+
+impl<T> Pair<T, T> {
+    fn pick(&self, first: bool) -> T {
+        if first { return self.a }
+        return self.b
+    }
+}
+
+fn main() {
+    let p = Pair { a: 3, b: 9 }
+    let q = Pair { a: "l", b: "r" }
+    println(p.pick(false))
+    println(q.pick(true))
+}

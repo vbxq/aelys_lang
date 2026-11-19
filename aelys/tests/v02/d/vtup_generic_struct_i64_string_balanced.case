@@ -1,0 +1,30 @@
+fn mk(n: i64) -> Vec<i64> {
+    let mut d: Vec<i64> = Vec::new()
+    let mut i: i64 = 0
+    while i < n { Vec::push(d, i * 10)
+        i = i + 1 }
+    return d
+}
+
+struct W<T> { v: Vec<T>, tag: i64 }
+impl<T> W<T> {
+    fn size(&self) -> i64 { return self.v.len + self.tag }
+}
+fn s(i: i64) -> string { return "x{i}" }
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 200 {
+        let mut ws: W<string> = W { v: Vec::new(), tag: 1 }
+        Vec::push(ws.v, s(i))
+        let w2 = ws
+        Vec::push(ws.v, s(2))
+        let wi: W<i64> = W { v: mk(5), tag: 2 }
+        let mut wj = wi
+        wj.v[4] = 1
+        t = t + ws.v.len * 7 + w2.v.len + wi.v[4] + wj.v[4] * 1000 + ws.size() * 100 + w2.v[0].len()
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

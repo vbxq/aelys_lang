@@ -1,11 +1,10 @@
-// recursive descent parser
-
 mod decl;
 mod expr;
 mod stmt;
 
+use aelys_common::Diagnostic;
 use aelys_common::Result;
-use aelys_common::error::{CompileError, CompileErrorKind};
+use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
 use aelys_syntax::Source;
 use aelys_syntax::{Stmt, Token, TokenKind};
 use std::sync::Arc;
@@ -17,6 +16,11 @@ pub struct Parser {
     current: usize,
     pub(crate) source: Arc<Source>,
     recursion_depth: usize,
+    pub(crate) block_depth: usize,
+    errors: Vec<Diagnostic>,
+    pattern_in_let: bool,
+    pub(crate) bodiless: bool,
+    pub(crate) mut_self: bool,
 }
 
 impl Parser {
@@ -26,25 +30,103 @@ impl Parser {
             current: 0,
             source,
             recursion_depth: 0,
+            block_depth: 0,
+            errors: Vec::new(),
+            pattern_in_let: false,
+            bodiless: false,
+            mut_self: false,
         }
     }
 
     pub fn parse(mut self) -> Result<Vec<Stmt>> {
         let mut statements = Vec::new();
 
+        let mut prologue_open = true;
+
         while !self.is_at_end() {
             if self.match_token(&TokenKind::Semicolon) {
                 continue;
             }
 
-            statements.push(self.declaration()?);
+            let start = self.current;
+            let parsed = if prologue_open && self.check(&TokenKind::Needs) {
+                self.needs_declaration()
+            } else {
+                prologue_open = false;
+                self.declaration()
+            };
+
+            match parsed {
+                Ok(stmt) => statements.push(stmt),
+                Err(err) => {
+                    let diag = match &err {
+                        AelysError::Compile(e) => e.to_diagnostic(),
+                        AelysError::Multiple(diags) => {
+                            if let Some(d) = diags.first() {
+                                d.clone()
+                            } else {
+                                continue;
+                            }
+                        }
+                    };
+                    self.errors.push(diag);
+                    self.synchronize(start);
+                }
+            }
         }
 
-        Ok(statements)
+        if self.errors.is_empty() {
+            Ok(statements)
+        } else {
+            Err(AelysError::Multiple(self.errors))
+        }
+    }
+
+    fn synchronize(&mut self, start: usize) {
+        if self.current == start && !self.is_at_end() {
+            self.advance();
+        }
+        let mut depth = 0usize;
+        for token in &self.tokens[start..self.current] {
+            match token.kind {
+                TokenKind::LBrace => depth += 1,
+                TokenKind::RBrace => depth = depth.saturating_sub(1),
+                _ => {}
+            }
+        }
+        while !self.is_at_end() {
+            match &self.peek().kind {
+                TokenKind::LBrace => depth += 1,
+                TokenKind::RBrace => depth = depth.saturating_sub(1),
+                _ if depth == 0 && self.starts_item() => return,
+                _ => {}
+            }
+            self.advance();
+        }
     }
 
     pub fn error(&self, kind: CompileErrorKind) -> aelys_common::error::AelysError {
         CompileError::new(kind, self.peek().span, Arc::clone(&self.source)).into()
+    }
+
+    pub(crate) fn unit_type_refusal(&self, open: aelys_syntax::Span) -> AelysError {
+        let kind = CompileErrorKind::UnexpectedToken {
+            expected: "a type, the unit type is written by leaving out the return type: \
+                       `fn f()` rather than `fn f() -> ()`"
+                .to_string(),
+            found: "()".to_string(),
+        };
+        let span = open.merge(self.previous().span);
+        CompileError::new(kind, span, Arc::clone(&self.source)).into()
+    }
+
+    pub(crate) fn rule(&self, code: u16, message: &str, span: aelys_syntax::Span) -> AelysError {
+        let kind = CompileErrorKind::ParseRule {
+            code,
+            message: message.to_string(),
+            help: None,
+        };
+        CompileError::new(kind, span, Arc::clone(&self.source)).into()
     }
 
     pub(crate) fn enter_recursion(&mut self) -> Result<()> {
@@ -73,6 +155,37 @@ impl Parser {
         }
     }
 
+    fn consume_gt(&mut self) -> Result<()> {
+        if self.check(&TokenKind::Gt) {
+            self.advance();
+            Ok(())
+        } else if self.check(&TokenKind::Shr) {
+            let span = self.tokens[self.current].span;
+            let first_gt_span = aelys_syntax::Span {
+                start: span.start,
+                end: span.start + 1,
+                line: span.line,
+                column: span.column,
+            };
+            let second_gt_span = aelys_syntax::Span {
+                start: span.start + 1,
+                end: span.end,
+                line: span.line,
+                column: span.column + 1,
+            };
+            self.tokens[self.current] = Token::new(TokenKind::Gt, second_gt_span);
+            self.tokens
+                .insert(self.current, Token::new(TokenKind::Gt, first_gt_span));
+            self.advance();
+            Ok(())
+        } else {
+            Err(self.error(CompileErrorKind::UnexpectedToken {
+                expected: ">".to_string(),
+                found: self.peek().kind.to_string(),
+            }))
+        }
+    }
+
     fn consume_identifier(&mut self, expected: &str) -> Result<String> {
         match &self.peek().kind {
             TokenKind::Identifier(name) => {
@@ -80,11 +193,79 @@ impl Parser {
                 self.advance();
                 Ok(name)
             }
-            _ => Err(self.error(CompileErrorKind::UnexpectedToken {
-                expected: expected.to_string(),
-                found: self.peek().kind.to_string(),
-            })),
+            kind => {
+                let found = match kind.keyword_spelling() {
+                    Some(word) => {
+                        format!("reserved word `{word}`; write `r#{word}` to use it as a name")
+                    }
+                    None if kind.is_reserved_word() => format!("reserved word `{kind}`"),
+                    None => kind.to_string(),
+                };
+                Err(self.error(CompileErrorKind::UnexpectedToken {
+                    expected: expected.to_string(),
+                    found,
+                }))
+            }
         }
+    }
+
+    fn consume_member_name(&mut self, expected: &str) -> Result<String> {
+        let token = self.peek();
+        if let Some(word) = token.kind.keyword_spelling()
+            && token.span.end - token.span.start == word.len()
+        {
+            self.advance();
+            return Ok(word.to_string());
+        }
+        self.consume_identifier(expected)
+    }
+
+    // the parse goes on after a misnamed binding, so one wrong name gives one diagnostic
+    fn refuse_in_place(&mut self, kind: CompileErrorKind, span: aelys_syntax::Span) {
+        let diag = CompileError::new(kind, span, Arc::clone(&self.source)).to_diagnostic();
+        self.errors.push(diag);
+    }
+
+    fn consume_value_name(&mut self, expected: &str) -> Result<String> {
+        let span = self.peek().span;
+        let name = self.consume_identifier(expected)?;
+        self.refuse_reserved_value_name(&name, span);
+        Ok(name)
+    }
+
+    fn refuse_reserved_value_name(&mut self, name: &str, span: aelys_syntax::Span) -> bool {
+        let Some(enum_name) = aelys_syntax::prelude_variant_enum(name) else {
+            return false;
+        };
+        let kind = CompileErrorKind::ReservedVariantName {
+            name: name.to_string(),
+            enum_name: enum_name.to_string(),
+        };
+        self.refuse_in_place(kind, span);
+        true
+    }
+
+    fn consume_binding_name(&mut self, expected: &str) -> Result<String> {
+        let span = self.peek().span;
+        let name = self.consume_identifier(expected)?;
+        if !self.refuse_reserved_value_name(&name, span) && name.starts_with(char::is_uppercase) {
+            let kind = CompileErrorKind::UppercaseBinding { name: name.clone() };
+            self.refuse_in_place(kind, span);
+        }
+        Ok(name)
+    }
+
+    // while null stays a reserved keyword everywhere else
+    fn consume_path_segment(&mut self, expected: &str) -> Result<String> {
+        if matches!(self.peek().kind, TokenKind::Null) {
+            self.advance();
+            return Ok("null".to_string());
+        }
+        if matches!(self.peek().kind, TokenKind::From) {
+            self.advance();
+            return Ok("from".to_string());
+        }
+        self.consume_identifier(expected)
     }
 
     fn check(&self, kind: &TokenKind) -> bool {

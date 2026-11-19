@@ -1,0 +1,4 @@
+refuse E0306
+`Self` is only valid inside an `impl` block
+!__recv
+!__pre$

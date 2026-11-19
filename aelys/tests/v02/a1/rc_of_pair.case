@@ -1,0 +1,7 @@
+struct Pair<A, B> { a: A, b: B }
+fn main() {
+    let r: Rc<Pair<i64, string>> = Rc::new(Pair { a: 5, b: "rc" })
+    let r2 = r
+    println(Rc::get(r).a + Rc::get(r2).a)
+    println(Rc::get(r2).b)
+}

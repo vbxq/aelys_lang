@@ -19,7 +19,7 @@ fn source_to_air(code: &str) -> AirProgram {
 
 /// Wrap an expression in a function so AIR lowering processes it.
 fn wrap(expr: &str) -> String {
-    format!("fn test() {{ {} }}", expr)
+    format!("fn test() {{\n    let probe = {}\n}}", expr)
 }
 
 /// Walk all statements in all blocks of all functions, collect Cast rvalues as (from, to) pairs.

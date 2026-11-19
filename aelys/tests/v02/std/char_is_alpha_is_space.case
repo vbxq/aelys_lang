@@ -1,0 +1,13 @@
+needs std.str
+
+fn main() {
+    let mut alpha = 0
+    let mut space = 0
+    let mut digit = 0
+    for c in "a 1\tZ!é" {
+        if c.is_alpha() { alpha = alpha + 1 }
+        if c.is_space() { space = space + 1 }
+        if c.is_digit() { digit = digit + 1 }
+    }
+    println("{alpha} {space} {digit}")
+}

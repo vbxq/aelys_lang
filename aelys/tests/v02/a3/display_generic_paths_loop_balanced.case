@@ -1,0 +1,34 @@
+struct Nm { name: string, n: i64 }
+
+impl Display for Nm {
+    fn to_string(&self) -> string { return self.name }
+}
+
+fn len_of<T>(x: T) -> i64 {
+    let s = "[{x}]"
+    return s.len
+}
+
+fn bounded<T: Display>(x: &T) -> i64 {
+    let s = x.to_string()
+    return s.len
+}
+
+fn show<T>(x: T) {
+    println(x)
+}
+
+fn main() -> i64 {
+    let mut acc: i64 = 0
+    for i in 0..1000 {
+        let t = Nm { name: "abc", n: i }
+        acc = acc + len_of(t)
+        let u = Nm { name: "abcd", n: i }
+        acc = acc + bounded(&u)
+    }
+    println(acc)
+    for i in 0..3 {
+        show(Nm { name: "z", n: i })
+    }
+    return 0
+}

@@ -1,0 +1,15 @@
+struct P { x: i64 }
+
+impl Display for P {
+    fn to_string(&self) -> string { return "P{self.x}" }
+}
+
+fn show<T>(x: T) {
+    println(x)
+}
+
+fn main() -> i64 {
+    show(P { x: 4 })
+    show(9)
+    return 0
+}

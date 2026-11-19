@@ -1,0 +1,19 @@
+struct K { key: i64, pay: i64 }
+
+impl eq for K {
+    fn eq(&self, o: &K) -> bool { return self.key == o.key }
+}
+
+impl ord for K {
+    fn cmp(&self, o: &K) -> i64 { return o.key - self.key }
+}
+
+fn main() -> i64 {
+    let a = K { key: 1, pay: 0 }
+    let b = K { key: 5, pay: 0 }
+    println(a < b)
+    println(a > b)
+    println(a <= a)
+    println(b >= a)
+    return 0
+}

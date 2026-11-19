@@ -3,11 +3,16 @@ use aelys_air::*;
 
 fn empty_program() -> AirProgram {
     AirProgram {
+        impls: Vec::new(),
         functions: vec![],
         structs: vec![],
+        enums: vec![],
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     }
 }
 
@@ -282,6 +287,7 @@ fn mono_instances() {
         span: None,
     });
     p.mono_instances.push(MonoInstance {
+        original_name: String::new(),
         original: FunctionId(0),
         type_args: vec![AirType::I64],
         result: FunctionId(1),

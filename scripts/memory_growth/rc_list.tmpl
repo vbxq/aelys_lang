@@ -1,0 +1,49 @@
+struct Node { val: i64, next: Rc<Node> }
+struct List { head: Rc<Node>, len: i64 }
+
+fn push(l: &mut List, v: i64) {
+    (*l).head = Rc::new(Node { val: v, next: (*l).head })
+    (*l).len = (*l).len + 1
+}
+
+fn pop(l: &mut List) -> i64 {
+    if Rc::is_null((*l).head) { return 0 }
+    let v = Rc::get((*l).head).val
+    (*l).head = Rc::get((*l).head).next
+    (*l).len = (*l).len - 1
+    return v
+}
+
+fn sum(l: &List) -> i64 {
+    let mut cur = (*l).head
+    let mut t = 0
+    while !Rc::is_null(cur) {
+        t = t + Rc::get(cur).val
+        cur = Rc::get(cur).next
+    }
+    return t
+}
+
+fn build(n: i64) -> Rc<Node> {
+    if n == 0 { return Rc::null() }
+    return Rc::new(Node { val: n, next: build(n - 1) })
+}
+
+fn main() -> i64 {
+    let mut l = List { head: build(10), len: 10 }
+    let mut t = 0
+    let mut i = 0
+    while i < NN {
+        push(&mut l, i % 1000)
+        push(&mut l, 1)
+        t = t + pop(&mut l) + pop(&mut l)
+        if i % 1000 == 0 {
+            l.head = build(20)
+            l.len = 20
+            t = t + sum(&l)
+        }
+        i = i + 1
+    }
+    println("{t} {l.len} {sum(&l)}")
+    return 0
+}

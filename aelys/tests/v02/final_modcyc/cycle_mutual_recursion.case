@@ -1,0 +1,5 @@
+needs ev
+fn main() {
+    println(ev.is_even(10))
+    println(ev.is_even(7))
+}

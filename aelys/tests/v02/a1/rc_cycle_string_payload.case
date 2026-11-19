@@ -1,0 +1,16 @@
+struct Node<T> { v: T, next: Rc<Node<T>> }
+fn churn(i: i64) -> i64 {
+    let a: Rc<Node<string>> = Rc::new(Node { v: "a" + "{i}", next: Rc::null() })
+    let b: Rc<Node<string>> = Rc::new(Node { v: "b", next: a })
+    a.next = b
+    return i % 3
+}
+fn main() {
+    let mut i = 0
+    let mut n = 0
+    while i < 500 {
+        n = n + churn(i)
+        i = i + 1
+    }
+    println(n)
+}

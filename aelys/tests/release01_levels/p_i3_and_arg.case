@@ -1,0 +1,6 @@
+fn g(c: bool, x: i64) -> bool { return c && x > 0 }
+fn f(i: i64) -> i64 { let arr = [1, 2, 3]
+    let r = g(false, arr[i])
+    println("survived {r}")
+    return 0 }
+fn main() -> i64 { return f(10) }

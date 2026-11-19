@@ -31,11 +31,29 @@ impl Lexer {
             "from" => TokenKind::From,
             "for" => TokenKind::For,
             "in" => TokenKind::In,
-            "step" => TokenKind::Step,
             "struct" => TokenKind::Struct,
+            "enum" => TokenKind::Enum,
+            "match" => TokenKind::Match,
+            "discard" => TokenKind::Discard,
+            "catch" => TokenKind::Catch,
+            "unsafe" => TokenKind::Unsafe,
+            "nogc" => TokenKind::Nogc,
+            "extern" => TokenKind::Extern,
+            "const" => TokenKind::Const,
+            "impl" => TokenKind::Impl,
             _ => TokenKind::Identifier(text),
         };
 
         self.add_token(kind);
+    }
+
+    pub(super) fn raw_identifier(&mut self) {
+        self.advance();
+        let begin = self.current;
+        while self.peek().is_alphanumeric() || self.peek() == '_' {
+            self.advance();
+        }
+        let text: String = self.chars[begin..self.current].iter().collect();
+        self.add_token(TokenKind::Identifier(text));
     }
 }

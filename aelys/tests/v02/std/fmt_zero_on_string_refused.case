@@ -1,0 +1,4 @@
+fn main() {
+    let s = "ab"
+    println("[{s:05}]")
+}

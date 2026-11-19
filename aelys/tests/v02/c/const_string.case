@@ -1,0 +1,7 @@
+const GREETING: string = "hello"
+fn main() {
+    for i in 0..3 {
+        let s = "{GREETING}-{i}"
+        println(s)
+    }
+}

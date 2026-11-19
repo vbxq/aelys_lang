@@ -1,0 +1,2 @@
+refuse E0412
+holds a `Vec<T>` by value

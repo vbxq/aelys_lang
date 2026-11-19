@@ -1,0 +1,10 @@
+mod shapes; use shapes::Area;
+mod geo; use geo::Pt;
+
+impl Area for Pt {
+    fn area(&self) -> i64 { self.v }
+}
+
+fn main() {
+    println!("{}", Pt { v: 2 }.area());
+}

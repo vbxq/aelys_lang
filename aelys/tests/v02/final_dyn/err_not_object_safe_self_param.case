@@ -1,0 +1,6 @@
+trait Same {
+    fn area(&self) -> i64
+    fn same(&self, o: &Self) -> bool
+}
+fn f(x: &dyn Same) -> i64 { return x.area() }
+fn main() -> i64 { return 0 }

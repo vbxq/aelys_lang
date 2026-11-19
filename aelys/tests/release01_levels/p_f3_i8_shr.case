@@ -1,0 +1,6 @@
+fn main() -> i64 { let a: i8 = -128
+    let s: i8 = 9
+    let u: u16 = 65535
+    let t: u16 = 17
+    println("{a >> s} {a << s} {u >> t} {u << t}")
+    return 0 }

@@ -1,3 +1,4 @@
+
 use super::analyze::{BlockReason, InlineDecision, ProgramAnalysis};
 use super::expand::InlineExpander;
 use crate::passes::{OptimizationLevel, OptimizationPass, OptimizationStats};
@@ -5,7 +6,6 @@ use aelys_common::{Warning, WarningKind};
 use aelys_sema::{TypedExpr, TypedExprKind, TypedFunction, TypedProgram, TypedStmt, TypedStmtKind};
 use std::collections::{HashMap, HashSet};
 
-// TODO: we should make this somewhat configurable
 const BLOAT_BUDGET: f64 = 0.20;
 
 pub struct FunctionInliner {
@@ -15,6 +15,7 @@ pub struct FunctionInliner {
     warned_functions: HashSet<String>,
     functions: HashMap<String, TypedFunction>,
     expander: InlineExpander,
+    locals: Vec<String>,
 }
 
 impl FunctionInliner {
@@ -26,6 +27,7 @@ impl FunctionInliner {
             warned_functions: HashSet::new(),
             functions: HashMap::new(),
             expander: InlineExpander::new(),
+            locals: Vec::new(),
         }
     }
 
@@ -50,14 +52,19 @@ impl FunctionInliner {
         match &mut stmt.kind {
             TypedStmtKind::Expression(e) => self.inline_in_expr(e, analysis),
 
-            TypedStmtKind::Let { initializer, .. } => {
+            TypedStmtKind::Let {
+                name, initializer, ..
+            } => {
                 self.inline_in_expr(initializer, analysis);
+                self.locals.push(name.clone());
             }
 
             TypedStmtKind::Block(stmts) => {
+                let mark = self.locals.len();
                 for s in stmts.iter_mut() {
                     self.inline_in_stmt(s, analysis);
                 }
+                self.locals.truncate(mark);
             }
 
             TypedStmtKind::If {
@@ -78,6 +85,7 @@ impl FunctionInliner {
             }
 
             TypedStmtKind::For {
+                iterator,
                 start,
                 end,
                 step,
@@ -89,20 +97,34 @@ impl FunctionInliner {
                 if let Some(s) = &mut **step {
                     self.inline_in_expr(s, analysis);
                 }
+                let mark = self.locals.len();
+                self.locals.push(iterator.clone());
                 self.inline_in_stmt(body, analysis);
+                self.locals.truncate(mark);
             }
 
-            TypedStmtKind::ForEach { iterable, body, .. } => {
+            TypedStmtKind::ForEach {
+                iterator,
+                iterable,
+                body,
+                ..
+            } => {
                 self.inline_in_expr(iterable, analysis);
+                let mark = self.locals.len();
+                self.locals.push(iterator.clone());
                 self.inline_in_stmt(body, analysis);
+                self.locals.truncate(mark);
             }
 
             TypedStmtKind::Return(Some(e)) => self.inline_in_expr(e, analysis),
 
             TypedStmtKind::Function(f) => {
+                let mark = self.locals.len();
+                self.locals.extend(f.params.iter().map(|p| p.name.clone()));
                 for s in f.body.iter_mut() {
                     self.inline_in_stmt(s, analysis);
                 }
+                self.locals.truncate(mark);
             }
 
             _ => {}
@@ -110,7 +132,6 @@ impl FunctionInliner {
     }
 
     fn inline_in_expr(&mut self, expr: &mut TypedExpr, analysis: &ProgramAnalysis) {
-        // recurse first so nested calls get processed
         match &mut expr.kind {
             TypedExprKind::Binary { left, right, .. } => {
                 self.inline_in_expr(left, analysis);
@@ -147,7 +168,14 @@ impl FunctionInliner {
                     self.inline_in_expr(e, analysis);
                 }
             }
-            TypedExprKind::ArraySized { size, .. } => self.inline_in_expr(size, analysis),
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
+                self.inline_in_expr(size, analysis);
+                if let Some(fv) = fill_value {
+                    self.inline_in_expr(fv, analysis);
+                }
+            }
             TypedExprKind::Index { object, index } => {
                 self.inline_in_expr(object, analysis);
                 self.inline_in_expr(index, analysis);
@@ -159,6 +187,10 @@ impl FunctionInliner {
             } => {
                 self.inline_in_expr(object, analysis);
                 self.inline_in_expr(index, analysis);
+                self.inline_in_expr(value, analysis);
+            }
+            TypedExprKind::FieldAssign { object, value, .. } => {
+                self.inline_in_expr(object, analysis);
                 self.inline_in_expr(value, analysis);
             }
             TypedExprKind::Range { start, end, .. } => {
@@ -173,17 +205,63 @@ impl FunctionInliner {
                 self.inline_in_expr(object, analysis);
                 self.inline_in_expr(range, analysis);
             }
-            TypedExprKind::LambdaInner { body, .. } => {
+            TypedExprKind::LambdaInner {
+                params,
+                body,
+                captures,
+                ..
+            } => {
+                let mark = self.locals.len();
+                self.locals.extend(params.iter().map(|p| p.name.clone()));
+                self.locals.extend(captures.iter().map(|(name, _)| name.clone()));
                 for s in body.iter_mut() {
                     self.inline_in_stmt(s, analysis);
                 }
+                self.locals.truncate(mark);
+            }
+            TypedExprKind::Match {
+                scrutinee, arms, ..
+            } => {
+                self.inline_in_expr(scrutinee, analysis);
+                for arm in arms.iter_mut() {
+                    let mark = self.locals.len();
+                    let names: Vec<String> =
+                        arm.bindings().iter().map(|(name, _, _)| name.to_string()).collect();
+                    self.locals.extend(names);
+                    for e in arm.exprs_mut() {
+                        self.inline_in_expr(e, analysis);
+                    }
+                    self.locals.truncate(mark);
+                }
+            }
+            TypedExprKind::Block { stmts, tail } => {
+                let mark = self.locals.len();
+                for s in stmts.iter_mut() {
+                    self.inline_in_stmt(s, analysis);
+                }
+                self.inline_in_expr(tail, analysis);
+                self.locals.truncate(mark);
+            }
+            TypedExprKind::StructLiteral { fields, .. } => {
+                for (_, val) in fields.iter_mut() {
+                    self.inline_in_expr(val, analysis);
+                }
+            }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args.iter_mut() {
+                    self.inline_in_expr(arg, analysis);
+                }
+            }
+            TypedExprKind::Cast { expr, .. } => self.inline_in_expr(expr, analysis),
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.inline_in_expr(scrutinee, analysis)
             }
             _ => {}
         }
 
-        // now check if this is a call we should inline
         if let TypedExprKind::Call { callee, args } = &expr.kind
             && let TypedExprKind::Identifier(name) = &callee.kind
+            && !self.locals.contains(name)
             && let Some(func) = self.functions.get(name).cloned()
         {
             let aggressive = self.level == OptimizationLevel::Aggressive;
@@ -191,7 +269,10 @@ impl FunctionInliner {
 
             match decision {
                 InlineDecision::Inline => {
-                    if let Some(inlined) = self.expander.expand_call(&func, args, expr.span) {
+                    // the analysis diagnoses at every level, only the rewrite is gated on -o
+                    if self.level != OptimizationLevel::None
+                        && let Some(inlined) = self.expander.expand_call(&func, args, expr.span)
+                    {
                         *expr = inlined;
                         self.stats.functions_inlined += 1;
                     }
@@ -217,11 +298,12 @@ impl FunctionInliner {
             BlockReason::Recursive => WarningKind::InlineRecursive,
             BlockReason::MutualRecursion(cycle) => WarningKind::InlineMutualRecursion { cycle },
             BlockReason::HasCaptures => WarningKind::InlineHasCaptures,
+            BlockReason::HasTypeParams => WarningKind::InlineHasCaptures, // reuse warning kind for now
+            BlockReason::VecParam => WarningKind::InlineHasCaptures,
         };
 
         let has_always = func.decorators.iter().any(|d| d.name == "inline_always");
 
-        // @inline_always suppresses non-fatal warnings
         let is_fatal = matches!(
             kind,
             WarningKind::InlineRecursive
@@ -244,15 +326,12 @@ impl OptimizationPass for FunctionInliner {
     }
 
     fn run(&mut self, program: &mut TypedProgram) -> OptimizationStats {
-        if self.level == OptimizationLevel::None {
-            return OptimizationStats::new();
-        }
-
         self.stats = OptimizationStats::new();
         self.warnings.clear();
         self.warned_functions.clear();
 
         self.collect_functions(program);
+        self.locals.clear();
         let analysis = ProgramAnalysis::analyze(program);
 
         for stmt in program.stmts.iter_mut() {

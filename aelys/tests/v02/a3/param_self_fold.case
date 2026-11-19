@@ -1,0 +1,25 @@
+trait Add2 {
+    fn plus(&self, o: &Self) -> Self
+    fn get(&self) -> i64
+}
+
+struct V { x: i64 }
+struct W { x: i64 }
+
+impl Add2 for V {
+    fn plus(&self, o: &Self) -> Self { return V { x: self.x + o.x } }
+    fn get(&self) -> i64 { return self.x }
+}
+
+impl Add2 for W {
+    fn plus(&self, o: &Self) -> Self { return W { x: self.x * o.x } }
+    fn get(&self) -> i64 { return self.x + 1000 }
+}
+
+fn fold3<T: Add2>(a: T, b: T, c: T) -> i64 { return a.plus(&b).plus(&c).get() }
+
+fn main() -> i64 {
+    println(fold3(V { x: 1 }, V { x: 2 }, V { x: 3 }))
+    println(fold3(W { x: 2 }, W { x: 3 }, W { x: 4 }))
+    return 0
+}

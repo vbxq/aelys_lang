@@ -1,0 +1,2 @@
+refuse E0753
+`string` already implements `ord` structurally

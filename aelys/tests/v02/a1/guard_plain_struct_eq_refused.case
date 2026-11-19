@@ -1,0 +1,6 @@
+struct P { a: i64 }
+fn main() {
+    let x = P { a: 1 }
+    let y = P { a: 1 }
+    if x == y { println("eq") } else { println("ne") }
+}

@@ -1,30 +1,69 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason};
-use crate::typed_ast::TypedStmtKind;
+use crate::constraint::{Constraint, ConstraintReason, TypeError};
+use crate::typed_ast::{TypedExpr, TypedExprKind, TypedStmtKind};
 use crate::types::InferType;
 use aelys_syntax::{Expr, Span};
 
 impl TypeInference {
     pub(super) fn infer_return_stmt(&mut self, span: Span, expr: Option<&Expr>) -> TypedStmtKind {
-        let typed_expr = expr.map(|e| self.infer_expr(e));
+        let expected_ret = self.current_return_type().cloned();
+        let mut typed_expr = expr.map(|e| match &expected_ret {
+            Some(ty) => self.infer_expecting(e, ty),
+            None => self.infer_expr(e),
+        });
 
-        if let Some(expected_ret) = self.current_return_type().cloned() {
+        if let Some(expected_ret) = expected_ret {
+            if let Some(ref mut texpr) = typed_expr {
+                self.try_narrow_literal(texpr, &expected_ret);
+
+                if texpr.ty != expected_ret && texpr.ty.can_implicit_widen_to(&expected_ret) {
+                    let vspan = texpr.span;
+                    let original = std::mem::replace(
+                        texpr,
+                        TypedExpr {
+                            kind: TypedExprKind::Null,
+                            ty: InferType::Null,
+                            span: vspan,
+                        },
+                    );
+                    *texpr = TypedExpr {
+                        kind: TypedExprKind::Cast {
+                            expr: Box::new(original),
+                            target: expected_ret.clone(),
+                        },
+                        ty: expected_ret.clone(),
+                        span: vspan,
+                    };
+                }
+            }
+
             let actual_ret = typed_expr
                 .as_ref()
                 .map(|e| e.ty.clone())
                 .unwrap_or(InferType::Null);
-
-            self.constraints.push(Constraint::equal(
-                actual_ret,
-                expected_ret,
-                span,
-                ConstraintReason::Return {
-                    func_name: self
-                        .env
-                        .current_function()
-                        .cloned()
-                        .unwrap_or_else(|| "<anonymous>".to_string()),
+            let func_name = self
+                .env
+                .current_function()
+                .cloned()
+                .unwrap_or_else(|| "<anonymous>".to_string());
+            let reason = match (&typed_expr, &expected_ret) {
+                (None, _) => ConstraintReason::ReturnNoValue {
+                    func_name,
+                    fallthrough: false,
                 },
+                (Some(value), InferType::Null) if !matches!(value.ty, InferType::Null) => {
+                    self.errors
+                        .push(TypeError::value_in_unit_fn(&func_name, &value.ty, span));
+                    return TypedStmtKind::Return(typed_expr);
+                }
+                _ => ConstraintReason::Return { func_name },
+            };
+
+            self.constraints.push(Constraint::flows_into(
+                expected_ret,
+                actual_ret,
+                span,
+                reason,
             ));
         }
 

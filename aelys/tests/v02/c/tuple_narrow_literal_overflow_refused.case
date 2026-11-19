@@ -1,0 +1,4 @@
+fn main() {
+    let u: (u8, i8) = (256, -1)
+    println(u)
+}

@@ -1,0 +1,34 @@
+enum Expr { Num(i64), Neg(Rc<Expr>), Bin(char, Rc<Expr>, Rc<Expr>) }
+
+fn eval(e: Expr) -> i64 {
+    match e {
+        Expr::Num(n) => n,
+        Expr::Neg(x) => 0 - eval(Rc::get(x)),
+        Expr::Bin('+', l, r) => eval(Rc::get(l)) + eval(Rc::get(r)),
+        Expr::Bin('*', l, r) => eval(Rc::get(l)) * eval(Rc::get(r)),
+        Expr::Bin(_, l, r) => eval(Rc::get(l)) - eval(Rc::get(r)),
+    }
+}
+fn simp(e: Expr) -> i64 {
+    match e {
+        Expr::Neg(x) => match Rc::get(x) {
+            Expr::Neg(y) => simp(Rc::get(y)),
+            Expr::Num(n) => 0 - n,
+            _ => 0 - simp(Rc::get(x)),
+        },
+        _ => eval(e),
+    }
+}
+fn num(n: i64) -> Rc<Expr> { return Rc::new(Expr::Num(n)) }
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        let e = Expr::Bin('*', Rc::new(Expr::Bin('+', num(i), num(2))), Rc::new(Expr::Neg(Rc::new(Expr::Neg(num(3))))))
+        let d = Expr::Bin('-', num(i), num(5))
+        t = t + eval(e) + simp(Expr::Neg(Rc::new(Expr::Neg(num(i))))) - eval(d)
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

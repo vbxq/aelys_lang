@@ -1,0 +1,8 @@
+
+struct Node { val: i64, next: Rc<Node> }
+fn main() -> i64 {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
+    a.next = (b)
+    return 0
+}

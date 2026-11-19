@@ -12,7 +12,6 @@ impl Token {
     }
 }
 
-/// Part of a format string: either literal text, a placeholder {}, or an expression {expr}
 #[derive(Debug, Clone, PartialEq)]
 pub enum FmtPart {
     Literal(String),
@@ -22,10 +21,11 @@ pub enum FmtPart {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
-    // literals
     Int(i64),
+    UInt(u64),
     Float(f64),
     String(String),
+    Char(u32),
     FmtString(Vec<FmtPart>),
     True,
     False,
@@ -33,7 +33,6 @@ pub enum TokenKind {
 
     Identifier(String),
 
-    // keywords
     Let,
     Mut,
     Fn,
@@ -52,10 +51,17 @@ pub enum TokenKind {
     From, // module system
     For,
     In,
-    Step,
     Struct,
+    Enum,
+    Match,
+    Discard,
+    Catch,
+    Unsafe,
+    Nogc,
+    Extern,
+    Const,
+    Impl,
 
-    // operators
     Plus,
     Minus,
     Star,
@@ -69,7 +75,9 @@ pub enum TokenKind {
     Gt,
     GtEq,
     Arrow,      // ->
+    FatArrow,   // =>
     Colon,      // :
+    ColonColon, // ::
     PlusEq,     // +=
     MinusEq,    // -=
     StarEq,     // *=
@@ -77,8 +85,8 @@ pub enum TokenKind {
     PercentEq,  // %=
     PlusPlus,   // ++
     MinusMinus, // --
+    Question,   // ?
 
-    // bitwise
     Shl,
     Shr,       // << >>
     Ampersand, // &
@@ -86,7 +94,6 @@ pub enum TokenKind {
     Caret, // | ^
     Tilde, // ~
 
-    // delimiters
     LParen,
     RParen,
     LBrace,
@@ -99,19 +106,56 @@ pub enum TokenKind {
     DotDot,   // ..
     DotDotEq, // ..=
 
-    // special
     At,      // @ for decorators
     Newline, // for auto-semicolon insertion
     Eof,
 }
 
 impl TokenKind {
+    pub fn keyword_spelling(&self) -> Option<&'static str> {
+        Some(match self {
+            Self::True => "true",
+            Self::False => "false",
+            Self::Null => "null",
+            Self::Let => "let",
+            Self::Mut => "mut",
+            Self::Fn => "fn",
+            Self::If => "if",
+            Self::Else => "else",
+            Self::While => "while",
+            Self::Return => "return",
+            Self::Break => "break",
+            Self::Continue => "continue",
+            Self::And => "and",
+            Self::Or => "or",
+            Self::Not => "not",
+            Self::Pub => "pub",
+            Self::Needs => "needs",
+            Self::As => "as",
+            Self::From => "from",
+            Self::For => "for",
+            Self::In => "in",
+            Self::Struct => "struct",
+            Self::Enum => "enum",
+            Self::Match => "match",
+            Self::Discard => "discard",
+            Self::Catch => "catch",
+            Self::Unsafe => "unsafe",
+            Self::Nogc => "nogc",
+            Self::Extern => "extern",
+            Self::Const => "const",
+            _ => return None,
+        })
+    }
+
     pub fn is_literal(&self) -> bool {
         matches!(
             self,
             Self::Int(_)
+                | Self::UInt(_)
                 | Self::Float(_)
                 | Self::String(_)
+                | Self::Char(_)
                 | Self::FmtString(_)
                 | Self::True
                 | Self::False
@@ -119,14 +163,50 @@ impl TokenKind {
         )
     }
 
-    // semicolon insertion (Go-style, roughly)
+    pub fn is_reserved_word(&self) -> bool {
+        matches!(
+            self,
+            Self::Let
+                | Self::Mut
+                | Self::Fn
+                | Self::If
+                | Self::Else
+                | Self::While
+                | Self::Return
+                | Self::Break
+                | Self::Continue
+                | Self::And
+                | Self::Or
+                | Self::Not
+                | Self::True
+                | Self::False
+                | Self::Null
+                | Self::Pub
+                | Self::Needs
+                | Self::As
+                | Self::From
+                | Self::For
+                | Self::In
+                | Self::Struct
+                | Self::Enum
+                | Self::Match
+                | Self::Discard
+                | Self::Catch
+                | Self::Unsafe
+                | Self::Nogc
+                | Self::Extern
+        )
+    }
+
     pub fn can_end_statement(&self) -> bool {
         matches!(
             self,
             Self::Identifier(_)
                 | Self::Int(_)
+                | Self::UInt(_)
                 | Self::Float(_)
                 | Self::String(_)
+                | Self::Char(_)
                 | Self::FmtString(_)
                 | Self::True
                 | Self::False
@@ -140,6 +220,7 @@ impl TokenKind {
                 | Self::Star // for `needs module.*`
                 | Self::PlusPlus
                 | Self::MinusMinus
+                | Self::Question
         )
     }
 }
@@ -148,8 +229,13 @@ impl std::fmt::Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Int(n) => write!(f, "{}", n),
+            Self::UInt(n) => write!(f, "{}", n),
             Self::Float(n) => write!(f, "{}", n),
             Self::String(s) => write!(f, "\"{}\"", s),
+            Self::Char(cp) => match char::from_u32(*cp) {
+                Some(c) => write!(f, "'{}'", c),
+                None => write!(f, "'\\u{{{:x}}}'", cp),
+            },
             Self::FmtString(_) => write!(f, "<format string>"),
             Self::True => write!(f, "true"),
             Self::False => write!(f, "false"),
@@ -173,8 +259,16 @@ impl std::fmt::Display for TokenKind {
             Self::From => write!(f, "from"),
             Self::For => write!(f, "for"),
             Self::In => write!(f, "in"),
-            Self::Step => write!(f, "step"),
             Self::Struct => write!(f, "struct"),
+            Self::Enum => write!(f, "enum"),
+            Self::Match => write!(f, "match"),
+            Self::Discard => write!(f, "discard"),
+            Self::Catch => write!(f, "catch"),
+            Self::Unsafe => write!(f, "unsafe"),
+            Self::Nogc => write!(f, "nogc"),
+            Self::Extern => write!(f, "extern"),
+            Self::Const => write!(f, "const"),
+            Self::Impl => write!(f, "impl"),
             Self::Plus => write!(f, "+"),
             Self::Minus => write!(f, "-"),
             Self::Star => write!(f, "*"),
@@ -188,7 +282,9 @@ impl std::fmt::Display for TokenKind {
             Self::Gt => write!(f, ">"),
             Self::GtEq => write!(f, ">="),
             Self::Arrow => write!(f, "->"),
+            Self::FatArrow => write!(f, "=>"),
             Self::Colon => write!(f, ":"),
+            Self::ColonColon => write!(f, "::"),
             Self::PlusEq => write!(f, "+="),
             Self::MinusEq => write!(f, "-="),
             Self::StarEq => write!(f, "*="),
@@ -196,6 +292,7 @@ impl std::fmt::Display for TokenKind {
             Self::PercentEq => write!(f, "%="),
             Self::PlusPlus => write!(f, "++"),
             Self::MinusMinus => write!(f, "--"),
+            Self::Question => write!(f, "?"),
             Self::Shl => write!(f, "<<"),
             Self::Shr => write!(f, ">>"),
             Self::Ampersand => write!(f, "&"),

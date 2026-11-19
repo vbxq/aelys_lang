@@ -1,0 +1,35 @@
+enum Tok { Num(i64), Op(char), Word(string), End }
+
+fn f(t: Tok) -> string {
+    return match t {
+        Tok::Num(n @ (1 | 2 | 3)) => "small{n}",
+        Tok::Num(n) if n < 0 => "neg",
+        Tok::Num(_) => "num",
+        Tok::Op('+' | '-') => "additive",
+        Tok::Op(c @ '*'..='/') => "mul{c}",
+        Tok::Op(_) => "op",
+        Tok::Word("let") | Tok::Word("fn") => "kw",
+        Tok::Word(w) if w.len > 3 => "long:" + w,
+        Tok::Word(w) => w,
+        Tok::End => "end"
+    }
+}
+
+fn parse(s: string) -> Result<i64, string> {
+    if s == "x" { return Err("bad" + "") }
+    return Ok(s.len)
+}
+
+fn main() -> i64 {
+    println(f(Tok::Num(2)))
+    println(f(Tok::Num(-4)))
+    println(f(Tok::Num(9)))
+    println(f(Tok::Op('-')))
+    println(f(Tok::Op('/')))
+    println(f(Tok::Op('!')))
+    println(f(Tok::Word("fn")))
+    println(f(Tok::Word("hello" + "")))
+    println(f(Tok::Word("ab")))
+    println(f(Tok::End))
+    return 0
+}

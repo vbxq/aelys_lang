@@ -1,0 +1,10 @@
+fn main() -> i64 {
+    let mut v: Vec<i64> = Vec::with_capacity(16)
+    println(v.len)
+    Vec::push(v, 4)
+    Vec::push(v, 5)
+    Vec::push(v, 6)
+    println(v[0] + v[1] + v[2])
+    println(v.len)
+    return 0
+}

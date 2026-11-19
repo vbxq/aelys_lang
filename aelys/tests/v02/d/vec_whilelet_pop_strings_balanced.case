@@ -1,0 +1,25 @@
+fn mk(i: i64) -> string { return "s{i}" }
+fn drain(v: &mut Vec<string>) -> i64 {
+    let mut n: i64 = 0
+    while let Some(s) = Vec::pop(*v) { n = n + s.len }
+    return n
+}
+fn main() -> i64 {
+    let mut total: i64 = 0
+    let mut last: string = ""
+    let mut i: i64 = 0
+    while i < 1000 {
+        let mut v: Vec<string> = vec[mk(i), mk(i + 1), mk(i + 2)]
+        let w = v
+        while let Some(s) = Vec::pop(v) {
+            total = total + 1
+            last = s
+        }
+        let mut u = w
+        total = total + drain(&mut u) * 1000 + w.len * 1000000 + v.len
+        i = i + 1
+    }
+    println(total)
+    println(last)
+    return 0
+}

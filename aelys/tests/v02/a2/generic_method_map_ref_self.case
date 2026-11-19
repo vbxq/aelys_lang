@@ -1,0 +1,16 @@
+struct Pair<A, B> { a: A, b: B }
+
+impl<T> Pair<T, T> {
+    fn map<U>(&self, f: fn(T) -> U) -> Pair<U, U> {
+        return Pair { a: f(self.a), b: f(self.b) }
+    }
+}
+
+fn len_of(s: string) -> i64 { return s.len }
+
+fn main() {
+    let p = Pair { a: "abc", b: "hello" }
+    let q = p.map(len_of)
+    println(q.a * 10 + q.b)
+    println(p.a)
+}

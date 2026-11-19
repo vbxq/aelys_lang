@@ -1,0 +1,8 @@
+needs a
+needs b
+fn main() {
+    println(a.total(3))
+    println(b.describe(a.Shape::Rect(4, 5)))
+    let p = b.pair(a.Shape::Sq(6), 7)
+    println(a.area(p.first) + p.second)
+}

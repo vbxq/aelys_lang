@@ -40,11 +40,32 @@ impl Lexer {
 
     pub(super) fn next_token_is_else(&self) -> bool {
         let mut i = self.current;
-        // skip whitespace (but not newlines because we're already on a newline)
+        // skip whitespace, newlines, and comments to find the next real token
         while i < self.chars.len() {
             let c = self.chars[i];
             if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
                 i += 1;
+            } else if i + 1 < self.chars.len() && c == '/' && self.chars[i + 1] == '/' {
+                // skip line comment
+                i += 2;
+                while i < self.chars.len() && self.chars[i] != '\n' {
+                    i += 1;
+                }
+            } else if i + 1 < self.chars.len() && c == '/' && self.chars[i + 1] == '*' {
+                // skip block comment (with nesting)
+                i += 2;
+                let mut depth = 1u32;
+                while i + 1 < self.chars.len() && depth > 0 {
+                    if self.chars[i] == '/' && self.chars[i + 1] == '*' {
+                        depth += 1;
+                        i += 2;
+                    } else if self.chars[i] == '*' && self.chars[i + 1] == '/' {
+                        depth -= 1;
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
             } else {
                 break;
             }

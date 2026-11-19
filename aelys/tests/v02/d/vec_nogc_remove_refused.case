@@ -1,0 +1,6 @@
+nogc fn f(v: &mut Vec<i64>) -> i64 { return Vec::remove(*v, 0) }
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[1]
+    println(f(&mut v))
+    return 0
+}

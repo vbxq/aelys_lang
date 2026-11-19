@@ -3,7 +3,6 @@ use crate::typed_ast::{TypedStmt, TypedStmtKind};
 use crate::unify::Substitution;
 
 impl TypeInference {
-    /// Apply substitution to a statement
     pub(super) fn apply_substitution_stmt(
         &self,
         stmt: &TypedStmt,
@@ -88,12 +87,34 @@ impl TypeInference {
                 name,
                 type_params,
                 fields,
+                is_pub,
             } => TypedStmtKind::StructDecl {
                 name: name.clone(),
                 type_params: type_params.clone(),
+                is_pub: *is_pub,
                 fields: fields
                     .iter()
                     .map(|(n, ty)| (n.clone(), subst.apply(ty)))
+                    .collect(),
+            },
+            TypedStmtKind::EnumDecl {
+                name,
+                type_params,
+                variants,
+                is_pub,
+            } => TypedStmtKind::EnumDecl {
+                name: name.clone(),
+                type_params: type_params.clone(),
+                is_pub: *is_pub,
+                variants: variants
+                    .iter()
+                    .map(|(vname, tag, data)| {
+                        (
+                            vname.clone(),
+                            *tag,
+                            data.iter().map(|ty| subst.apply(ty)).collect(),
+                        )
+                    })
                     .collect(),
             },
         };

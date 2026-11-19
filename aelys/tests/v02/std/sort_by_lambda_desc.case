@@ -1,0 +1,13 @@
+needs std.slice
+needs std.vec
+
+fn desc(a: i64, b: i64) -> i64 { return b - a }
+
+fn main() {
+    let mut a = [3, 9, 1, 4]
+    a.sort_by(desc)
+    println("{a[0]}{a[1]}{a[2]}{a[3]}")
+    let mut v: Vec<i64> = vec[5, 7, 6]
+    v.sort_by(fn(x: i64, y: i64) -> i64 { return y - x })
+    println("{v[0]}{v[1]}{v[2]}")
+}

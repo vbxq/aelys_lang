@@ -1,0 +1,23 @@
+// Pass data enum through multiple functions, extract value
+use std::process::ExitCode; enum Wrapper { Val(i64) }
+
+fn wrap(x: i64) -> Wrapper {
+    Wrapper::Val(x)
+}
+
+fn unwrap(w: Wrapper) -> i64 {
+    match w {
+        Wrapper::Val(v) => v,
+    }
+}
+
+fn transform(w: Wrapper) -> Wrapper {
+    let v = unwrap(w);
+    wrap(v * 2)
+}
+
+fn main() -> ExitCode {
+    let w = wrap(21);
+    let w2 = transform(w);
+    return ExitCode::from(unwrap(w2) as u8);  // 42
+}

@@ -1,0 +1,27 @@
+needs prog
+needs std.str
+pub struct Link { pub node: prog.Node }
+pub fn chain(n: i64) -> Rc<Link> {
+    let mut cur: Option<Rc<Link>> = None
+    let mut i = 0
+    while i < n {
+        cur = Some(Rc::new(Link { node: prog.Node { name: prog.mkname(i), next: cur } }))
+        i = i + 1
+    }
+    return match cur { Some(r) => r, None => Rc::new(Link { node: prog.Node { name: "end", next: None } }) }
+}
+pub fn render(l: Rc<Link>) -> string {
+    let mut out = ""
+    let mut cur: Option<Rc<Link>> = Some(l)
+    while true {
+        match cur {
+            Some(r) => {
+                out = out + Rc::get(r).node.name + ";"
+                cur = Rc::get(r).node.next
+            }
+            None => { break }
+        }
+    }
+    return out
+}
+pub fn label(x: i64) -> string { return str.repeat("x", x) }

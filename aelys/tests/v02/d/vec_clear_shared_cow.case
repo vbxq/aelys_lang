@@ -1,0 +1,11 @@
+fn mk(i: i64) -> string { return "s{i}" }
+
+fn main() -> i64 {
+    let mut a: Vec<string> = vec[mk(1), mk(2), mk(3)]
+    let mut b = a
+    Vec::clear(b)
+    println(a.len)
+    println(b.len)
+    println(a[2])
+    return 0
+}

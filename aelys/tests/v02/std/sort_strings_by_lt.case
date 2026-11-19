@@ -1,0 +1,28 @@
+needs std.slice
+needs std.vec
+
+struct Fiche { name: string, n: i64 }
+
+impl eq for Fiche {
+    fn eq(&self, o: &Fiche) -> bool { return self.name == o.name }
+}
+
+impl ord for Fiche {
+    fn cmp(&self, o: &Fiche) -> i64 {
+        if self.name < o.name { return -1 }
+        if self.name > o.name { return 1 }
+        return 0
+    }
+}
+
+fn main() {
+    let mut a: [string; 5] = ["pear", "Fig", "apple", "fig", "äb"]
+    a.sort()
+    println("{a[0]} {a[1]} {a[2]} {a[3]} {a[4]}")
+    let mut fs: [Fiche; 3] = [Fiche { name: "zoé", n: 1 }, Fiche { name: "ana", n: 2 }, Fiche { name: "lou", n: 3 }]
+    fs.sort_unstable()
+    println("{fs[0].n}{fs[1].n}{fs[2].n} {fs.max().unwrap_or(Fiche { name: "-", n: 0 }).name}")
+    let v: Vec<string> = vec["b", "c", "a"]
+    let s = v.sorted()
+    println("{s.join("")} {v.join("")} {s.binary_search("c")}")
+}

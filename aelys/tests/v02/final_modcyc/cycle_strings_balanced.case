@@ -1,0 +1,11 @@
+needs names
+pub struct Person { pub name: string, pub age: i64 }
+pub fn greet(p: Person) -> string { return "hi " + p.name }
+fn main() {
+    let mut i = 0
+    while i < 3 {
+        let p = names.make("ann", i)
+        println(names.label(p))
+        i = i + 1
+    }
+}

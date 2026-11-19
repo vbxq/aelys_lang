@@ -1,0 +1,3 @@
+refuse E0902
+globals cannot serialize yet
+!llvm-backend

@@ -1,0 +1,115 @@
+needs std.str
+
+struct Item { name: string, qty: i64, cents: i64 }
+
+impl Item {
+    fn value(&self) -> i64 { return self.qty * self.cents }
+}
+
+impl Display for Item {
+    fn to_string(&self) -> string {
+        return pad_right(self.name, 8) + pad_left(str.from_int(self.qty), 6) + pad_left(money(self.cents), 9) +
+            pad_left(money(self.value()), 10)
+    }
+}
+
+fn money(c: i64) -> string {
+    let zero = if c % 100 < 10 { "0" } else { "" }
+    return "{c / 100}.{zero}{c % 100}"
+}
+
+fn pad_left(s: string, w: i64) -> string { return str.repeat(" ", w - str.char_count(s)) + s }
+
+fn pad_right(s: string, w: i64) -> string { return s + str.repeat(" ", w - str.char_count(s)) }
+
+struct Inventory { items: Vec<Item> }
+
+impl Inventory {
+    fn new() -> Self { return Inventory { items: Vec::new() } }
+
+    fn with(self, name: string, qty: i64, cents: i64) -> Self {
+        let mut inv = self
+        inv.add(Item { name: name, qty: qty, cents: cents })
+        return inv
+    }
+
+    fn add(&mut self, item: Item) { self.items.push(item) }
+
+    fn position(&self, name: string) -> Option<i64> {
+        for i in 0..self.items.len() {
+            if let Some(Item { name: n, .. }) = self.items.get(i) {
+                if n == name { return Some(i) }
+            }
+        }
+        return None
+    }
+
+    fn get(&self, name: string) -> Option<Item> {
+        if let Some(i) = self.position(name) { return self.items.get(i) }
+        return None
+    }
+
+    fn remove_by_name(&mut self, name: string) -> Option<Item> {
+        if let Some(i) = self.position(name) { return Some(self.items.remove(i)) }
+        return None
+    }
+
+    fn restock(&mut self, name: string, extra: i64) -> bool {
+        if let Some(i) = self.position(name) {
+            self.items[i].qty = self.items[i].qty + extra
+            return true
+        }
+        return false
+    }
+
+    fn total_value(&self) -> i64 {
+        let mut total: i64 = 0
+        for it in self.items.as_slice() { total = total + it.value() }
+        return total
+    }
+
+    fn sorted_by_value(&self) -> Vec<Item> {
+        let mut v = self.items
+        for i in 1..v.len() {
+            let mut j = i
+            while j > 0 and v[j - 1].value() < v[j].value() {
+                let t = v[j]
+                v[j] = v[j - 1]
+                v[j - 1] = t
+                j = j - 1
+            }
+        }
+        return v
+    }
+
+    fn print(&self, title: string, rows: Vec<Item>) {
+        println("== {title}")
+        println(pad_right("item", 8) + pad_left("qty", 6) + pad_left("unit", 9) + pad_left("value", 10))
+        for item in rows.as_slice() { println("{item}") }
+        println(pad_right("total", 23) + pad_left(money(self.total_value()), 10))
+    }
+}
+
+fn main() -> i64 {
+    let mut inv = Inventory::new().with("bolt", 120, 15).with("nut", 300, 5).with("hammer", 4, 1250).with("drill", 1, 8999)
+    inv.add(Item { name: "tape", qty: 12, cents: 235 })
+    inv.add(Item { name: "glue", qty: 7, cents: 310 })
+    inv.print("stock", inv.items)
+    for name in ["hammer", "saw"] {
+        if let Some(it) = inv.get(name) {
+            println("{it.name}: {it.qty} in stock at {money(it.cents)}")
+        } else {
+            println("{name}: not stocked")
+        }
+    }
+    for name in ["nut", "nut"] {
+        match inv.remove_by_name(name) {
+            Some(gone) => println("removed {gone.name}, worth {money(gone.value())}"),
+            None => println("{name}: nothing to remove")
+        }
+    }
+    let (bolt, saw) = (inv.restock("bolt", 80), inv.restock("saw", 5))
+    println("restock bolt: {bolt}, restock saw: {saw}")
+    inv.print("by value", inv.sorted_by_value())
+    return 0
+}

@@ -1,0 +1,6 @@
+nogc fn g(n: i64) {
+    println("a")
+}
+fn main() {
+    g(1)
+}

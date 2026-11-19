@@ -1,0 +1,9 @@
+fn f(c: bool) -> i64 {
+    return match 5 { _ if c => 1, _ => 2 }
+}
+
+fn main() -> i64 {
+    println(f(true))
+    println(f(false))
+    return 0
+}

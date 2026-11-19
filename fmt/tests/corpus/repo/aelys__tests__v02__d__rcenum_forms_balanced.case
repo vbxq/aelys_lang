@@ -1,0 +1,50 @@
+fn mk(i: i64) -> String { format!("s{i}") }
+struct N { val: i64 }
+enum E { S(String), R(Rc<N>), Both(String, Rc<N>), Nothing }
+fn weigh(e: E) -> i64 {
+    let mut r: i64 = 0;
+    match e {
+        E::S(s) => { r = s.len(); }
+        E::R(n) => { r = Rc::get(n).val; }
+        E::Both(s, n) => { r = s.len() + Rc::get(n).val * 10; }
+        E::Nothing => { r = -1; }
+    }
+    r
+}
+fn pick(i: i64) -> Option<Rc<N>> {
+    if i % 2 == 0 { return Some(Rc::new(N { val: i })); }
+    None
+}
+fn ident(e: E) -> E { e }
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
+    let mut keep: Option<Rc<N>> = None;
+    while i < 300 {
+        let a: E = E::Both(mk(i), Rc::new(N { val: 3 }));
+        let b = a;
+        let mut c: E = E::R(Rc::new(N { val: 4 }));
+        t = t + weigh(b) + weigh(ident(c));
+        c = E::S(mk(7));
+        t = t + weigh(c);
+        c = a;
+        t = t + weigh(c);
+        let o = pick(i);
+        match o {
+            Some(n) => { t = t + Rc::get(n).val;
+                keep = Some(n); }
+            None => { t = t + 1000; }
+        }
+        let mut l: E = E::R(Rc::new(N { val: 9 }));
+        match l {
+            E::R(n) => { l = E::Nothing;
+                t = t + Rc::get(n).val; }
+            E::S(s) => { t = t - 1; }
+            E::Both(s, n) => { t = t - 1; }
+            E::Nothing => { t = t - 1; }
+        }
+        i = i + 1;
+    }
+    match keep { Some(n) => { println!("{}", Rc::get(n).val); } None => { println!("none"); } }
+    println!("{}", t);
+}

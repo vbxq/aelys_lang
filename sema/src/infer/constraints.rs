@@ -1,12 +1,99 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, TypeError};
+use crate::constraint::{Constraint, ConstraintReason, TypeError};
 use crate::types::InferType;
-use crate::unify::{Substitution, unify, unify_error_to_type_error};
+use crate::unify::{Substitution, unify, unify_dir, unify_error_to_type_error};
 
 impl TypeInference {
-    /// Solve all collected constraints with gradual fallback
+    // a best effort view of the solution so far; the final solve still checks every constraint
+    pub(super) fn probe_type(&mut self, ty: &InferType) -> InferType {
+        while self.probe_upto < self.constraints.len() {
+            if let Constraint::Equal {
+                left, right, dir, ..
+            } = &self.constraints[self.probe_upto]
+            {
+                let l = self.probe_subst.apply(left);
+                let r = self.probe_subst.apply(right);
+                let saved = self.probe_subst.snapshot();
+                if unify_dir(&l, &r, &mut self.probe_subst, *dir).is_err() {
+                    self.probe_subst.restore(saved);
+                }
+            }
+            self.probe_upto += 1;
+        }
+        self.probe_subst.apply(ty)
+    }
+
+    fn recover_param_name(&self, ty: &InferType) -> InferType {
+        match ty {
+            InferType::Var(id) => match self.instantiated_param_names.get(id) {
+                Some(name) => InferType::Struct(name.clone(), Vec::new()),
+                None => ty.clone(),
+            },
+            InferType::Array(inner, len) => {
+                InferType::Array(Box::new(self.recover_param_name(inner)), *len)
+            }
+            InferType::Vec(inner) => InferType::Vec(Box::new(self.recover_param_name(inner))),
+            InferType::Rc(inner) => InferType::Rc(Box::new(self.recover_param_name(inner))),
+            InferType::Ref { referent, mutable } => InferType::Ref {
+                referent: Box::new(self.recover_param_name(referent)),
+                mutable: *mutable,
+            },
+            InferType::Slice { elem, mutable } => InferType::Slice {
+                elem: Box::new(self.recover_param_name(elem)),
+                mutable: *mutable,
+            },
+            InferType::Tuple(elems) => {
+                InferType::Tuple(elems.iter().map(|e| self.recover_param_name(e)).collect())
+            }
+            InferType::Enum(name, args) => InferType::Enum(
+                name.clone(),
+                args.iter().map(|a| self.recover_param_name(a)).collect(),
+            ),
+            InferType::Struct(name, args) if !args.is_empty() => InferType::Struct(
+                name.clone(),
+                args.iter().map(|a| self.recover_param_name(a)).collect(),
+            ),
+            InferType::Function { params, ret, nogc } => InferType::Function {
+                params: params.iter().map(|p| self.recover_param_name(p)).collect(),
+                ret: Box::new(self.recover_param_name(ret)),
+                nogc: *nogc,
+            },
+            other => other.clone(),
+        }
+    }
+
+    fn name_the_type_params(&self, mut err: TypeError) -> TypeError {
+        use crate::constraint::TypeErrorKind;
+        err.kind = match err.kind {
+            TypeErrorKind::Mismatch { expected, found } => TypeErrorKind::Mismatch {
+                expected: self.recover_param_name(&expected),
+                found: self.recover_param_name(&found),
+            },
+            TypeErrorKind::RefMutability { found, required } => TypeErrorKind::RefMutability {
+                found: self.recover_param_name(&found),
+                required: self.recover_param_name(&required),
+            },
+            other => other,
+        };
+        err
+    }
+
+    fn validation_refuses_callee(
+        callee: &InferType,
+        expected: &InferType,
+        reason: &ConstraintReason,
+    ) -> bool {
+        matches!(reason, ConstraintReason::Other(r) if r == "function call")
+            && matches!(expected, InferType::Function { .. })
+            && !matches!(
+                callee,
+                InferType::Function { .. } | InferType::Var(_) | InferType::Dynamic
+            )
+    }
+
     pub(super) fn solve_constraints(&mut self) -> Substitution {
         let mut subst = Substitution::new();
+        let mut pending: Vec<usize> = (0..self.deferred.len()).collect();
 
         for constraint in self.constraints.clone() {
             if let Constraint::Equal {
@@ -14,23 +101,63 @@ impl TypeInference {
                 right,
                 span,
                 reason,
+                dir,
             } = constraint
             {
                 let left_resolved = subst.apply(&left);
                 let right_resolved = subst.apply(&right);
 
-                match unify(&left_resolved, &right_resolved, &mut subst) {
+                let saved = subst.snapshot();
+                match unify_dir(&left_resolved, &right_resolved, &mut subst, dir) {
                     Ok(()) => {}
                     Err(e) => {
-                        let err = unify_error_to_type_error(e, span, reason);
-                        self.errors.push(err);
+                        subst.restore(saved);
+                        let refused_callee =
+                            Self::validation_refuses_callee(&left_resolved, &right, &reason);
+
+                        let mut err = self
+                            .name_the_type_params(unify_error_to_type_error(e, span, reason, dir));
+                        if err.help.is_none()
+                            && (self.names_a_deferred_result(&left)
+                                || self.names_a_deferred_result(&right))
+                            && TypeError::late_projection_converts(&left_resolved, &right_resolved)
+                        {
+                            err.help = Some(TypeError::late_projection_help());
+                        }
+                        if err.help.is_none()
+                            && let crate::constraint::TypeErrorKind::Mismatch { expected, found } =
+                                &err.kind
+                            && (matches!(expected, InferType::Never)
+                                || matches!(found, InferType::Never))
+                        {
+                            err.help = Some(
+                                "`Never` has no values: a `Result<T, Never>` can only be built \
+                                 with `Result::Ok`"
+                                    .to_string(),
+                            );
+                        }
+                        if err.help.is_none()
+                            && let crate::constraint::TypeErrorKind::Mismatch { expected, found } =
+                                &err.kind
+                            && (expected.is_integer() || expected.is_float())
+                            && (found.is_integer() || found.is_float())
+                        {
+                            err.help = Some(format!("convert explicitly: `as {expected}`"));
+                        }
+                        if !refused_callee {
+                            self.errors.push(err);
+                        }
 
                         self.force_dynamic(&left_resolved, &mut subst);
                         self.force_dynamic(&right_resolved, &mut subst);
                     }
                 }
+                if !pending.is_empty() {
+                    self.resolve_deferred(&mut pending, &mut subst);
+                }
             }
         }
+        self.resolve_deferred(&mut pending, &mut subst);
 
         for constraint in self.constraints.clone() {
             if let Constraint::OneOf {
@@ -43,14 +170,25 @@ impl TypeInference {
                 let resolved = subst.apply(&ty);
 
                 match &resolved {
-                    InferType::Var(_) | InferType::Dynamic => {}
+                    InferType::Dynamic => {}
+                    InferType::Var(id) => {
+                        if let Some(default) = Self::pick_widest_type(&options) {
+                            subst.bind(*id, default);
+                        }
+                    }
                     concrete => {
-                        let matches = options.iter().any(|opt| {
+                        let mut matched = false;
+                        for opt in &options {
                             let mut temp_subst = subst.clone();
-                            unify(concrete, opt, &mut temp_subst).is_ok()
-                        });
+                            if unify(concrete, opt, &mut temp_subst).is_ok() {
+                                // ! the old merge-by-key pattern leaked stale bindings from earlier failed options
+                                subst = temp_subst;
+                                matched = true;
+                                break;
+                            }
+                        }
 
-                        if !matches {
+                        if !matched {
                             self.errors.push(TypeError::not_one_of(
                                 concrete.clone(),
                                 options.clone(),
@@ -64,30 +202,50 @@ impl TypeInference {
             }
         }
 
+        self.resolve_deferred(&mut pending, &mut subst);
+        self.report_unresolved(&pending);
+        self.drop_operand_mismatches_under_operator_refusals();
+
         subst
     }
 
-    /// Force a type to Dynamic (for error recovery)
+    fn drop_operand_mismatches_under_operator_refusals(&mut self) {
+        use crate::constraint::TypeErrorKind;
+        let refused: Vec<aelys_syntax::Span> = self
+            .errors
+            .iter()
+            .filter(|e| {
+                matches!(e.kind, TypeErrorKind::NotOneOf { .. })
+                    && matches!(e.reason, ConstraintReason::BinaryOp { .. })
+            })
+            .map(|e| e.span)
+            .collect();
+        if refused.is_empty() {
+            return;
+        }
+        self.errors.retain(|e| {
+            !(matches!(e.kind, TypeErrorKind::Mismatch { .. })
+                && matches!(e.reason, ConstraintReason::BinaryOp { .. })
+                && refused.contains(&e.span))
+        });
+    }
+
+    fn pick_widest_type(options: &[InferType]) -> Option<InferType> {
+        let has_integers = options.iter().any(|t| t.is_integer());
+        let has_floats = options.iter().any(|t| t.is_float());
+
+        if has_integers {
+            Some(InferType::I64)
+        } else if has_floats {
+            Some(InferType::F64)
+        } else {
+            None
+        }
+    }
+
     fn force_dynamic(&mut self, ty: &InferType, subst: &mut Substitution) {
-        match ty {
-            InferType::Var(id) => {
-                subst.bind(*id, InferType::Dynamic);
-            }
-            InferType::Function { params, ret } => {
-                for p in params {
-                    self.force_dynamic(p, subst);
-                }
-                self.force_dynamic(ret, subst);
-            }
-            InferType::Array(inner) => {
-                self.force_dynamic(inner, subst);
-            }
-            InferType::Tuple(elems) => {
-                for e in elems {
-                    self.force_dynamic(e, subst);
-                }
-            }
-            _ => {}
+        if let InferType::Var(id) = ty {
+            subst.bind(*id, InferType::Dynamic);
         }
     }
 }

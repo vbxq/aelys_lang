@@ -1,0 +1,25 @@
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+fn process(o: Option<i64>, threshold: i64) -> String {
+    let val = match o {
+        Option::Some(v) => v,
+        Option::None => 0,
+    };
+    if val > threshold {
+        "above"
+    } else {
+        "below"
+    }
+}
+
+fn main() {
+    let a: Option<i64> = Option::Some(100);
+    let b: Option<i64> = Option::Some(5);
+    let c: Option<i64> = Option::None;
+    println!("{}", process(a, 50));
+    println!("{}", process(b, 50));
+    println!("{}", process(c, 50));
+}

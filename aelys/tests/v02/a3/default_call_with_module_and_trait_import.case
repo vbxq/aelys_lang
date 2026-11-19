@@ -1,0 +1,11 @@
+needs tr
+needs Sh from tr
+struct P { v: i64 }
+impl Sh for P { fn req(&self) -> i64 { return self.v + 50 } }
+fn main() -> i64 {
+    let a = P { v: 1 }
+    println(a.req())
+    println(Sh::d(&a))
+    println(a.d())
+    return 0
+}

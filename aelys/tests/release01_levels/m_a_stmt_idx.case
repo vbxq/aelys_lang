@@ -1,0 +1,5 @@
+fn f(i: i64) -> i64 { let arr = [1, 2, 3]
+    arr[i]
+    println("survived")
+    return 0 }
+fn main() -> i64 { return f(10) }

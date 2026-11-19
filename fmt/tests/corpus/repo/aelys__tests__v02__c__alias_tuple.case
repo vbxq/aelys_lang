@@ -1,0 +1,8 @@
+type Pair = (i64, i64);
+fn add(a: Pair, b: Pair) -> Pair {
+    (a.0 + b.0, a.1 + b.1)
+}
+fn main() {
+    let (x, y) = add((1, 2), (30, 40));
+    println!("{x} {y}");
+}

@@ -1,0 +1,24 @@
+needs std.slice
+
+struct K { key: i64, pay: i64 }
+
+impl eq for K {
+    fn eq(&self, o: &K) -> bool { return self.key == o.key }
+}
+
+impl ord for K {
+    fn cmp(&self, o: &K) -> i64 { return o.key - self.key }
+}
+
+fn main() -> i64 {
+    let arr: [K; 3] = [K { key: 5, pay: 0 }, K { key: 3, pay: 0 }, K { key: 8, pay: 0 }]
+    match slice.max(arr[..]) {
+        Some(m) => println(m.key),
+        None => println(-1)
+    }
+    match slice.min(arr[..]) {
+        Some(m) => println(m.key),
+        None => println(-1)
+    }
+    return 0
+}

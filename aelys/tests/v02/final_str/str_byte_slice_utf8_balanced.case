@@ -1,0 +1,14 @@
+fn main() {
+    let s: String = "aé€z"
+    println(s.len())
+    println(s[0..1])
+    println(s[1..3])
+    println(s[3..6])
+    println(&s[6..])
+    println(&s[..3])
+    let v: &str = &s[1..=2]
+    println(v)
+    println(s[1..6].len())
+    let t = s[0..3] + s[6..7]
+    println(t)
+}

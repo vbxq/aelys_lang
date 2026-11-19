@@ -1,0 +1,12 @@
+struct R { w: i64, h: i64 }
+
+impl R {
+    fn area(&self) -> i64 { return self.w * self.h }
+}
+
+nogc fn twice(a: &R) -> i64 { return a.area() * 2 }
+
+fn main() {
+    let a = R { w: 3, h: 7 }
+    println(twice(&a))
+}

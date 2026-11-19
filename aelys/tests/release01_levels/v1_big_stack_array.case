@@ -1,0 +1,10 @@
+
+enum Big {
+    A(string),
+    B(i64),
+}
+
+fn main() {
+    let arr = [Big::B(0); 50000];
+    println(0);
+}

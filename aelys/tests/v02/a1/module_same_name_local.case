@@ -1,0 +1,7 @@
+needs m
+struct Pair<T> { x: T }
+fn main() {
+    let l = Pair { x: 10 }
+    let r: m.Pair<i64, i64> = m.mk(20, 12)
+    println(l.x + r.a + r.b)
+}

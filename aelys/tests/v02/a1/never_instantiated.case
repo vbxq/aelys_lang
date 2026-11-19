@@ -1,0 +1,4 @@
+struct Unused<T> { v: T, next: Rc<Unused<T>>, o: Option<T> }
+fn main() {
+    println(42)
+}

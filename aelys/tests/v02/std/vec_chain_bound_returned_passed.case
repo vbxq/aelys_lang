@@ -1,0 +1,22 @@
+needs std.vec
+
+fn double(x: i64) -> i64 { return x * 2 }
+fn big(x: i64) -> bool { return x > 4 }
+
+fn pipeline(v: &Vec<i64>) -> Vec<i64> {
+    return v.map(double).filter(big)
+}
+
+fn total(v: Vec<i64>) -> i64 { return v.sum() }
+
+fn main() {
+    let v: Vec<i64> = vec[1, 2, 3, 4]
+    let mut acc = 0
+    let mut i = 0
+    while i < 1000 {
+        let kept = v.map(double).filter(big)
+        acc = acc + kept.len() + total(v.map(double).filter(big)) + pipeline(&v).sum()
+        i = i + 1
+    }
+    println(acc)
+}

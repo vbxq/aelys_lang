@@ -1,0 +1,17 @@
+struct Node { val: i64, next: Rc<Node> }
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        let mut head: Rc<Node> = Rc::null()
+        for k in 1..11 { head = Rc::new(Node { val: k, next: head }) }
+        let mut cur: Rc<Node> = head
+        while Rc::is_null(cur) == false {
+            t = t + Rc::get(cur).val
+            cur = Rc::get(cur).next
+        }
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

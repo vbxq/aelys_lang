@@ -1,0 +1,8 @@
+fn main() {
+    let s = "héllo"
+    let a = [1, 2, 3]
+    println(s.len())
+    println(a.len())
+    println(a[..].len())
+    println(a[0..2].len())
+}

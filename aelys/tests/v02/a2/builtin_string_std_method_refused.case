@@ -1,0 +1,6 @@
+needs std.str
+
+fn main() {
+    let s = "  a  "
+    println(s.trim())
+}

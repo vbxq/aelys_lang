@@ -1,0 +1,10 @@
+// Closure with NO captures but passed as fn ptr and called with args
+// This should work because no env struct is needed
+use std::process::ExitCode; fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
+    f(x)
+}
+
+fn main() -> ExitCode {
+    let double = move |x: i64| -> i64 { x * 2 };
+    return ExitCode::from(apply(double, 21) as u8);  // 42
+}

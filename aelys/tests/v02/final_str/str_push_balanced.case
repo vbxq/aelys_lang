@@ -1,0 +1,28 @@
+fn build(n: i64) -> String {
+    let mut s = String::new()
+    let mut i = 0
+    while i < n {
+        s.push_str("ab")
+        s.push('c')
+        i = i + 1
+    }
+    return s
+}
+
+fn main() {
+    let s = build(1000)
+    println(s.len())
+    println(s[0..6])
+    let mut t = String::from("x")
+    t += "yz"
+    t += t
+    println(t)
+    let mut u: String = "start"
+    u = u + "-" + "end"
+    println(u)
+    let mut w = String::new()
+    w.push('é')
+    w.push_str("€")
+    println(w)
+    println(w.len())
+}

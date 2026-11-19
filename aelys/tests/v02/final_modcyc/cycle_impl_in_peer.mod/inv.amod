@@ -1,0 +1,17 @@
+needs prog
+pub struct Stock { pub items: Vec<prog.Item> }
+impl prog.Item {
+    pub fn cost(&self) -> i64 { return self.price * self.qty }
+}
+impl Stock {
+    pub fn count(&self) -> i64 { return self.items.len() + self.value() * 0 }
+}
+pub fn stock(n: i64) -> Stock {
+    let mut v = Vec::new()
+    let mut i = 1
+    while i <= n {
+        v.push(prog.Item { price: i * 10, qty: i })
+        i = i + 1
+    }
+    return Stock { items: v }
+}

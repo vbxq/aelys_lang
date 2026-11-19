@@ -1,0 +1,5 @@
+struct Flags { r#and: bool, step: i64 }
+fn main() {
+    let f = Flags { r#and: true, step: 7 }
+    if f.and { println(f.step) }
+}

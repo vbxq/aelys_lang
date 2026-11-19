@@ -1,0 +1,5 @@
+enum E { A, B }
+fn f(d: i64, e: E) -> i64 { let x = match e { E::A => 10 / d, E::B => 1 }
+    println("survived")
+    return 0 }
+fn main() -> i64 { return f(0, E::A) }

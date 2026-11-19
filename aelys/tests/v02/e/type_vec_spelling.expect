@@ -1,0 +1,3 @@
+refuse E0301
+expected `string`, found `Vec<i64>`
+!vec[i64]

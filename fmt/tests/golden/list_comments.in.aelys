@@ -1,0 +1,11 @@
+fn main() {
+    let v = vec![
+        1, // one
+        2  // two
+    ];
+    let w = f(a, /* mid */ b);
+
+    // a section comment
+
+    let z = 3; // trailing
+}

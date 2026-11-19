@@ -1,0 +1,15 @@
+struct P { x: i64, y: i64 }
+
+impl Display for P {
+    fn to_string(&self) -> string { return "P({self.x},{self.y})" }
+}
+
+fn main() -> i64 {
+    let p = P { x: 1, y: 2 }
+    let t = p.to_string() + "!"
+    println(t)
+    println(t.len)
+    let n: i64 = 5
+    println(n.to_string() + n.to_string())
+    return 0
+}

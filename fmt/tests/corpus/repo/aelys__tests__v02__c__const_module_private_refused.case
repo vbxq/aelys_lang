@@ -1,0 +1,4 @@
+mod cfg;
+fn main() {
+    println!("{}", cfg::HIDDEN);
+}

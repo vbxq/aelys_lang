@@ -1,0 +1,5 @@
+needs std.str
+
+fn main() {
+    println(str.from_int(42))
+}

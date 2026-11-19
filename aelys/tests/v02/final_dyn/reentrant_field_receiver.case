@@ -1,0 +1,19 @@
+trait Tr {
+    fn m(&self, h: Rc<H>) -> i64
+}
+struct H { d: Rc<dyn Tr> }
+struct S { n: i64 }
+impl Tr for S {
+    fn m(&self, h: Rc<H>) -> i64 {
+        h.d = Rc::new(S { n: 999 })
+        let junk = Rc::new(S { n: 555 })
+        let junk2 = Rc::new(S { n: 444 })
+        return self.n + junk.n - junk.n + junk2.n - junk2.n
+    }
+}
+fn main() -> i64 {
+    let h = Rc::new(H { d: Rc::new(S { n: 7 }) })
+    println(h.d.m(h))
+    println(h.d.m(h))
+    return 0
+}

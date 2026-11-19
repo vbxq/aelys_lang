@@ -1,9 +1,12 @@
-// AST nodes
-
 mod expr;
 mod stmt;
 
 pub use expr::{
-    BinaryOp, Expr, ExprKind, FmtStringPart, Parameter, StructFieldInit, TypeAnnotation, UnaryOp,
+    BinaryOp, CatchHandler, Expr, ExprKind, FmtStringPart, MatchArm, MatchOrigin, Parameter,
+    PatLit, Pattern, RefKind, StructFieldInit, TypeAnnotation, UnaryOp, prelude_variant_enum,
 };
-pub use stmt::{Decorator, Function, ImportKind, NeedsStmt, Stmt, StmtKind, StructFieldDecl};
+pub use stmt::{
+    Decorator, EnumVariantDecl, ForeignConv, ForeignDecl, Function, ImplDecl, ImportKind, Method,
+    NeedsStmt, NeedsTarget, Receiver, Stmt, StmtKind, StructFieldDecl, TraitDecl, TraitMethod,
+    TraitRef, TypeBounds,
+};

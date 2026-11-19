@@ -1,0 +1,6 @@
+needs P from x
+pub trait Show {
+    fn show(&self) -> i64
+    fn twice(&self) -> i64 { return self.show() * 3 }
+}
+impl Show for P { fn show(&self) -> i64 { return self.v + 7000 } }

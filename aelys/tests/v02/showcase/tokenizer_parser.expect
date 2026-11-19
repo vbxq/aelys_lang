@@ -1,0 +1,13 @@
+balanced
+1 + 2 * 3  =>  (+ 1 (* 2 3)) = 7
+(1 + 2) * 3  =>  (* (+ 1 2) 3) = 9
+10 / 3 - -4  =>  (- (/ 10 3) (neg 4)) = 7
+-(8 - 10) * 7  =>  (* (neg (- 8 10)) 7) = 14
+100 / (7 - 2 * 3) / 4  =>  (/ (/ 100 (- 7 (* 2 3))) 4) = 25
+-7 / 2  =>  (/ (neg 7) 2) = -3
+4 / (2 - 2)  =>  (/ 4 (- 2 2)): division by zero
+(0 - 9223372036854775807 - 1) / -1  =>  (/ (- (- 0 9223372036854775807) 1) (neg 1)): overflow in -9223372036854775808 / -1
+(1 + 2  =>  syntax error: missing ')' for the '(' at token 0, found end of input
+3 + * 4  =>  syntax error: unexpected '*' at token 2
+1 2  =>  syntax error: unexpected 2 at token 1
+2 $ 3  =>  syntax error: unexpected character '$'

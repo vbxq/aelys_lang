@@ -1,0 +1,15 @@
+trait Shape2 {
+    fn area(&self) -> i64
+    fn perimeter(&self) -> i64
+}
+
+struct Rect { w: i64, h: i64 }
+
+impl Shape2 for Rect {
+    fn area(&self) -> i64 { return self.w * self.h }
+}
+
+fn main() -> i64 {
+    println(Rect { w: 1, h: 2 }.area())
+    return 0
+}

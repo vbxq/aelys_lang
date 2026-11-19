@@ -1,0 +1,33 @@
+struct N { val: i64 }
+enum E { A(Rc<N>), Z }
+fn take(e: E) -> E {
+    let mut cur: E = e
+    match cur {
+        E::A(h) if Rc::get(h).val > 5 => {
+            cur = E::Z
+            return E::A(h)
+        }
+        E::A(h) => {
+            cur = E::Z
+            return E::A(Rc::new(N { val: Rc::get(h).val * 100 }))
+        }
+        E::Z => { return E::Z }
+    }
+    return E::Z
+}
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 300 {
+        let v = i % 10
+        let e = if v == 0 { E::Z } else { E::A(Rc::new(N { val: v })) }
+        match take(e) {
+            E::A(n) => { let x = Rc::get(n).val
+                if x >= 100 { t = t + x / 100 } else { t = t + x * 10 } }
+            E::Z => { t = t + 1000 }
+        }
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

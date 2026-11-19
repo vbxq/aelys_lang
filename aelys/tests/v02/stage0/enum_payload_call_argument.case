@@ -1,0 +1,7 @@
+fn f(e: Option<i64>) {
+    println(0)
+}
+
+fn main() {
+    f(Some("s"))
+}

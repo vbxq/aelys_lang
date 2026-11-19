@@ -1,0 +1,7 @@
+fn f(s: &mut str) -> i64 {
+    return 0
+}
+
+fn main() {
+    println(0)
+}

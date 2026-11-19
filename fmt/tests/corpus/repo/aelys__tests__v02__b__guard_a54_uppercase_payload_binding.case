@@ -1,0 +1,4 @@
+use std::process::ExitCode; fn main() -> ExitCode {
+    let o: Option<i64> = Some(1);
+    return ExitCode::from((match o { Some(X) => 1, None => 0 }) as u8);
+}

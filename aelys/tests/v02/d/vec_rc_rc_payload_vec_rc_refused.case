@@ -1,0 +1,8 @@
+struct N { k: i64 }
+fn main() -> i64 {
+    let mut v: Vec<Rc<N>> = Vec::new()
+    Vec::push(v, Rc::new(N { k: 1 }))
+    let p: Rc<Vec<Rc<N>>> = Rc::new(v)
+    println(Rc::get(p).len)
+    return 0
+}

@@ -1,0 +1,2 @@
+refuse E0301
+`f` declares no return type, so it returns nothing

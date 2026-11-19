@@ -1,0 +1,15 @@
+let mut gs: Option<string> = None
+
+fn clear() -> bool {
+    gs = None
+    return false
+}
+
+fn main() -> i64 {
+    gs = Some("a" + "bc")
+    let n: i64 = match gs { Some(s) if clear() => 100, Some(t) => t.len, None => -1 }
+    println(n)
+    let m: i64 = match gs { Some(t) => t.len, None => -1 }
+    println(m)
+    return 0
+}

@@ -6,12 +6,7 @@ impl GlobalConstantPropagator {
         match &mut expr.kind {
             TypedExprKind::Identifier(name) => {
                 if let Some(c) = self.constants.get(name) {
-                    let ty = if expr.ty.is_integer() && c.ty.is_integer() {
-                        expr.ty.clone()
-                    } else {
-                        c.ty.clone()
-                    };
-                    *expr = TypedExpr::new(c.kind.clone(), ty, expr.span);
+                    *expr = TypedExpr::new(c.kind.clone(), c.ty.clone(), expr.span);
                     self.stats.globals_propagated += 1;
                 }
             }
@@ -54,8 +49,13 @@ impl GlobalConstantPropagator {
                     self.substitute_constants(elem);
                 }
             }
-            TypedExprKind::ArraySized { size, .. } => {
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
                 self.substitute_constants(size);
+                if let Some(fv) = fill_value {
+                    self.substitute_constants(fv);
+                }
             }
             TypedExprKind::Index { object, index } => {
                 self.substitute_constants(object);
@@ -70,6 +70,10 @@ impl GlobalConstantPropagator {
                 self.substitute_constants(index);
                 self.substitute_constants(value);
             }
+            TypedExprKind::FieldAssign { object, value, .. } => {
+                self.substitute_constants(object);
+                self.substitute_constants(value);
+            }
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(s) = start {
                     self.substitute_constants(s);
@@ -81,6 +85,12 @@ impl GlobalConstantPropagator {
             TypedExprKind::Slice { object, range } => {
                 self.substitute_constants(object);
                 self.substitute_constants(range);
+            }
+            TypedExprKind::Reference { operand, .. } => self.substitute_constants(operand),
+            TypedExprKind::Deref(operand) => self.substitute_constants(operand),
+            TypedExprKind::DerefAssign { target, value } => {
+                self.substitute_constants(target);
+                self.substitute_constants(value);
             }
             TypedExprKind::FmtString(parts) => {
                 for part in parts {
@@ -97,9 +107,46 @@ impl GlobalConstantPropagator {
             TypedExprKind::Cast { expr, .. } => {
                 self.substitute_constants(expr);
             }
+            TypedExprKind::Block { stmts, tail } => {
+                for stmt in stmts {
+                    self.substitute_in_stmt(stmt);
+                }
+                self.substitute_constants(tail);
+            }
+            TypedExprKind::Match {
+                scrutinee, arms, ..
+            } => {
+                self.substitute_constants(scrutinee);
+                for arm in arms {
+                    let names: Vec<String> = arm
+                        .bindings()
+                        .iter()
+                        .map(|(n, _, _)| n.to_string())
+                        .collect();
+                    let shadowed: Vec<(String, aelys_sema::TypedExpr)> = names
+                        .into_iter()
+                        .filter_map(|name| self.constants.remove(&name).map(|v| (name, v)))
+                        .collect();
+                    for e in arm.exprs_mut() {
+                        self.substitute_constants(e);
+                    }
+                    for (name, val) in shadowed {
+                        self.constants.insert(name, val);
+                    }
+                }
+            }
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.substitute_constants(scrutinee);
+            }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args {
+                    self.substitute_constants(arg);
+                }
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
+            | TypedExprKind::Char(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null => {}
         }
@@ -110,9 +157,7 @@ impl GlobalConstantPropagator {
             TypedStmtKind::Expression(expr) => self.substitute_constants(expr),
             TypedStmtKind::Let { initializer, .. } => self.substitute_constants(initializer),
             TypedStmtKind::Block(stmts) => {
-                for s in stmts {
-                    self.substitute_in_stmt(s);
-                }
+                self.substitute_in_scoped_stmts(stmts);
             }
             TypedStmtKind::If {
                 condition,
@@ -130,6 +175,7 @@ impl GlobalConstantPropagator {
                 self.substitute_in_stmt(body);
             }
             TypedStmtKind::For {
+                iterator,
                 start,
                 end,
                 step,
@@ -141,11 +187,24 @@ impl GlobalConstantPropagator {
                 if let Some(s) = &mut **step {
                     self.substitute_constants(s);
                 }
+                let shadowed = self.constants.remove(iterator);
                 self.substitute_in_stmt(body);
+                if let Some(val) = shadowed {
+                    self.constants.insert(iterator.clone(), val);
+                }
             }
-            TypedStmtKind::ForEach { iterable, body, .. } => {
+            TypedStmtKind::ForEach {
+                iterator,
+                iterable,
+                body,
+                ..
+            } => {
                 self.substitute_constants(iterable);
+                let shadowed = self.constants.remove(iterator);
                 self.substitute_in_stmt(body);
+                if let Some(val) = shadowed {
+                    self.constants.insert(iterator.clone(), val);
+                }
             }
             TypedStmtKind::Return(Some(expr)) => self.substitute_constants(expr),
             TypedStmtKind::Function(func) => self.substitute_in_function(func),
@@ -153,13 +212,35 @@ impl GlobalConstantPropagator {
             | TypedStmtKind::Break
             | TypedStmtKind::Continue
             | TypedStmtKind::Needs(_)
-            | TypedStmtKind::StructDecl { .. } => {}
+            | TypedStmtKind::StructDecl { .. }
+            | TypedStmtKind::EnumDecl { .. } => {}
         }
     }
 
     fn substitute_in_function(&mut self, func: &mut TypedFunction) {
-        for stmt in &mut func.body {
+        let shadowed_by_params: Vec<(String, aelys_sema::TypedExpr)> = func
+            .params
+            .iter()
+            .filter_map(|p| self.constants.remove(&p.name).map(|v| (p.name.clone(), v)))
+            .collect();
+        self.substitute_in_scoped_stmts(&mut func.body);
+        for (name, val) in shadowed_by_params {
+            self.constants.insert(name, val);
+        }
+    }
+
+    fn substitute_in_scoped_stmts(&mut self, stmts: &mut Vec<TypedStmt>) {
+        let mut shadowed: Vec<(String, aelys_sema::TypedExpr)> = Vec::new();
+        for stmt in stmts.iter_mut() {
             self.substitute_in_stmt(stmt);
+            if let TypedStmtKind::Let { name, .. } = &stmt.kind {
+                if let Some(val) = self.constants.remove(name) {
+                    shadowed.push((name.clone(), val));
+                }
+            }
+        }
+        for (name, val) in shadowed {
+            self.constants.insert(name, val);
         }
     }
 }

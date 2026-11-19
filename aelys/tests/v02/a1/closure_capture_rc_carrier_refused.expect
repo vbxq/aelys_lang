@@ -1,0 +1,2 @@
+refuse E0902
+capturing an Rc (or a carrier of one) in a closure is not supported

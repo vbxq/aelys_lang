@@ -1,0 +1,5 @@
+const Z: i64 = 0
+const X: i64 = 10 / Z
+fn main() {
+    println(X)
+}

@@ -1,0 +1,4 @@
+
+fn f<T: hash>(a: T) -> bool { return true }
+
+fn main() -> i64 { return 0 }

@@ -1,0 +1,7 @@
+needs shapes
+needs geo
+fn main() {
+    let c = geo.Circle { r: 3 }
+    println(c.describe())
+    println(shapes.total(c))
+}

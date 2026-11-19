@@ -1,0 +1,5 @@
+unsafe extern fn aelys_no_such_symbol_xyz(x: i64) -> i64
+fn main() {
+    let r = unsafe { aelys_no_such_symbol_xyz(1) }
+    println(r)
+}

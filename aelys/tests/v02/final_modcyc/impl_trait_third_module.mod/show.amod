@@ -1,0 +1,11 @@
+needs Area from shapes
+needs geo
+impl Area for geo.Pt {
+    fn area(&self) -> i64 { return self.v * self.v }
+}
+impl eq for geo.Pt {
+    fn eq(&self, o: &geo.Pt) -> bool { return self.v == o.v }
+}
+impl Display for geo.Pt {
+    fn to_string(&self) -> string { return "Pt({self.v})" }
+}

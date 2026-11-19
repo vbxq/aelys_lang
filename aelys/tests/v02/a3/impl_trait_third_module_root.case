@@ -1,0 +1,11 @@
+needs Area from shapes
+needs Pt from geo
+
+impl Area for Pt {
+    fn area(&self) -> i64 { return self.v }
+}
+
+fn main() -> i64 {
+    println(Pt { v: 2 }.area())
+    return 0
+}

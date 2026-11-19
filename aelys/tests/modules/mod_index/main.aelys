@@ -1,4 +1,0 @@
-// main.aelys - Module index (mod.aelys) test
-needs utils
-
-print(utils.utility())  // Should print "from mod.aelys"

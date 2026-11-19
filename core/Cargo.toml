@@ -1,0 +1,9 @@
+[package]
+name = "aelys-core"
+version.workspace = true
+edition = "2024"
+build = "build.rs"
+links = "aelys-core"
+
+[build-dependencies]
+cc = "1.0"

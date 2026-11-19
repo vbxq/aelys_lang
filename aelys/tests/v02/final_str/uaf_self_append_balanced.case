@@ -1,0 +1,20 @@
+fn warm(s: &str) -> String {
+    let mut w = String::with_capacity(32)
+    w.push_str(s)
+    return w
+}
+
+fn main() {
+    let mut s: String = warm("abcd")
+    s = s + s[1..]
+    println(s)
+    s.push_str(s.as_str())
+    println(s)
+    s += s[0..2]
+    println(s)
+    let mut t = String::with_capacity(64)
+    t.push_str("xy")
+    t.push_str(t)
+    t.push_str(t[1..3])
+    println(t)
+}

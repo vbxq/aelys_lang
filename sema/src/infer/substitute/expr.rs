@@ -3,7 +3,6 @@ use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart, TypedParam}
 use crate::unify::Substitution;
 
 impl TypeInference {
-    /// Apply substitution to an expression
     pub(super) fn apply_substitution_expr(
         &self,
         expr: &TypedExpr,
@@ -13,9 +12,10 @@ impl TypeInference {
             TypedExprKind::Int(n) => TypedExprKind::Int(*n),
             TypedExprKind::Float(f) => TypedExprKind::Float(*f),
             TypedExprKind::Bool(b) => TypedExprKind::Bool(*b),
+            TypedExprKind::Char(cp) => TypedExprKind::Char(*cp),
             TypedExprKind::String(s) => TypedExprKind::String(s.clone()),
-            TypedExprKind::FmtString(parts) => TypedExprKind::FmtString(
-                parts
+            TypedExprKind::FmtString(parts) => {
+                let parts = parts
                     .iter()
                     .map(|p| match p {
                         TypedFmtStringPart::Literal(s) => TypedFmtStringPart::Literal(s.clone()),
@@ -24,15 +24,30 @@ impl TypeInference {
                         )),
                         TypedFmtStringPart::Placeholder => TypedFmtStringPart::Placeholder,
                     })
-                    .collect(),
-            ),
+                    .collect();
+                match self.tuple_format(parts, expr.span) {
+                    Ok(desugared) => return desugared,
+                    Err(parts) => TypedExprKind::FmtString(parts),
+                }
+            }
             TypedExprKind::Null => TypedExprKind::Null,
             TypedExprKind::Identifier(name) => TypedExprKind::Identifier(name.clone()),
-            TypedExprKind::Binary { left, op, right } => TypedExprKind::Binary {
-                left: Box::new(self.apply_substitution_expr(left, subst)),
-                op: *op,
-                right: Box::new(self.apply_substitution_expr(right, subst)),
-            },
+            TypedExprKind::Binary { left, op, right } => {
+                let left = self.apply_substitution_expr(left, subst);
+                let right = self.apply_substitution_expr(right, subst);
+                if matches!(left.ty, crate::types::InferType::Tuple(_)) {
+                    if let Some(desugared) =
+                        self.tuple_equality(left.clone(), *op, right.clone(), expr.span)
+                    {
+                        return desugared;
+                    }
+                }
+                TypedExprKind::Binary {
+                    left: Box::new(left),
+                    op: *op,
+                    right: Box::new(right),
+                }
+            }
             TypedExprKind::Unary { op, operand } => TypedExprKind::Unary {
                 op: *op,
                 operand: Box::new(self.apply_substitution_expr(operand, subst)),
@@ -45,13 +60,20 @@ impl TypeInference {
                 left: Box::new(self.apply_substitution_expr(left, subst)),
                 right: Box::new(self.apply_substitution_expr(right, subst)),
             },
-            TypedExprKind::Call { callee, args } => TypedExprKind::Call {
-                callee: Box::new(self.apply_substitution_expr(callee, subst)),
-                args: args
-                    .iter()
-                    .map(|a| self.apply_substitution_expr(a, subst))
-                    .collect(),
-            },
+            TypedExprKind::Call { callee, args } => {
+                let prints = matches!(&callee.kind,
+                    TypedExprKind::Identifier(n) if n == "println" || n == "print");
+                TypedExprKind::Call {
+                    callee: Box::new(self.apply_substitution_expr(callee, subst)),
+                    args: args
+                        .iter()
+                        .map(|a| {
+                            let a = self.apply_substitution_expr(a, subst);
+                            if prints { self.tuple_print_arg(a) } else { a }
+                        })
+                        .collect(),
+                }
+            }
             TypedExprKind::Assign { name, value } => TypedExprKind::Assign {
                 name: name.clone(),
                 value: Box::new(self.apply_substitution_expr(value, subst)),
@@ -100,30 +122,37 @@ impl TypeInference {
                 object: Box::new(self.apply_substitution_expr(object, subst)),
                 member: member.clone(),
             },
-            TypedExprKind::ArrayLiteral {
-                element_type,
-                elements,
-            } => TypedExprKind::ArrayLiteral {
-                element_type: element_type.clone(),
+            TypedExprKind::ArrayLiteral { elements } => TypedExprKind::ArrayLiteral {
                 elements: elements
                     .iter()
                     .map(|e| self.apply_substitution_expr(e, subst))
                     .collect(),
             },
-            TypedExprKind::ArraySized { element_type, size } => TypedExprKind::ArraySized {
-                element_type: element_type.clone(),
+            TypedExprKind::ArraySized { size, fill_value } => TypedExprKind::ArraySized {
                 size: Box::new(self.apply_substitution_expr(size, subst)),
+                fill_value: fill_value
+                    .as_ref()
+                    .map(|fv| Box::new(self.apply_substitution_expr(fv, subst))),
             },
             TypedExprKind::VecLiteral {
-                element_type,
+                element_type: _,
                 elements,
-            } => TypedExprKind::VecLiteral {
-                element_type: element_type.clone(),
-                elements: elements
-                    .iter()
-                    .map(|e| self.apply_substitution_expr(e, subst))
-                    .collect(),
-            },
+            } => {
+                let substituted_ty = subst.apply(&expr.ty);
+                let new_elem_type = match &substituted_ty {
+                    crate::types::InferType::Vec(inner) => {
+                        Some(crate::types::ResolvedType::from_infer_type(inner))
+                    }
+                    _ => None,
+                };
+                TypedExprKind::VecLiteral {
+                    element_type: new_elem_type,
+                    elements: elements
+                        .iter()
+                        .map(|e| self.apply_substitution_expr(e, subst))
+                        .collect(),
+                }
+            }
             TypedExprKind::Index { object, index } => TypedExprKind::Index {
                 object: Box::new(self.apply_substitution_expr(object, subst)),
                 index: Box::new(self.apply_substitution_expr(index, subst)),
@@ -135,6 +164,15 @@ impl TypeInference {
             } => TypedExprKind::IndexAssign {
                 object: Box::new(self.apply_substitution_expr(object, subst)),
                 index: Box::new(self.apply_substitution_expr(index, subst)),
+                value: Box::new(self.apply_substitution_expr(value, subst)),
+            },
+            TypedExprKind::FieldAssign {
+                object,
+                field,
+                value,
+            } => TypedExprKind::FieldAssign {
+                object: Box::new(self.apply_substitution_expr(object, subst)),
+                field: field.clone(),
                 value: Box::new(self.apply_substitution_expr(value, subst)),
             },
             TypedExprKind::Range {
@@ -154,6 +192,22 @@ impl TypeInference {
                 object: Box::new(self.apply_substitution_expr(object, subst)),
                 range: Box::new(self.apply_substitution_expr(range, subst)),
             },
+            TypedExprKind::Reference {
+                mutable,
+                operand,
+                receiver_of,
+            } => TypedExprKind::Reference {
+                mutable: *mutable,
+                operand: Box::new(self.apply_substitution_expr(operand, subst)),
+                receiver_of: receiver_of.clone(),
+            },
+            TypedExprKind::Deref(operand) => {
+                TypedExprKind::Deref(Box::new(self.apply_substitution_expr(operand, subst)))
+            }
+            TypedExprKind::DerefAssign { target, value } => TypedExprKind::DerefAssign {
+                target: Box::new(self.apply_substitution_expr(target, subst)),
+                value: Box::new(self.apply_substitution_expr(value, subst)),
+            },
             TypedExprKind::StructLiteral { name, fields } => TypedExprKind::StructLiteral {
                 name: name.clone(),
                 fields: fields
@@ -164,6 +218,57 @@ impl TypeInference {
             TypedExprKind::Cast { expr, target } => TypedExprKind::Cast {
                 expr: Box::new(self.apply_substitution_expr(expr, subst)),
                 target: subst.apply(target),
+            },
+            TypedExprKind::EnumVariant {
+                enum_name,
+                variant,
+                tag,
+                args,
+            } => TypedExprKind::EnumVariant {
+                enum_name: enum_name.clone(),
+                variant: variant.clone(),
+                tag: *tag,
+                args: args
+                    .iter()
+                    .map(|a| self.apply_substitution_expr(a, subst))
+                    .collect(),
+            },
+            TypedExprKind::Block { stmts, tail } => TypedExprKind::Block {
+                stmts: stmts
+                    .iter()
+                    .map(|s| self.apply_substitution_stmt(s, subst))
+                    .collect(),
+                tail: Box::new(self.apply_substitution_expr(tail, subst)),
+            },
+            TypedExprKind::Match {
+                scrutinee,
+                arms,
+                origin,
+            } => TypedExprKind::Match {
+                scrutinee: Box::new(self.apply_substitution_expr(scrutinee, subst)),
+                arms: arms
+                    .iter()
+                    .map(|arm| {
+                        let mut arm = arm
+                            .clone()
+                            .map_exprs(|e| self.apply_substitution_expr(&e, subst));
+                        arm.pattern = arm.pattern.map_types(&mut |t| subst.apply(&t));
+                        arm
+                    })
+                    .collect(),
+                origin: *origin,
+            },
+
+            TypedExprKind::ResultAssert {
+                scrutinee,
+                ok_tag,
+                payload_ty,
+                on_err,
+            } => TypedExprKind::ResultAssert {
+                scrutinee: Box::new(self.apply_substitution_expr(scrutinee, subst)),
+                ok_tag: *ok_tag,
+                payload_ty: subst.apply(payload_ty),
+                on_err: on_err.clone(),
             },
         };
 

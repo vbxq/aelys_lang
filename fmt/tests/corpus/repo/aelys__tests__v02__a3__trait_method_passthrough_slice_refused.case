@@ -1,0 +1,24 @@
+trait Pick {
+    fn pick(&self, a: i64) -> i64;
+}
+
+struct K { n: i64 }
+
+impl Pick for K {
+    fn pick(&self, a: i64) -> i64 { a + self.n }
+}
+
+fn via<T: Pick>(t: &T, s: &[i64]) -> i64 { t.pick(s[0]) }
+
+fn keep<T>(x: T, k: i64) -> T { x }
+
+fn main() {
+    let mut v: Vec<i64> = vec![11, 22, 33, 44];
+    let k = K { n: 1 };
+    let r = keep(v.as_slice(), via(&k, v.as_slice()));
+    let mut i = 0;
+    while i < 100 { v.push(i) ; i = i + 1; }
+    let w: Vec<i64> = vec![777, 777, 777, 777];
+    println!("{}", r[0] + r[1]);
+    println!("{}", w[0]);
+}

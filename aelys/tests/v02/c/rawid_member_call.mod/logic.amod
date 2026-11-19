@@ -1,0 +1,6 @@
+pub fn r#and(a: bool, b: bool) -> bool {
+    return a and b
+}
+pub fn step(n: i64) -> i64 {
+    return n + 1
+}

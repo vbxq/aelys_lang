@@ -1,0 +1,14 @@
+fn find(i: i64) -> Option<(string, i64)> {
+    if i % 2 == 0 { return Some(("e{i}", i)) }
+    return None
+}
+fn main() {
+    let mut n = 0
+    for i in 0..100 {
+        n = match find(i) {
+            Some(p) => n + p.0.len + p.1,
+            None => n + 1,
+        }
+    }
+    println(n)
+}

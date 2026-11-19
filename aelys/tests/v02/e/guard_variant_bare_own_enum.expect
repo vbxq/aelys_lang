@@ -1,0 +1,2 @@
+refuse E0101
+`On` alone does not name a variant; write `Mode::On`

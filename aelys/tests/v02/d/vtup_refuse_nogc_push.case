@@ -1,0 +1,12 @@
+struct W<T> { v: Vec<T> }
+nogc fn f(p: &mut (Vec<i64>, i64), w: &mut W<i64>) {
+    Vec::push((*p).0, 1)
+    Vec::push((*w).v, 1)
+}
+fn main() -> i64 {
+    let mut p: (Vec<i64>, i64) = (Vec::new(), 1)
+    let mut w: W<i64> = W { v: Vec::new() }
+    f(&mut p, &mut w)
+    println(p.0.len)
+    return 0
+}

@@ -1,0 +1,20 @@
+struct Node { val: i64, next: Rc<Node> }
+fn build(n: i64, first: Rc<Node>) -> Rc<Node> {
+    if n == 0 { return first }
+    return Rc::new(Node { val: n, next: build(n - 1, first) })
+}
+fn ring(i: i64) -> i64 {
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
+    a.next = build(31, a)
+    return Rc::get(Rc::get(a).next).val
+}
+fn main() -> i64 {
+    let mut i: i64 = 0
+    let mut n: i64 = 0
+    while i < NN / 10 {
+        n = n + ring(i)
+        i = i + 1
+    }
+    println(n)
+    return 0
+}

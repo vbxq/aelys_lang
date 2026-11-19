@@ -1,0 +1,29 @@
+trait T2 {
+    fn req(&self) -> i64
+    fn b(&self) -> i64 { return self.req() + 1 }
+    fn a(&self) -> i64 { return self.b() * 10 }
+}
+
+struct X { v: i64 }
+struct Y { v: i64 }
+
+impl T2 for X {
+    fn req(&self) -> i64 { return self.v }
+    fn b(&self) -> i64 { return self.req() + 5 }
+}
+
+impl T2 for Y {
+    fn req(&self) -> i64 { return self.v * 2 }
+}
+
+fn ga<T: T2>(t: &T) -> i64 { return t.a() }
+
+fn main() -> i64 {
+    let y = Y { v: 3 }
+    let x = X { v: 3 }
+    println(ga(&y))
+    println(ga(&x))
+    println(y.a())
+    println(x.a())
+    return 0
+}

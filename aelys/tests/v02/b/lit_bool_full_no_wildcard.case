@@ -1,0 +1,9 @@
+fn yn(b: bool) -> string {
+    return match b { true => "y", false => "n" }
+}
+
+fn main() -> i64 {
+    println(yn(3 > 2))
+    println(yn(3 < 2))
+    return 0
+}

@@ -1,0 +1,13 @@
+struct Buf<T> { xs: [T; 3], n: i64 }
+fn main() {
+    let b = Buf { xs: [5, 6, 7], n: 3 }
+    let mut i = 0
+    let mut t = 0
+    while i < b.n {
+        t = t + b.xs[i]
+        i = i + 1
+    }
+    println(t)
+    let s = Buf { xs: ["a", "b", "c"], n: 2 }
+    println(s.xs[1])
+}

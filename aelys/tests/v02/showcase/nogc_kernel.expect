@@ -1,0 +1,19 @@
+balanced
+A =
+     1     2     3
+     4     5     6
+B =
+     7     8
+     9    10
+    11    12
+A*B =
+    58    64
+   139   154
+trace 212, peak 154
+transpose identity: true
+error: cannot multiply 2x3 by 2x3
+M^3 =
+    22    21    21
+    21    22    21
+    21    21    22
+trace(M^10) = 1048578

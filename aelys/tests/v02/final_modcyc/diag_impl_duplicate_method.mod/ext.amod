@@ -1,0 +1,5 @@
+needs geom
+
+impl geom.Pt {
+    pub fn get(&self) -> i64 { return self.v + 1 }
+}

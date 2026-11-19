@@ -1,0 +1,8 @@
+fn main() {
+    let t = (1, "a")
+    println("{t}")
+    let n = ((1, 2), true)
+    println(n)
+    let c = (-3, 'x')
+    println(c)
+}

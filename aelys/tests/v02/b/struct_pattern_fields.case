@@ -1,0 +1,17 @@
+struct Point { x: i64, y: i64 }
+
+fn f(p: Point) -> i64 {
+    return match p {
+        Point { x, y: 0 } => x,
+        Point { x: 0, y } => y * 10,
+        Point { x, y } => x + y
+    }
+}
+
+fn main() -> i64 {
+    println(f(Point { x: 3, y: 0 }))
+    println(f(Point { x: 0, y: 4 }))
+    println(f(Point { x: 2, y: 5 }))
+    println(f(Point { x: 0, y: 0 }))
+    return 0
+}

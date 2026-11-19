@@ -1,0 +1,7 @@
+type Res<T> = Result<T, string>
+fn f() -> Res<i64, i64> {
+    return Result::Ok(1)
+}
+fn main() {
+    f()
+}

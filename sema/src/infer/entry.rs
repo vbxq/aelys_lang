@@ -1,15 +1,17 @@
 use super::{KNOWN_TYPE_NAMES, TypeInference};
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
-use crate::typed_ast::TypedProgram;
+use crate::modules::ModuleImports;
+use crate::typed_ast::{TypedProgram, TypedStmt};
 use crate::types::{InferType, TypeTable};
 use aelys_common::Warning;
-use aelys_syntax::{Source, Stmt, TypeAnnotation};
-use std::collections::HashSet;
+use aelys_syntax::{Source, Stmt, StmtKind, TypeAnnotation};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 pub struct InferenceResult {
     pub program: TypedProgram,
     pub warnings: Vec<Warning>,
+    pub deferred_errors: Vec<TypeError>,
     pub type_table: TypeTable,
 }
 
@@ -25,8 +27,74 @@ impl Default for TypeInference {
             warnings: Vec::new(),
             type_table: TypeTable::new(),
             type_params_in_scope: Vec::new(),
+            type_param_bounds: HashMap::new(),
+            instantiated_param_names: HashMap::new(),
+            literal_init_vars: HashMap::new(),
+            struct_literal_hint: None,
+            dyn_expect: None,
+            literal_globals: HashMap::new(),
+            keep_binding_use: false,
+            try_counter: 0,
+            unsafe_depth: 0,
+            refused_matches: std::collections::HashSet::new(),
+            nogc_fn_params: HashSet::new(),
+            bound_generic_sigs: HashMap::new(),
+            foreign_sigs: HashSet::new(),
+            foreign_shadowed_spans: HashSet::new(),
+            unqualified_variant_spans: HashSet::new(),
+            generic_fn_sigs: HashSet::new(),
+            generic_value_spans: HashSet::new(),
+            module_globals: HashSet::new(),
+            shadowed_globals: HashSet::new(),
+            lambda_depth: 0,
+            in_nogc_fn: false,
+            lambda_captures: HashSet::new(),
+            module_imports: crate::modules::ModuleImports::default(),
+            import_aliases: HashMap::new(),
+            imported_globals: HashSet::new(),
+            imported_types: HashSet::new(),
+            module_is_importable: false,
+            deferred: Vec::new(),
+            deferred_sites: HashSet::new(),
+            reported_sites: HashSet::new(),
+            deferred_results: HashSet::new(),
+            deferred_carriers: Vec::new(),
+            deferred_mutability: Vec::new(),
+            consts: HashMap::new(),
+            alias_names: HashSet::new(),
+            failed_consts: HashSet::new(),
+            alias_checks: Vec::new(),
+            module_decls: Default::default(),
+            methods: HashMap::new(),
+            trait_methods: HashMap::new(),
+            builtin_methods: HashMap::new(),
+            recv_counter: 0,
+            pretyped: HashMap::new(),
+            method_tparams: HashMap::new(),
+            probe_subst: crate::unify::Substitution::new(),
+            probe_upto: 0,
+            trait_names: HashMap::new(),
+            trait_defs: HashMap::new(),
+            impl_defs: Vec::new(),
+            local_impls: Vec::new(),
+            local_traits: Vec::new(),
+            used_builtin_stubs: HashSet::new(),
+            pending_trait_args: None,
+            declarations_only: false,
+            early_trait_names: HashMap::new(),
+            unchecked_dyns: Vec::new(),
         }
     }
+}
+
+fn is_str_name(ann: &TypeAnnotation) -> bool {
+    matches!(ann.name.as_str(), "str" | "String" | "string")
+        && !ann.is_slice
+        && ann.type_param.is_none()
+        && ann.type_params.is_empty()
+        && ann.tuple_elems.is_none()
+        && ann.array_size.is_none()
+        && !ann.is_function_type()
 }
 
 impl TypeInference {
@@ -35,16 +103,376 @@ impl TypeInference {
     }
 
     pub fn type_from_annotation(&mut self, ann: &TypeAnnotation) -> InferType {
-        self.check_type_annotation(ann);
-        InferType::from_annotation(ann)
+        // default position: a `nogc fn(...)` type is out of position here and gets rejected
+        self.lower_known_type(ann, false)
     }
 
-    fn check_type_annotation(&mut self, ann: &TypeAnnotation) {
+    pub(crate) fn type_from_param_annotation(&mut self, ann: &TypeAnnotation) -> InferType {
+        self.lower_known_type(ann, true)
+    }
+
+    fn lower_known_type(&mut self, ann: &TypeAnnotation, nogc_ok: bool) -> InferType {
+        let before = self.errors.len();
+        let ty = self.lower_type(ann, nogc_ok);
+        if self.errors[before..].iter().any(|e| !e.is_type_arg_count()) {
+            InferType::Dynamic
+        } else {
+            ty
+        }
+    }
+
+    // recursion passes false, so a `nogc fn` anywhere but a bare parameter type is rejected
+    fn lower_type(&mut self, ann: &TypeAnnotation, nogc_ok: bool) -> InferType {
+        if let Some(kind) = ann.reference {
+            let mutable = matches!(kind, aelys_syntax::RefKind::Mut);
+            if ann.is_slice {
+                let elem = ann
+                    .type_param
+                    .as_ref()
+                    .map(|p| self.lower_type(p, false))
+                    .unwrap_or(InferType::Dynamic);
+                return InferType::Slice {
+                    elem: Box::new(elem),
+                    mutable,
+                };
+            }
+            if is_str_name(ann) {
+                if !mutable {
+                    return InferType::StrRef;
+                }
+                if ann.name == "str" {
+                    self.errors.push(TypeError::coded(
+                        "E0321",
+                        "`&mut str` is not a type; take `&mut String` to grow a string in place",
+                        "`&mut str`",
+                        ann.span,
+                    ));
+                    return InferType::Dynamic;
+                }
+            }
+            let mut base = ann.clone();
+            base.reference = None;
+            let referent = if base.is_dyn {
+                self.lower_dyn(&base)
+            } else {
+                self.lower_type(&base, false)
+            };
+            return InferType::Ref {
+                referent: Box::new(referent),
+                mutable,
+            };
+        }
+
+        if ann.is_dyn {
+            return self.unsized_dyn(ann);
+        }
+
+        if ann.name == "str" && is_str_name(ann) {
+            self.errors.push(TypeError::coded(
+                "E0321",
+                "`str` is only a type behind a reference; write `&str` for a borrowed string or \
+                 `String` for an owned one",
+                "bare `str`",
+                ann.span,
+            ));
+            return InferType::Dynamic;
+        }
+
+        if let Some(elems) = &ann.tuple_elems {
+            let ty = InferType::Tuple(elems.iter().map(|e| self.lower_type(e, false)).collect());
+            self.reject_tuple_carriers(&ty, ann.span);
+            return ty;
+        }
+
+        self.check_type_annotation(ann);
+
+        if ann.is_function_type() {
+            if ann.nogc && !nogc_ok {
+                self.errors.push(TypeError::nogc_out_of_position(ann.span));
+            }
+            let params = ann
+                .fn_params
+                .as_ref()
+                .map(|ps| ps.iter().map(|p| self.lower_type(p, false)).collect())
+                .unwrap_or_default();
+            let ret = ann
+                .fn_ret
+                .as_ref()
+                .map(|r| self.lower_type(r, false))
+                .unwrap_or(InferType::Null);
+            return InferType::Function {
+                params,
+                ret: Box::new(ret),
+                nogc: ann.nogc,
+            };
+        }
+
+        let name_lower = ann.name.to_lowercase();
+        if name_lower == "array" && ann.array_size.is_some() {
+            let inner = ann
+                .type_param
+                .as_ref()
+                .map(|p| self.type_from_annotation(p))
+                .unwrap_or(InferType::Dynamic);
+            return InferType::Array(Box::new(inner), ann.array_size);
+        }
+        if name_lower == "vec" {
+            self.check_type_arg_count("type", &ann.name, 1, ann);
+            let inner = ann
+                .type_param
+                .as_ref()
+                .map(|p| self.type_from_annotation(p))
+                .unwrap_or(InferType::Dynamic);
+            return InferType::Vec(Box::new(inner));
+        }
+        if ann.name == "Rc" {
+            self.check_type_arg_count("type", &ann.name, 1, ann);
+            let inner = match ann.type_param.as_deref() {
+                Some(p) if p.is_dyn && p.reference.is_none() => self.lower_dyn(p),
+                Some(p) => self.type_from_annotation(p),
+                None => InferType::Dynamic,
+            };
+            return InferType::Rc(Box::new(inner));
+        }
+
+        // map never so into_ok can read it, a plain never annotation is still rejected by check_type_annotation
+        if ann.name == "Never" {
+            return InferType::Never;
+        }
+
+        // resolved once, so the `result` special case and the generic path name the same enum
+        let qualified = match self.imported_type_name(&ann.name) {
+            Some(q) => Some(q),
+            None if ann.name.starts_with(crate::modules::TYPE_HEAD)
+                && (self.type_table.has_struct(&ann.name) || self.type_table.has_enum(&ann.name)) =>
+            {
+                Some(ann.name.clone())
+            }
+            None if ann.name.contains('.') => {
+                let before = self.errors.len();
+                match self.resolve_module_type_name(&ann.name, ann.span) {
+                    Some(q) => Some(q),
+                    None => {
+                        if self.errors.len() == before {
+                            self.errors.push(TypeError {
+                                kind: TypeErrorKind::Mismatch {
+                                    expected: InferType::Dynamic,
+                                    found: InferType::Struct(ann.name.clone(), Vec::new()),
+                                },
+                                span: ann.span,
+                                reason: ConstraintReason::UnknownType {
+                                    name: ann.to_string(),
+                                },
+                                secondary_spans: Vec::new(),
+                                help: Some(format!(
+                                    "a type of another module is written `<namespace>.{}`, \
+                                     with the namespace bound by a `needs`",
+                                    crate::modules::source_type_name(&ann.name)
+                                )),
+                                suggestion: None,
+                            });
+                        }
+                        return InferType::Dynamic;
+                    }
+                }
+            }
+            None => None,
+        };
+
+        let result_carrier = match &qualified {
+            Some(q) => (crate::modules::source_type_name(q) == "Result").then(|| q.clone()),
+            None => (ann.name == "Result" && self.type_table.has_enum("Result"))
+                .then(|| ann.name.clone()),
+        };
+        if let Some(carrier) = result_carrier
+            && self.type_table.has_enum(&carrier)
+            && ann.type_params.len() == 2
+        {
+            let t = self.type_from_annotation(&ann.type_params[0]);
+            let e = if ann.type_params[1].name == "Never" && !ann.type_params[1].is_function_type()
+            {
+                InferType::Never
+            } else {
+                self.type_from_annotation(&ann.type_params[1])
+            };
+            return InferType::Enum(carrier, vec![t, e]);
+        }
+
+        if let Some(qualified) = qualified {
+            if self.type_table.has_enum(&qualified) {
+                let type_args = self.collect_type_args(ann);
+                self.check_enum_type_arg_count(&qualified, type_args.len(), ann);
+                let type_args = self.fit_enum_type_args(&qualified, type_args);
+                return InferType::Enum(qualified, type_args);
+            }
+            if self.type_table.has_struct(&qualified) {
+                return self.struct_annotation(&qualified, ann);
+            }
+            return InferType::Struct(qualified, Vec::new());
+        }
+
+        let ty = InferType::from_annotation(ann);
+        if let InferType::Struct(ref name, _) = ty {
+            if self.type_table.has_enum(name) {
+                let type_args = self.collect_type_args(ann);
+                self.check_enum_type_arg_count(name, type_args.len(), ann);
+                let type_args = self.fit_enum_type_args(name, type_args);
+                return InferType::Enum(name.clone(), type_args);
+            }
+            if self.type_table.has_struct(name) {
+                return self.struct_annotation(&name.clone(), ann);
+            }
+        }
+        ty
+    }
+
+    fn fit_enum_type_args(&self, name: &str, mut args: Vec<InferType>) -> Vec<InferType> {
+        if let Some(expected) = self.type_table.get_enum(name).map(|d| d.type_params.len()) {
+            args.resize(expected, InferType::Dynamic);
+        }
+        args
+    }
+
+    fn struct_annotation(&mut self, name: &str, ann: &TypeAnnotation) -> InferType {
+        let found = Self::annotated_type_arg_count(ann);
+        if found == 0 && self.type_params_in_scope.iter().any(|p| p == name) {
+            return InferType::Struct(name.to_string(), Vec::new());
+        }
+        let expected = self
+            .type_table
+            .get_struct(name)
+            .map_or(0, |d| d.type_params.len());
+        self.check_struct_type_arg_count(name, ann);
+        if expected == 0 {
+            return InferType::Struct(name.to_string(), Vec::new());
+        }
+        if expected != found {
+            return InferType::Dynamic;
+        }
+        let args = self.collect_type_args(ann);
+        InferType::Struct(name.to_string(), args)
+    }
+
+    fn annotated_type_arg_count(ann: &TypeAnnotation) -> usize {
+        if !ann.type_params.is_empty() {
+            ann.type_params.len()
+        } else {
+            usize::from(ann.type_param.is_some())
+        }
+    }
+
+    fn check_type_arg_count(
+        &mut self,
+        what: &str,
+        name: &str,
+        expected: usize,
+        ann: &TypeAnnotation,
+    ) {
+        let found = Self::annotated_type_arg_count(ann);
+        if expected != found {
+            self.errors.push(TypeError::type_arg_count(
+                what,
+                crate::modules::source_type_name(name),
+                expected,
+                found,
+                ann.span,
+            ));
+        }
+    }
+
+    fn check_struct_type_arg_count(&mut self, name: &str, ann: &TypeAnnotation) {
+        let expected = self
+            .type_table
+            .get_struct(name)
+            .map_or(0, |d| d.type_params.len());
+        self.check_type_arg_count("struct", name, expected, ann);
+    }
+
+    fn check_enum_type_arg_count(&mut self, name: &str, found: usize, ann: &TypeAnnotation) {
+        let Some(expected) = self.type_table.get_enum(name).map(|d| d.type_params.len()) else {
+            return;
+        };
+        if expected != found {
+            self.errors.push(TypeError::type_arg_count(
+                "enum",
+                crate::modules::source_type_name(name),
+                expected,
+                found,
+                ann.span,
+            ));
+        }
+    }
+
+    fn collect_type_args(&mut self, ann: &TypeAnnotation) -> Vec<InferType> {
+        if !ann.type_params.is_empty() {
+            return ann
+                .type_params
+                .iter()
+                .map(|p| self.type_from_annotation(p))
+                .collect();
+        }
+        if let Some(ref param) = ann.type_param {
+            return vec![self.type_from_annotation(param)];
+        }
+        Vec::new()
+    }
+
+    pub(crate) fn check_type_annotation(&mut self, ann: &TypeAnnotation) {
+        if ann.is_dyn {
+            return;
+        }
         if self.type_params_in_scope.iter().any(|tp| tp == &ann.name) {
             return;
         }
 
+        if ann.name.contains('.') || self.import_aliases.contains_key(&ann.name) {
+            return;
+        }
+
+        if let Some(elems) = &ann.tuple_elems {
+            for e in elems {
+                self.check_type_annotation(e);
+            }
+            return;
+        }
+
+        if ann.is_slice {
+            if let Some(ref elem) = ann.type_param {
+                self.check_type_annotation(elem);
+            }
+            return;
+        }
+
+        if ann.is_function_type() {
+            if let Some(ref params) = ann.fn_params {
+                for p in params {
+                    self.check_type_annotation(p);
+                }
+            }
+            if let Some(ref ret) = ann.fn_ret {
+                self.check_type_annotation(ret);
+            }
+            return;
+        }
+
         let name_lower = ann.name.to_lowercase();
+
+        if name_lower == "array" && ann.array_size.is_none() {
+            self.errors.push(TypeError {
+                kind: TypeErrorKind::Mismatch {
+                    expected: InferType::Dynamic,
+                    found: InferType::Struct(ann.name.clone(), Vec::new()),
+                },
+                span: ann.span,
+                reason: ConstraintReason::UnknownType {
+                    name: ann.to_string(),
+                },
+                secondary_spans: Vec::new(),
+                help: Some("use [T; N] syntax instead of Array<T>".to_string()),
+                suggestion: None,
+            });
+            return;
+        }
 
         if KNOWN_TYPE_NAMES.contains(&name_lower.as_str()) {
             if let Some(ref param) = ann.type_param {
@@ -53,19 +481,59 @@ impl TypeInference {
             return;
         }
 
+        if ann.name == "Rc" {
+            if let Some(ref param) = ann.type_param {
+                self.check_type_annotation(param);
+            }
+            return;
+        }
+
+        if ann.name == "Never" {
+            self.errors.push(TypeError::member_access(
+                "[result] `Never` may only appear as the error type of a `Result`".to_string(),
+                ann.span,
+            ));
+            return;
+        }
+
+        if ann.name == "Self" {
+            self.errors.push(TypeError::self_outside_impl(ann.span));
+            return;
+        }
+
+        if self.is_trait_name(&ann.name) {
+            self.errors.push(TypeError::coded(
+                "E0750",
+                format!(
+                    "the trait `{}` is used as a type; write `dyn {}` for a trait object, or \
+                     take a type parameter `<T: {}>`",
+                    ann.name, ann.name, ann.name
+                ),
+                "trait used as a type",
+                ann.span,
+            ));
+            return;
+        }
+
         if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
-            if self.type_table.has_struct(&ann.name) || self.env.contains(&ann.name) {
+            if self.type_table.has_struct(&ann.name)
+                || self.type_table.has_enum(&ann.name)
+                || self.env.contains(&ann.name)
+            {
                 return;
             }
             self.errors.push(TypeError {
                 kind: TypeErrorKind::Mismatch {
                     expected: InferType::Dynamic,
-                    found: InferType::Struct(ann.name.clone()),
+                    found: InferType::Struct(ann.name.clone(), Vec::new()),
                 },
                 span: ann.span,
                 reason: ConstraintReason::UnknownType {
-                    name: ann.name.clone(),
+                    name: ann.to_string(),
                 },
+                secondary_spans: Vec::new(),
+                help: None,
+                suggestion: None,
             });
             return;
         }
@@ -77,91 +545,239 @@ impl TypeInference {
             },
             span: ann.span,
             reason: ConstraintReason::UnknownType {
-                name: ann.name.clone(),
+                name: ann.to_string(),
             },
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
         });
     }
 
     pub fn infer_program(
         stmts: Vec<Stmt>,
         source: Arc<Source>,
-    ) -> Result<TypedProgram, Vec<crate::constraint::TypeError>> {
+    ) -> Result<TypedProgram, Vec<TypeError>> {
         let result =
-            Self::infer_program_full(stmts, source, Default::default(), Default::default())?;
+            Self::infer_program_full(stmts, source, ModuleImports::default(), Default::default())?;
+        if !result.deferred_errors.is_empty() {
+            return Err(result.deferred_errors);
+        }
         Ok(result.program)
     }
 
     pub fn infer_program_with_imports(
         stmts: Vec<Stmt>,
         source: Arc<Source>,
-        module_aliases: HashSet<String>,
+        imports: ModuleImports,
         known_globals: HashSet<String>,
-    ) -> Result<TypedProgram, Vec<crate::constraint::TypeError>> {
-        let result = Self::infer_program_full(stmts, source, module_aliases, known_globals)?;
+    ) -> Result<TypedProgram, Vec<TypeError>> {
+        let result = Self::infer_program_full(stmts, source, imports, known_globals)?;
+        if !result.deferred_errors.is_empty() {
+            return Err(result.deferred_errors);
+        }
         Ok(result.program)
     }
 
     pub fn infer_program_full(
         stmts: Vec<Stmt>,
         source: Arc<Source>,
-        module_aliases: HashSet<String>,
+        imports: ModuleImports,
         known_globals: HashSet<String>,
-    ) -> Result<InferenceResult, Vec<crate::constraint::TypeError>> {
-        let mut inf = TypeInference::new();
-
-        for alias in &module_aliases {
-            inf.env
-                .define_function_owned(alias.clone(), InferType::Dynamic);
-        }
-
-        for global in &known_globals {
-            inf.env
-                .define_function_owned(global.clone(), InferType::Dynamic);
-        }
-
-        inf.collect_structs(&stmts);
-        inf.collect_signatures(&stmts, "");
-
-        let typed_stmts = inf.infer_stmts(&stmts);
+    ) -> Result<InferenceResult, Vec<TypeError>> {
+        let (mut inf, stmts) = Self::collect_declarations(stmts, imports, known_globals, false);
+        let mut typed_stmts = inf.infer_stmts(&stmts);
+        typed_stmts.extend(inf.infer_used_builtin_stubs());
 
         let subst = inf.solve_constraints();
+        inf.replay_carrier_checks(&subst);
+        inf.replay_mutability_checks(&subst);
 
         let resolved_stmts = inf.apply_substitution_stmts(&typed_stmts, &subst);
 
+        let declared_type_params = collect_declared_type_params(&stmts);
+
+        inf.validate_resolved_stmts(&resolved_stmts, &declared_type_params);
+        inf.check_vec_producing_forms(&resolved_stmts);
+        inf.reject_private_types_in_public_api(&resolved_stmts);
+        inf.drop_generic_value_cascades();
+
+        let is_type_param = |inf: &TypeInference, ty: &InferType| -> bool {
+            matches!(ty, InferType::Struct(name, args) if args.is_empty() && declared_type_params.contains(name.as_str()) && !inf.type_table.has_struct(name))
+        };
+        let defers = |kind: &TypeErrorKind| {
+            matches!(
+                kind,
+                TypeErrorKind::NestedFnShadowsOuter { .. }
+                    | TypeErrorKind::ConstIndexOutOfBounds { .. }
+            )
+        };
+        let reported = |inf: &TypeInference, err: &TypeError| match &err.kind {
+            TypeErrorKind::Mismatch { expected, found } => {
+                !(matches!(
+                    &err.reason,
+                    ConstraintReason::TypeAnnotation { .. } | ConstraintReason::StructField { .. }
+                ) && (is_type_param(inf, expected) || is_type_param(inf, found)))
+            }
+            _ => true,
+        };
+
+        if !inf.errors.iter().any(|err| reported(&inf, err)) {
+            inf.reject_unresolved_types(&resolved_stmts);
+        }
+
         let final_stmts = inf.finalize_stmts(resolved_stmts);
 
-        let (fatal_errors, type_warnings): (Vec<_>, Vec<_>) =
-            inf.errors.iter().cloned().partition(|err| {
-                matches!(
-                    err.reason,
-                    ConstraintReason::BitwiseOp { .. }
-                        | ConstraintReason::TypeAnnotation { .. }
-                        | ConstraintReason::InvalidCast
-                        | ConstraintReason::UnknownType { .. }
-                        | ConstraintReason::IntLiteralOverflow { .. }
-                )
-            });
+        let all_errors: Vec<_> = inf
+            .errors
+            .iter()
+            .filter(|err| defers(&err.kind) || reported(&inf, err))
+            .cloned()
+            .collect();
 
-        if !fatal_errors.is_empty() {
-            return Err(fatal_errors);
+        if all_errors.iter().any(|err| !defers(&err.kind)) {
+            return Err(all_errors);
+        }
+        Ok(inf.into_result(final_stmts, source, all_errors))
+    }
+
+    // bodies skipped and errors dropped: the module is typed again once its neighbours are known
+    pub fn infer_declarations(
+        stmts: Vec<Stmt>,
+        source: Arc<Source>,
+        imports: ModuleImports,
+        known_globals: HashSet<String>,
+    ) -> TypedProgram {
+        let (mut inf, stmts) = Self::collect_declarations(stmts, imports, known_globals, true);
+        let typed_stmts = inf.infer_stmts(&stmts);
+        let subst = inf.solve_constraints();
+        let resolved = inf.apply_substitution_stmts(&typed_stmts, &subst);
+        let stmts = inf.finalize_stmts(resolved);
+        inf.into_result(stmts, source, Vec::new()).program
+    }
+
+    fn collect_declarations(
+        mut stmts: Vec<Stmt>,
+        imports: ModuleImports,
+        known_globals: HashSet<String>,
+        declarations_only: bool,
+    ) -> (TypeInference, Vec<Stmt>) {
+        let mut inf = TypeInference::new();
+        inf.declarations_only = declarations_only;
+        inf.module_is_importable = imports.is_importable;
+        inf.install_imports(imports);
+
+        for global in &known_globals {
+            let ty = match global.as_str() {
+                "print" | "println" => InferType::Function {
+                    params: vec![InferType::Dynamic],
+                    ret: Box::new(InferType::Null),
+                    nogc: false,
+                },
+                "__aelys_collect" => InferType::Function {
+                    params: vec![],
+                    ret: Box::new(InferType::Null),
+                    nogc: false,
+                },
+                _ => InferType::Dynamic,
+            };
+            inf.env.define_function_owned(global.clone(), ty);
         }
 
-        if !type_warnings.is_empty() && std::env::var("AELYS_TYPE_WARNINGS").is_ok() {
-            for err in &type_warnings {
-                eprintln!("Type warning: {}", err);
-            }
-        }
+        inf.prepare_decls(&mut stmts);
+        inf.reject_reserved_type_names(&stmts);
+        inf.register_struct_names(&stmts);
+        inf.note_trait_names(&stmts);
+        inf.collect_enums(&stmts);
+        inf.resolve_struct_fields(&stmts);
+        inf.check_alias_bodies();
+        let stmts = inf.collect_traits(stmts);
+        inf.check_unchecked_dyns();
+        inf.register_impls_of_local_traits();
+        let stmts = inf.collect_impls(stmts);
+        inf.reject_multi_variant_rc_enums(&stmts);
+        inf.reject_polymorphic_recursion(&stmts);
+        inf.collect_signatures(&stmts, "");
+        inf.fill_trait_sigs();
+        inf.check_ord_has_eq();
 
-        let type_table = inf.type_table;
+        (inf, stmts)
+    }
 
-        Ok(InferenceResult {
+    fn into_result(
+        self,
+        stmts: Vec<TypedStmt>,
+        source: Arc<Source>,
+        deferred_errors: Vec<TypeError>,
+    ) -> InferenceResult {
+        let type_table = self.type_table;
+        InferenceResult {
             program: TypedProgram {
-                stmts: final_stmts,
+                stmts,
                 source,
                 type_table: type_table.clone(),
+                literal_globals: self.literal_globals,
+                decls: self.module_decls,
+                traits: self
+                    .local_traits
+                    .iter()
+                    .filter_map(|q| self.trait_defs.get(q).cloned())
+                    .collect(),
+                impls: self
+                    .local_impls
+                    .iter()
+                    .map(|&i| self.impl_defs[i].clone())
+                    .collect(),
             },
-            warnings: inf.warnings,
+            warnings: self.warnings,
+            deferred_errors,
             type_table,
-        })
+        }
+    }
+}
+
+fn collect_declared_type_params(stmts: &[Stmt]) -> HashSet<String> {
+    let mut params = HashSet::new();
+    collect_type_params_recursive(stmts, &mut params);
+    params
+}
+
+fn collect_type_params_recursive(stmts: &[Stmt], params: &mut HashSet<String>) {
+    for stmt in stmts {
+        match &stmt.kind {
+            StmtKind::Function(func) => {
+                for tp in &func.type_params {
+                    params.insert(tp.clone());
+                }
+                collect_type_params_recursive(&func.body, params);
+            }
+            StmtKind::StructDecl { type_params, .. } | StmtKind::EnumDecl { type_params, .. } => {
+                for tp in type_params {
+                    params.insert(tp.clone());
+                }
+            }
+            StmtKind::Block(inner) => {
+                collect_type_params_recursive(inner, params);
+            }
+            StmtKind::If {
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                collect_type_params_recursive(std::slice::from_ref(then_branch), params);
+                if let Some(eb) = else_branch {
+                    collect_type_params_recursive(std::slice::from_ref(eb), params);
+                }
+            }
+            StmtKind::While { body, .. } => {
+                collect_type_params_recursive(std::slice::from_ref(body), params);
+            }
+            StmtKind::For { body, .. } => {
+                collect_type_params_recursive(std::slice::from_ref(body), params);
+            }
+            StmtKind::ForEach { body, .. } => {
+                collect_type_params_recursive(std::slice::from_ref(body), params);
+            }
+            _ => {}
+        }
     }
 }

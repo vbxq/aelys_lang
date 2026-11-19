@@ -1,0 +1,13 @@
+struct Bag { name: String, items: Vec<i64> }
+
+fn grow(b: Bag) -> i64 {
+    let mut c = b;
+    Vec::push(c.items, 1);
+    Vec::push(c.items, 1);
+    c.items.len()
+}
+fn main() {
+    let b = Bag { name: "bag", items: vec![1, 2, 3] };
+    println!("{}", grow(b));
+    println!("{}", b.items.len());
+}

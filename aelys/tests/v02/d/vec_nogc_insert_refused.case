@@ -1,0 +1,6 @@
+nogc fn f(v: &mut Vec<i64>) { Vec::insert(*v, 0, 1) }
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[1]
+    f(&mut v)
+    return 0
+}

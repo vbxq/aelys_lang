@@ -1,0 +1,15 @@
+enum Expr { Num(i64), Neg(Rc<Expr>), Bin(char, Rc<Expr>, Rc<Expr>) }
+
+fn main() -> i64 {
+    let e = Expr::Neg(Rc::new(Expr::Num(2)))
+    let f = fn() -> i64 {
+        match e {
+            Expr::Num(n) => { return n }
+            Expr::Neg(x) => { return 1 }
+            Expr::Bin(o, l, r) => { return 2 }
+        }
+        return 3
+    }
+    println(f())
+    return 0
+}

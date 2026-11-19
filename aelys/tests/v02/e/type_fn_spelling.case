@@ -1,0 +1,6 @@
+fn sum(s: &[i64]) -> i64 {
+    return s[0]
+}
+fn main() {
+    let y: i64 = sum
+}

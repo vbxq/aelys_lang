@@ -1,0 +1,7 @@
+struct Pair<A, B> { a: A, b: B }
+struct W<T> { v: T }
+fn main() {
+    let mut p = Pair { a: W { v: 1 }, b: 2 }
+    p.a.v = 40
+    println(p.a.v + p.b)
+}

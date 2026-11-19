@@ -1,0 +1,38 @@
+trait Area {
+    fn area(&self) -> i64
+}
+
+struct Sq { s: i64 }
+struct Rect { w: i64, h: i64 }
+
+impl Area for Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+
+impl Area for Rect {
+    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+}
+
+trait Name {
+    fn name(&self) -> i64
+}
+
+impl Name for Sq {
+    fn name(&self) -> i64 { return 1 }
+}
+
+impl Name for Rect {
+    fn name(&self) -> i64 { return 2 }
+}
+
+fn both<T>(x: T) -> i64 where T: Area + Name { return x.area() * 10 + x.name() }
+
+fn same<T>(a: T, b: T) -> bool where T: eq { return a == b }
+
+fn main() -> i64 {
+    println(both(Rect { w: 1, h: 3 }))
+    println(both(Sq { s: 4 }))
+    println(same(3, 3))
+    println(same(3, 4))
+    return 0
+}

@@ -1,0 +1,10 @@
+struct K { key: i64 }
+
+impl eq for K {
+    fn eq(&self, o: &K) -> i64 { return self.key - o.key }
+}
+
+fn main() -> i64 {
+    println(K { key: 1 } == K { key: 2 })
+    return 0
+}

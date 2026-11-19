@@ -1,0 +1,3 @@
+refuse E0620
+`?` on a `Result` requires the function to return `Result<_, E>`
+!stage1

@@ -1,0 +1,12 @@
+struct Box1<T> { v: T }
+
+fn dbl(x: i64) -> i64 { return x * 2 }
+
+impl<T> Box1<T> {
+    fn map<U>(self, f: fn(T) -> U) -> Box1<U> { return Box1 { v: f(self.v) } }
+}
+
+fn main() {
+    let b = Box1 { v: 4 }
+    println(b.map(dbl).map(dbl).v)
+}

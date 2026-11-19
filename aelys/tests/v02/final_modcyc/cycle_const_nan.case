@@ -1,0 +1,6 @@
+needs a
+pub const Z: f64 = 0.0
+fn main() {
+    println(a.N == a.N)
+    println(a.K)
+}

@@ -1,0 +1,4 @@
+fn main() { let a: i64 = 7;
+    let b: i64 = 0;
+    println!("{}", a / b);
+ }

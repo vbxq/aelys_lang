@@ -1,0 +1,16 @@
+struct P { x: i64, y: i64 }
+
+impl P {
+    fn get(&self) -> i64 { return self.x * 10 + self.y }
+}
+
+struct W { p: P }
+
+fn mk() -> W { return W { p: P { x: 4, y: 2 } } }
+
+fn mka() -> [P; 2] { return [P { x: 1, y: 1 }, P { x: 7, y: 3 }] }
+
+fn main() {
+    println(mk().p.get())
+    println(mka()[1].get())
+}

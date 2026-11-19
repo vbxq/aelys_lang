@@ -1,0 +1,8 @@
+fn f(and: i64) -> i64 {
+    return 1
+}
+fn g(or: i64) -> i64 {
+    return 2
+}
+fn main() {
+}

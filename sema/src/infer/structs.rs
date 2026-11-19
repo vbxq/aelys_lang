@@ -1,10 +1,51 @@
 use super::TypeInference;
+use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::types::{InferType, StructDef, StructField};
-use aelys_common::{Warning, WarningKind};
 use aelys_syntax::{Stmt, StmtKind};
+use std::collections::HashSet;
 
 impl TypeInference {
-    pub(super) fn collect_structs(&mut self, stmts: &[Stmt]) {
+    pub(super) fn register_struct_names(&mut self, stmts: &[Stmt]) {
+        for stmt in stmts {
+            if let StmtKind::StructDecl {
+                name, type_params, ..
+            } = &stmt.kind
+            {
+                if self.type_table.has_struct(name) {
+                    continue;
+                }
+
+                self.type_table.register_struct(StructDef {
+                    name: name.clone(),
+                    type_params: type_params.clone(),
+                    fields: Vec::new(),
+                });
+            }
+        }
+    }
+
+    pub(super) fn reject_reserved_type_names(&mut self, stmts: &[Stmt]) {
+        for stmt in stmts {
+            let name = match &stmt.kind {
+                StmtKind::StructDecl { name, .. } | StmtKind::EnumDecl { name, .. } => name,
+                _ => continue,
+            };
+            if name == "Rc" || name == "Vec" {
+                self.errors
+                    .push(TypeError::reserved_type_name(name.clone(), stmt.span));
+            }
+        }
+    }
+
+    pub(crate) fn is_transparent_aggregate_of_rc(ty: &InferType) -> bool {
+        matches!(
+            ty,
+            InferType::Array(..) | InferType::Vec(_) | InferType::Tuple(_)
+        ) && ty.contains_rc()
+    }
+
+    pub(super) fn resolve_struct_fields(&mut self, stmts: &[Stmt]) {
+        let mut processed = HashSet::new();
         for stmt in stmts {
             if let StmtKind::StructDecl {
                 name,
@@ -13,37 +54,191 @@ impl TypeInference {
                 ..
             } = &stmt.kind
             {
-                if self.type_table.has_struct(name) {
-                    self.warnings.push(Warning::new(
-                        WarningKind::UnknownType {
-                            name: format!("duplicate struct '{}'", name),
-                        },
-                        stmt.span,
-                    ));
+                if !processed.insert(name.clone()) {
                     continue;
                 }
 
-                for type_param in type_params {
-                    let fresh_var = self.type_gen.fresh();
-                    self.env.define_local(type_param.clone(), fresh_var);
+                let mut seen_fields = HashSet::new();
+                for f in fields {
+                    if !seen_fields.insert(&f.name) {
+                        self.errors.push(TypeError {
+                            kind: TypeErrorKind::Mismatch {
+                                expected: InferType::Dynamic,
+                                found: InferType::Dynamic,
+                            },
+                            span: f.span,
+                            reason: ConstraintReason::Other(format!(
+                                "duplicate field '{}' in struct '{}'",
+                                f.name, name
+                            )),
+                            secondary_spans: Vec::new(),
+                            help: None,
+                            suggestion: None,
+                        });
+                    }
                 }
+
+                let saved_type_params =
+                    std::mem::replace(&mut self.type_params_in_scope, type_params.clone());
 
                 let struct_fields: Vec<StructField> = fields
                     .iter()
                     .map(|f| {
-                        let ty = InferType::from_annotation(&f.type_annotation);
+                        let ty = self.type_from_annotation(&f.type_annotation);
+                        if Self::is_transparent_aggregate_of_rc(&ty) {
+                            self.errors.push(TypeError::rc_out_of_surface(
+                                format!(
+                                    "field `{}` of struct `{}` has type `{}`, a transparent \
+                                 aggregate embedding an `Rc<T>`; an Rc inside an \
+                                 array/vec/tuple field is not supported",
+                                    f.name, name, ty
+                                ),
+                                f.span,
+                            ));
+                        }
                         StructField {
                             name: f.name.clone(),
                             ty,
+                            is_pub: f.is_pub,
                         }
                     })
                     .collect();
+
+                self.type_params_in_scope = saved_type_params;
 
                 self.type_table.register_struct(StructDef {
                     name: name.clone(),
                     type_params: type_params.clone(),
                     fields: struct_fields,
                 });
+            }
+        }
+    }
+
+    pub(super) fn reject_polymorphic_recursion(&mut self, stmts: &[Stmt]) {
+        for stmt in stmts {
+            let (kind, name, type_params) = match &stmt.kind {
+                StmtKind::StructDecl {
+                    name, type_params, ..
+                } => ("struct", name, type_params),
+                StmtKind::EnumDecl {
+                    name, type_params, ..
+                } => ("enum", name, type_params),
+                _ => continue,
+            };
+            if type_params.is_empty() {
+                continue;
+            }
+            let own: Vec<InferType> = type_params
+                .iter()
+                .map(|p| InferType::Struct(p.clone(), Vec::new()))
+                .collect();
+            let culprit = self
+                .nominal_members(name, &own)
+                .into_iter()
+                .find(|(_, ty)| self.names_with_other_args(ty, name, &own, &mut HashSet::new(), 0))
+                .map(|(member, _)| member);
+            if let Some(member) = culprit {
+                self.errors.push(TypeError::not_supported_yet(
+                    format!(
+                        "{kind} `{name}<{}>` names itself with different type arguments in \
+                         {member}; polymorphic recursion is not supported",
+                        type_params.join(", ")
+                    ),
+                    stmt.span,
+                ));
+            }
+        }
+    }
+
+    fn nominal_members(&self, name: &str, args: &[InferType]) -> Vec<(String, InferType)> {
+        if let Some(fields) = self.type_table.struct_fields(name, args) {
+            return fields
+                .into_iter()
+                .map(|f| (format!("field `{}`", f.name), f.ty))
+                .collect();
+        }
+        let Some(def) = self.type_table.get_enum(name) else {
+            return Vec::new();
+        };
+        if def.type_params.len() != args.len() {
+            return Vec::new();
+        }
+        def.variants
+            .iter()
+            .flat_map(|v| {
+                v.data.iter().map(|d| {
+                    (
+                        format!("variant `{}`", v.name),
+                        d.subst_params(&def.type_params, args),
+                    )
+                })
+            })
+            .collect()
+    }
+
+    fn names_with_other_args(
+        &self,
+        ty: &InferType,
+        name: &str,
+        own: &[InferType],
+        expanded: &mut HashSet<String>,
+        depth: usize,
+    ) -> bool {
+        let mut go = |t: &InferType| self.names_with_other_args(t, name, own, expanded, depth);
+        match ty {
+            InferType::Struct(n, args) | InferType::Enum(n, args) if n == name => {
+                args != own || args.iter().any(go)
+            }
+            InferType::Struct(n, args) | InferType::Enum(n, args) => {
+                if args.iter().any(&mut go) {
+                    return true;
+                }
+                if args.is_empty() || depth >= 16 || !expanded.insert(format!("{n}{args:?}")) {
+                    return false;
+                }
+                self.nominal_members(n, args).iter().any(|(_, member)| {
+                    self.names_with_other_args(member, name, own, expanded, depth + 1)
+                })
+            }
+            InferType::Tuple(args) => args.iter().any(go),
+            InferType::Array(inner, _) | InferType::Vec(inner) | InferType::Rc(inner) => go(inner),
+            InferType::Ref { referent, .. } => go(referent),
+            InferType::Slice { elem, .. } => go(elem),
+            InferType::Function { params, ret, .. } => params.iter().any(&mut go) || go(ret),
+            _ => false,
+        }
+    }
+
+    pub(super) fn reject_multi_variant_rc_enums(&mut self, stmts: &[Stmt]) {
+        for stmt in stmts {
+            let StmtKind::EnumDecl { name, variants, .. } = &stmt.kind else {
+                continue;
+            };
+            let Some(def) = self.type_table.get_enum(name) else {
+                continue;
+            };
+            if def.variants.len() < 2 {
+                continue;
+            }
+            let offender = def
+                .variants
+                .iter()
+                .zip(variants.iter())
+                .flat_map(|(v, ast)| v.data.iter().zip(ast.fields.iter()).map(move |p| (v, p)))
+                .find(|(_, (ty, _))| {
+                    !ty.is_rc() && (ty.contains_rc() || self.type_table.contains_rc_nominal(ty))
+                })
+                .map(|(v, (ty, ann))| (v.name.clone(), ty.to_string(), ann.span));
+            if let Some((variant, ty, span)) = offender {
+                self.errors.push(TypeError::rc_carrier_out_of_surface(
+                    format!(
+                        "variant `{name}::{variant}` has a payload of type `{ty}`, which holds an \
+                         `Rc` inside it: an enum with more than one variant carries an Rc only as \
+                         a direct `Rc<T>` payload yet"
+                    ),
+                    span,
+                ));
             }
         }
     }

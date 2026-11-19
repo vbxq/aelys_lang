@@ -1,0 +1,8 @@
+struct W<T> { v: T }
+fn f(w: W<i64>) -> i64 {
+    return w.v
+}
+fn main() {
+    let s = W { v: "s" }
+    println(f(s))
+}

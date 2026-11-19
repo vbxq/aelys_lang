@@ -1,0 +1,18 @@
+let mut trace: i64 = 0
+let mut calls: i64 = 0
+
+fn probe(t: i64, r: bool) -> bool {
+    trace = trace * 10 + t
+    return r
+}
+
+fn next() -> i64 {
+    calls = calls + 1
+    return 4
+}
+
+fn main() -> i64 {
+    let unused: i64 = match next() { x if probe(1, x > 9) => 1, x if probe(2, x > 0) => 2, _ => 0 }
+    println("{trace} {calls}")
+    return 0
+}

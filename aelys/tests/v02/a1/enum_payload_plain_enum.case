@@ -1,0 +1,11 @@
+struct Pair<A, B> { a: A, b: B }
+enum Shape { Rect(Pair<i64, i64>), Dot }
+fn area(s: Shape) -> i64 {
+    match s {
+        Shape::Rect(p) => return p.a * 10 + p.b,
+        Shape::Dot => return 0
+    }
+}
+fn main() {
+    println(area(Shape::Rect(Pair { a: 6, b: 7 })) + area(Shape::Dot))
+}

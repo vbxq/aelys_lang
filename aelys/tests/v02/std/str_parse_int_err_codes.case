@@ -1,0 +1,16 @@
+needs std.str
+
+fn code(r: Result<i64, i64>) -> i64 {
+    return match r {
+        Ok(v) => v,
+        Err(e) => 1000 + e,
+    }
+}
+
+fn main() {
+    println(code("".parse_int()))
+    println(code("-".parse_int()))
+    println(code("1x".parse_int()))
+    println(code("99999999999999999999".parse_int()))
+    println(code("-42".parse_int()))
+}

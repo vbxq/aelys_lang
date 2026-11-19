@@ -9,6 +9,7 @@ mod local_const_prop;
 mod optimizer;
 mod pass;
 mod stats;
+mod traps;
 mod unused_vars;
 
 pub use constant_fold::ConstantFolder;
@@ -20,4 +21,5 @@ pub use local_const_prop::LocalConstantPropagator;
 pub use optimizer::Optimizer;
 pub use pass::OptimizationPass;
 pub use stats::OptimizationStats;
+pub use traps::may_trap_or_allocate;
 pub use unused_vars::UnusedVarEliminator;

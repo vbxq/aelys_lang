@@ -1,0 +1,22 @@
+struct N { val: i64, next: Option<Rc<N>> }
+struct St { head: Option<Rc<N>> }
+impl St {
+    fn pop(&mut self) -> Option<Rc<N>> {
+        match self.head {
+            Some(h) => {
+                self.head = Rc::get(h).next
+                return Some(h)
+            }
+            None => { return None }
+        }
+        return None
+    }
+}
+fn main() -> i64 {
+    let a = Rc::new(N { val: 1, next: None })
+    let mut s = St { head: Some(Rc::new(N { val: 2, next: Some(a) })) }
+    let mut t = 0
+    while let Some(nd) = s.pop() { t = t + Rc::get(nd).val }
+    println(t)
+    return 0
+}

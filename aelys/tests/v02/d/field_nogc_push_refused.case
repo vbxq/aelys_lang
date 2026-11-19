@@ -1,0 +1,8 @@
+struct Bag { name: string, items: Vec<i64> }
+
+nogc fn f(b: &mut Bag) { Vec::push((*b).items, 1) }
+fn main() -> i64 {
+    let mut b = Bag { name: "x", items: vec[1] }
+    f(&mut b)
+    return 0
+}

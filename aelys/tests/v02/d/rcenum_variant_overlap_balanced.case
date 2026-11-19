@@ -1,0 +1,28 @@
+struct Node { val: i64 }
+enum Slot { Num(i64), One(Rc<Node>), Two(i64, Rc<Node>) }
+fn weight(s: Slot) -> i64 {
+    let mut r: i64 = 0
+    match s {
+        Slot::Num(x) => { r = x }
+        Slot::One(n) => { r = Rc::get(n).val }
+        Slot::Two(k, n) => { r = k * Rc::get(n).val }
+    }
+    return r
+}
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        let mut s: Slot = Slot::Num(123456789)
+        t = t + weight(s)
+        s = Slot::One(Rc::new(Node { val: i }))
+        t = t + weight(s)
+        s = Slot::Two(3, Rc::new(Node { val: 2 }))
+        t = t + weight(s)
+        s = Slot::Num(5)
+        t = t + weight(s)
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

@@ -1,0 +1,2 @@
+pub struct Pt { pub x: i64 }
+pub fn mk(x: i64) -> Pt { Pt { x: x } }

@@ -1,0 +1,8 @@
+
+fn dup() -> i64 { return 0 }
+fn outer() -> i64 {
+    fn dup() -> i64 { return 0 }
+    return dup()
+}
+nogc fn f() -> i64 { return outer() }
+fn main() -> i64 { return f() }

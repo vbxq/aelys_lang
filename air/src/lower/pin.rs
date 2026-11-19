@@ -1,0 +1,342 @@
+use super::LoweringContext;
+use crate::*;
+use aelys_sema::{InferType, TypedExpr, TypedExprKind, TypedFmtStringPart, may_write_local};
+
+// only a form known to free nothing answers false, so a new form fails closed
+pub(super) fn may_free(expr: &TypedExpr) -> bool {
+    match &expr.kind {
+        TypedExprKind::Int(_)
+        | TypedExprKind::Float(_)
+        | TypedExprKind::Bool(_)
+        | TypedExprKind::Char(_)
+        | TypedExprKind::String(_)
+        | TypedExprKind::Null
+        | TypedExprKind::Identifier(_)
+        | TypedExprKind::Lambda(_)
+        | TypedExprKind::LambdaInner { .. } => false,
+        TypedExprKind::Grouping(inner) | TypedExprKind::Deref(inner) => may_free(inner),
+        TypedExprKind::Unary { operand, .. } | TypedExprKind::Reference { operand, .. } => {
+            may_free(operand)
+        }
+        TypedExprKind::Cast { expr, .. } => may_free(expr),
+        TypedExprKind::Member { object, .. } => may_free(object),
+        TypedExprKind::Binary { left, right, .. }
+        | TypedExprKind::And { left, right }
+        | TypedExprKind::Or { left, right } => may_free(left) || may_free(right),
+        TypedExprKind::Index { object, index } => may_free(object) || may_free(index),
+        TypedExprKind::FmtString(parts) => parts
+            .iter()
+            .any(|part| matches!(part, TypedFmtStringPart::Expr(e) if may_free(e))),
+        TypedExprKind::ArrayLiteral { elements } | TypedExprKind::VecLiteral { elements, .. } => {
+            elements.iter().any(may_free)
+        }
+        TypedExprKind::StructLiteral { fields, .. } => fields.iter().any(|(_, e)| may_free(e)),
+        TypedExprKind::EnumVariant {
+            enum_name,
+            variant,
+            args,
+            ..
+        } => {
+            (enum_name == "Vec" && variant == "clear")
+                || (enum_name == "string" && (variant == "push_str" || variant == "push"))
+                || args.iter().any(may_free)
+        }
+        _ => true,
+    }
+}
+
+fn same_value(a: &Operand, b: &Operand) -> bool {
+    match (a, b) {
+        (Operand::Copy(x) | Operand::Move(x), Operand::Copy(y) | Operand::Move(y)) => x == y,
+        (Operand::Const(_), Operand::Const(_)) => true,
+        _ => false,
+    }
+}
+
+pub(super) fn peel(expr: &TypedExpr) -> &TypedExpr {
+    let mut e = expr;
+    while let TypedExprKind::Grouping(inner) = &e.kind {
+        e = inner;
+    }
+    e
+}
+
+impl<'a> LoweringContext<'a> {
+    // a read through a vec element, a slice or a reference borrows a share a sibling may drop
+    pub(super) fn reads_a_borrowed_place(&self, expr: &TypedExpr) -> bool {
+        let e = peel(expr);
+        if !self.counted(&e.ty) {
+            return matches!(e.kind, TypedExprKind::Member { .. })
+                && self.rc_shape(&e.ty).is_some();
+        }
+        match &e.kind {
+            TypedExprKind::Index { object, .. } => {
+                Self::roots_a_vec(&object.ty)
+                    || Self::views_a_slice(&object.ty)
+                    || Self::roots_an_array(&object.ty)
+            }
+            TypedExprKind::Deref(_) | TypedExprKind::Member { .. } => true,
+            // a global hands out what it holds, and a sibling that runs code may replace it
+            TypedExprKind::Identifier(name) => self.is_global_name(name),
+            TypedExprKind::EnumVariant {
+                enum_name, variant, ..
+            } => enum_name == "Rc" && variant == "get",
+            TypedExprKind::Call { callee, .. } => {
+                matches!(self.named_callee(callee), Some(Callee::Named(name))
+                    if !self.retaining_fns.contains(&name)
+                        && !name.starts_with(aelys_sema::DYN_CALL)
+                        && !crate::symbols::BOOTSTRAP_BUILTIN_SYMBOLS.contains(&name.as_str()))
+            }
+            _ => false,
+        }
+    }
+
+    pub(super) fn pin_str_read(&mut self, val: Operand, sp: Option<Span>) -> Operand {
+        let pinned = self.retained_str_copy(val, sp);
+        if let Operand::Copy(id) = pinned
+            && !self.last_block_is_terminated()
+        {
+            self.stmt_str_temps.push((id, self.current_blocks.len()));
+        }
+        pinned
+    }
+
+    // one entry for every sibling operand: a borrowed read or a rewritten local is held as read
+    pub(super) fn hold_operand(
+        &mut self,
+        op: Operand,
+        e: &TypedExpr,
+        later: &[&TypedExpr],
+        lends_mut: bool,
+        sp: Option<Span>,
+    ) -> Operand {
+        let frees = lends_mut || later.iter().any(|s| may_free(s));
+        let borrowed =
+            self.reads_a_borrowed_place(e) || matches!(peel(e).kind, TypedExprKind::Deref(_));
+        if frees && borrowed {
+            return self.snapshot_value(op, e, sp);
+        }
+        let TypedExprKind::Identifier(name) = &peel(e).kind else {
+            return op;
+        };
+        if !later.iter().any(|s| may_write_local(s, name)) {
+            return op;
+        }
+        self.snapshot_value(op, e, sp)
+    }
+
+    // the old value dies only where the store roots in a binding this frame owns
+    pub(super) fn store_root_owns(&self, expr: &TypedExpr) -> bool {
+        let e = peel(expr);
+        if matches!(e.ty, InferType::Rc(_)) {
+            return true;
+        }
+        match &e.kind {
+            TypedExprKind::EnumVariant {
+                enum_name, variant, ..
+            } if enum_name == "Rc" && variant == "get" => true,
+            TypedExprKind::Identifier(name) => {
+                self.lookup_local(name).is_some() || self.is_global_name(name)
+            }
+            TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
+                !Self::views_a_slice(&object.ty) && self.store_root_owns(object)
+            }
+            TypedExprKind::Deref(inner) => matches!(inner.ty, InferType::Ref { mutable: true, .. }),
+            _ => false,
+        }
+    }
+
+    fn snapshot_value(&mut self, op: Operand, e: &TypedExpr, sp: Option<Span>) -> Operand {
+        if self.counted(&e.ty) {
+            return self.pin_str_read(op, sp);
+        }
+        let ty = self.lower_type_from_infer(&e.ty);
+        let plain = match &e.ty {
+            InferType::I8
+            | InferType::I16
+            | InferType::I32
+            | InferType::I64
+            | InferType::U8
+            | InferType::U16
+            | InferType::U32
+            | InferType::U64
+            | InferType::F32
+            | InferType::F64
+            | InferType::Bool
+            | InferType::Char
+            | InferType::Ref { .. }
+            | InferType::Slice { .. }
+            | InferType::Function { .. } => true,
+            InferType::Array(inner, _) if self.counted(inner) => true,
+            InferType::Array(..)
+            | InferType::Struct(..)
+            | InferType::Enum(..)
+            | InferType::Tuple(_) => !crate::rc_paths::air_type_has_rc_in(&ty, self.defs()),
+            // a value mono may still turn into a string is never copied without its share
+            InferType::String
+            | InferType::StrRef
+            | InferType::Vec(_)
+            | InferType::Rc(_)
+            | InferType::Null
+            | InferType::Never
+            | InferType::Range
+            | InferType::Var(_)
+            | InferType::Dyn(_)
+            | InferType::Dynamic => false,
+        };
+        if plain {
+            return self.emit_rvalue_to_temp(ty, Rvalue::Use(op), sp);
+        }
+        if let Some(shape) = self.rc_shape(&e.ty) {
+            return self.held_rc_copy(op, shape, sp);
+        }
+        if !matches!(e.ty, InferType::Vec(_)) {
+            return op;
+        }
+        let copy = self.alloc_temp(ty);
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Local(copy),
+                rvalue: Rvalue::Use(op),
+            },
+            sp,
+        );
+        self.emit_cow_retain(copy, sp);
+        if !self.last_block_is_terminated() {
+            self.stmt_str_temps.push((copy, self.current_blocks.len()));
+        }
+        Operand::Copy(copy)
+    }
+
+    pub(super) fn lower_pinned_operands(
+        &mut self,
+        exprs: &[&TypedExpr],
+        sp: Option<Span>,
+    ) -> Vec<Operand> {
+        self.lower_pinned_operands_owning(exprs, false, sp)
+    }
+
+    pub(super) fn lower_pinned_operands_owning(
+        &mut self,
+        exprs: &[&TypedExpr],
+        own_each: bool,
+        sp: Option<Span>,
+    ) -> Vec<Operand> {
+        self.lower_call_operands(exprs, own_each, false, sp)
+    }
+
+    pub(super) fn roots_in_global(&self, expr: &TypedExpr) -> bool {
+        let e = peel(expr);
+        match &e.kind {
+            TypedExprKind::Identifier(name) => {
+                self.lookup_local(name).is_none() && self.is_global_name(name)
+            }
+            TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
+                self.roots_in_global(object)
+            }
+            TypedExprKind::EnumVariant {
+                enum_name,
+                variant,
+                args,
+                ..
+            } => {
+                enum_name == "Rc"
+                    && variant == "get"
+                    && args.iter().any(|a| self.roots_in_global(a))
+            }
+            _ => false,
+        }
+    }
+
+    // a callee may replace the global it was handed, so the call holds its own share
+    pub(super) fn hold_global_read(
+        &mut self,
+        op: Operand,
+        e: &TypedExpr,
+        sp: Option<Span>,
+    ) -> Operand {
+        if self.counted(&e.ty) || matches!(e.ty, InferType::Vec(_)) {
+            return self.snapshot_value(op, e, sp);
+        }
+        let Some(shape) = self.rc_shape(&e.ty) else {
+            return op;
+        };
+        self.held_rc_copy(op, shape, sp)
+    }
+
+    fn held_rc_copy(&mut self, op: Operand, shape: super::RcShape, sp: Option<Span>) -> Operand {
+        let copy = self.alloc_temp(shape.ty.clone());
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Local(copy),
+                rvalue: Rvalue::Use(op),
+            },
+            sp,
+        );
+        if self.last_block_is_terminated() {
+            return Operand::Copy(copy);
+        }
+        if matches!(shape.ty, AirType::Rc(_)) {
+            self.emit_rc_retain(Operand::Copy(copy), sp);
+        } else {
+            self.emit_carrier_field_retains(Operand::Copy(copy), &shape.ty, &shape.paths, sp);
+        }
+        self.stmt_str_temps.push((copy, self.current_blocks.len()));
+        Operand::Copy(copy)
+    }
+
+    pub(super) fn frame_held_here(&self, expr: &TypedExpr) -> bool {
+        super::view_owner::frame_held(peel(expr), &|n| {
+            self.lookup_local(n)
+                .is_some_and(|id| !self.capture_slots.contains_key(&id))
+        })
+    }
+
+    pub(super) fn owned_here(&self, op: &Operand) -> bool {
+        match op {
+            Operand::Const(_) => true,
+            Operand::Copy(id) | Operand::Move(id) => {
+                self.stmt_str_temps.iter().any(|(l, _)| l == id)
+                    || self.fresh_str_results.contains(id)
+                    || self.str_operand_is_fresh(op)
+            }
+        }
+    }
+
+    pub(super) fn needs_call_share(&self, e: &TypedExpr, op: &Operand) -> bool {
+        !self.in_nogc && !self.frame_held_here(e) && !self.owned_here(op)
+    }
+
+    // the share is taken as each operand is read, so a later sibling cannot change what it holds
+    pub(super) fn lower_call_operands(
+        &mut self,
+        exprs: &[&TypedExpr],
+        own_each: bool,
+        runs_code: bool,
+        sp: Option<Span>,
+    ) -> Vec<Operand> {
+        let consumer_takes_mut = exprs
+            .iter()
+            .any(|e| matches!(e.ty, InferType::Ref { mutable: true, .. }));
+        exprs
+            .iter()
+            .enumerate()
+            .map(|(i, e)| {
+                let held = self.view_hold(e);
+                let op = self.lower_expr(e);
+                self.view_hold_done(held);
+                let share = runs_code && (self.roots_in_global(e) || self.needs_call_share(e, &op));
+                let kept = share.then(|| self.hold_global_read(op.clone(), e, sp));
+                let op = match kept {
+                    Some(kept) if !same_value(&kept, &op) => kept,
+                    _ => self.hold_operand(op, e, &exprs[i + 1..], consumer_takes_mut, sp),
+                };
+                if own_each {
+                    self.own_str_for_store(op, &e.ty, sp)
+                } else {
+                    op
+                }
+            })
+            .collect()
+    }
+}

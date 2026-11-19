@@ -1,0 +1,17 @@
+struct R { w: i64, h: i64 }
+
+impl R {
+    nogc fn area(&self) -> i64 { return self.w * self.h }
+    fn label(&self) -> string {
+        let w = self.w
+        return "r{w}"
+    }
+}
+
+nogc fn total(a: &R, b: &R) -> i64 { return a.area() + b.area() }
+
+fn main() {
+    let a = R { w: 3, h: 4 }
+    let b = R { w: 5, h: 6 }
+    println(total(&a, &b))
+}

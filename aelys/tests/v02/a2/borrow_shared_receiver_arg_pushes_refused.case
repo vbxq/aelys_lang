@@ -1,0 +1,14 @@
+struct C { n: i64 }
+
+impl C {
+    fn get_with(&self, d: i64) -> i64 { return self.n + d }
+}
+
+fn main() {
+    let mut v: Vec<C> = Vec::new()
+    v.push(C { n: 1 })
+    println(v[0].get_with({
+        v.push(C { n: 2 })
+        3
+    }))
+}

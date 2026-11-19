@@ -1,0 +1,30 @@
+fn warm(s: &str) -> String {
+    let mut w = String::with_capacity(32)
+    w.push_str(s)
+    return w
+}
+
+fn bump(s: &mut String) -> String {
+    s.push_str("!")
+    return "r"
+}
+
+fn main() {
+    let mut s = warm("a")
+    s = s + bump(&mut s)
+    println(s)
+    let mut t = "x" + "y"
+    t = t + bump(&mut t)
+    println(t)
+    let mut u = "u" + "v"
+    u += bump(&mut u)
+    println(u)
+    let mut acc = String::new()
+    let mut i = 0
+    while i < 5 {
+        acc = acc + "{i}"
+        acc += ","
+        i = i + 1
+    }
+    println(acc)
+}

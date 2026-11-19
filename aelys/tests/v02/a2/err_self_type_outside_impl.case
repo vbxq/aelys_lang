@@ -1,0 +1,5 @@
+fn f() -> Self { return 1 }
+
+fn main() {
+    println(f())
+}

@@ -1,0 +1,10 @@
+enum Expr { Num(i64), Neg(Rc<Expr>), Bin(char, Rc<Expr>, Rc<Expr>) }
+
+nogc fn mk() -> i64 {
+    let e = Expr::Neg(Rc::new(Expr::Num(1)))
+    return 0
+}
+fn main() -> i64 {
+    println(mk())
+    return 0
+}

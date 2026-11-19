@@ -1,0 +1,4 @@
+needs b
+pub struct Tok { pub v: i64 }
+pub fn start(n: i64) -> i64 { return b.step(Tok { v: n }) }
+pub fn finish(t: Tok) -> i64 { return t.v * 3 }

@@ -1,0 +1,14 @@
+needs std.slice
+needs std.sort
+
+nogc fn order(s: &mut [i64]) -> i64 {
+    s.sort_unstable()
+    sort.heap_sort(s)
+    return s.binary_search(8)
+}
+
+fn main() {
+    let mut a = [9, 4, 8, 1, 7, 3, 3, 0]
+    println(order(a[..]))
+    println("{a[0]}{a[1]}{a[2]}{a[3]}{a[4]}{a[5]}{a[6]}{a[7]}")
+}

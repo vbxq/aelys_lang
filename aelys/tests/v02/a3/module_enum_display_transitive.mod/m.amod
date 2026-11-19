@@ -1,0 +1,8 @@
+pub enum Shape { Sq, Ci }
+
+impl Display for Shape {
+    fn to_string(&self) -> string {
+        if *self == Shape::Sq { return "square" }
+        return "circle"
+    }
+}

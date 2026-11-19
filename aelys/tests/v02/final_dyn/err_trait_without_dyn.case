@@ -1,0 +1,10 @@
+trait Shape {
+    fn area(&self) -> i64
+}
+struct Sq { s: i64 }
+impl Shape for Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+
+fn f(x: &Shape) -> i64 { return 0 }
+fn main() -> i64 { return 0 }

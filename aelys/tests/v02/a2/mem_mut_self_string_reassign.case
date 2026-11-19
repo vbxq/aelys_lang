@@ -1,0 +1,18 @@
+struct N { s: string }
+
+impl N {
+    fn tag(&self, i: i64) -> string {
+        let s = self.s
+        return "{s}-{i}"
+    }
+    fn into_len(self) -> i64 { return self.s.len }
+    fn rename(&mut self, i: i64) { self.s = "n{i}" }
+}
+
+fn main() {
+    let mut n = N { s: "start" }
+    for i in 0..500 {
+        n.rename(i)
+    }
+    println(n.s)
+}

@@ -1,0 +1,4 @@
+refuse E0711
+cannot write to `v` while it is borrowed
+!__recv
+!__pre$

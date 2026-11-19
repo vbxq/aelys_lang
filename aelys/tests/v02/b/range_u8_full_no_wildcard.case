@@ -1,0 +1,21 @@
+fn band(b: u8) -> string {
+    return match b {
+        0..=99 => "lo",
+        100..=199 => "mid",
+        200..=255 => "hi"
+    }
+}
+
+fn main() -> i64 {
+    let a: u8 = 0
+    let b: u8 = 99
+    let c: u8 = 100
+    let d: u8 = 200
+    let e: u8 = 255
+    println(band(a))
+    println(band(b))
+    println(band(c))
+    println(band(d))
+    println(band(e))
+    return 0
+}

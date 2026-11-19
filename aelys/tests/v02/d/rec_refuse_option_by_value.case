@@ -1,0 +1,12 @@
+enum Expr { Num(i64), Neg(Rc<Expr>) }
+fn first(o: Option<Expr>) -> i64 {
+    match o {
+        Some(Expr::Num(n)) => n,
+        Some(Expr::Neg(x)) => 1,
+        None => 0,
+    }
+}
+fn main() -> i64 {
+    println(first(Some(Expr::Num(4))))
+    return 0
+}

@@ -1,0 +1,4 @@
+fn main() -> i64 {
+    let b: bool = true
+    return match b { true => 1, false => 2, _ => 3 }
+}

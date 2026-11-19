@@ -1,0 +1,15 @@
+struct Node { name: string, next: Rc<i64> }
+
+fn label(i: i64) -> string { return "n" + "{i}" }
+
+fn main() -> i64 {
+    let mut n: i64 = 0
+    let mut i: i64 = 0
+    while i < NN {
+        let r: Rc<Node> = Rc::new(Node { name: label(i % 100), next: Rc::new(i) })
+        n = n + Rc::get(r).name.len + Rc::get(Rc::get(r).next) % 2
+        i = i + 1
+    }
+    println(n)
+    return 0
+}

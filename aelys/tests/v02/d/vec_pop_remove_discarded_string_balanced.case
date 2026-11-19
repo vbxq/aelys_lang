@@ -1,0 +1,17 @@
+fn mk(i: i64) -> string { return "s{i}" }
+fn main() -> i64 {
+    let mut n: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        let mut v: Vec<string> = Vec::new()
+        Vec::push(v, mk(i))
+        Vec::push(v, mk(i + 1))
+        Vec::push(v, mk(i + 2))
+        Vec::remove(v, 0)
+        Vec::pop(v)
+        n = n + v.len + v[0].len
+        i = i + 1
+    }
+    println(n)
+    return 0
+}

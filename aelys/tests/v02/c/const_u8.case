@@ -1,0 +1,6 @@
+const B: u8 = 200
+fn main() {
+    let x: u8 = B
+    let y = x / 2
+    println(y)
+}

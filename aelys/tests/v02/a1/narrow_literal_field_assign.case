@@ -1,0 +1,7 @@
+struct P<A, B> { a: A, b: B }
+struct W<T> { v: T }
+fn main() {
+    let mut x: W<P<i64, u8>> = W { v: P { a: 1, b: 2 } }
+    x.v = P { a: 10, b: 250 }
+    println((x.v.b as i64) + x.v.a)
+}

@@ -1,0 +1,87 @@
+use std::str;
+
+const TOP: i64 = 5;
+
+type Entry = (String, i64);
+
+struct Freq { entries: Vec<Entry>, words: i64 }
+
+impl Freq {
+    fn new() -> Self { Freq { entries: Vec::new(), words: 0 } }
+
+    fn bump(&mut self, w: String) {
+        self.words = self.words + 1;
+        for i in 0..self.entries.len() {
+            let (word, n) = self.entries[i];
+            if word == w {
+                self.entries[i] = (word, n + 1);
+                return;
+            }
+        }
+        self.entries.push((w, 1));
+    }
+
+    fn ranked(&self) -> Vec<Entry> {
+        let mut v = self.entries;
+        for i in 1..v.len() {
+            let mut j = i;
+            while j > 0 && before(v[j], v[j - 1]) {
+                let t = v[j];
+                v[j] = v[j - 1];
+                v[j - 1] = t;
+                j = j - 1;
+            }
+        }
+        v
+    }
+}
+
+fn before(a: Entry, b: Entry) -> bool {
+    match (a, b) {
+        ((wa, na), (wb, nb)) if na == nb => str::compare(wa, wb) < 0,
+        ((_, na), (_, nb)) => na > nb,
+    }
+}
+
+fn fold(c: char) -> Option<char> {
+    match c {
+        'a'..='z' | 'ß'..='ö' | 'ø'..='ÿ' => Some(c),
+        'A'..='Z' | 'À'..='Ö' | 'Ø'..='Þ' => Some(char::from_i64(c as i64 + 32)),
+        _ => None,
+    }
+}
+
+fn pad(s: String, w: i64) -> String { s + str::repeat(" ", w - str::char_count(s)) }
+
+fn main() {
+    let text = "L'été arrive. Le café du matin, le café du soir : l'été, c'est la saison du café ! " +
+        "Où est passé l'été ? Là où le soleil brûle, le café désaltérant refroidit. ÉTÉ, Été, été... Ça suffit, Noël.";
+    let mut freq = Freq::new();
+    let mut cur = "";
+    let mut longest = "";
+    let mut accented: i64 = 0;
+    for c in text + " " {
+        match fold(c) {
+            Some(l @ 'ß'..='ÿ') => {
+                accented = accented + 1;
+                cur = cur + l.to_string();
+            }
+            Some(l) => { cur = cur + l.to_string(); }
+            None if cur.len() > 0 => {
+                if str::char_count(cur) > str::char_count(longest) { longest = cur; }
+                freq.bump(cur);
+                cur = "";
+            }
+            None => {}
+        }
+    }
+    println!("{} bytes, {} chars, {accented} accented letters", text.len(), str::char_count(text));
+    println!("{} words, {} distinct", freq.words, freq.entries.len());
+    println!("longest: {longest} ({} chars, {} bytes)", str::char_count(longest), longest.len());
+    let ranked = freq.ranked();
+    for i in 0..TOP {
+        if let Some((w, n)) = ranked.get(i) {
+            println!("{}. {}{n}", i + 1, pad(w, 9));
+        }
+    }
+}

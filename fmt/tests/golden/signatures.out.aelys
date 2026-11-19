@@ -1,0 +1,15 @@
+pub fn merge_sorted<T: Ord>(
+    left: &[T],
+    right: &[T],
+    out: &mut Vec<T>,
+    scratch: &mut Vec<T>,
+) -> i64 {
+    0
+}
+
+fn largest<T>(s: &[T]) -> T
+where
+    T: Ord + Display,
+{
+    s[0]
+}

@@ -1,0 +1,7 @@
+fn main() -> i64 {
+    let mut v: Vec<string> = Vec::new()
+    println("before")
+    let r: string = Vec::remove(v, 0)
+    println(r)
+    return 0
+}

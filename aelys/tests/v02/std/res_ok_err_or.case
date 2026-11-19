@@ -1,0 +1,11 @@
+fn check(x: i64) -> Result<i64, string> {
+    if x > 0 { return Ok(x) }
+    return Err("neg")
+}
+
+fn main() {
+    println(check(5).unwrap_or(0) + check(-1).unwrap_or(100))
+    println(check(-2).err_or("none"))
+    println("{check(1).is_ok()} {check(0).is_err()}")
+    println(check(8).ok().unwrap_or(0))
+}

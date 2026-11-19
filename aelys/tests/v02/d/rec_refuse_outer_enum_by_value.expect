@@ -1,0 +1,2 @@
+refuse E0410
+carries an Rc only as a direct `Rc<T>` payload

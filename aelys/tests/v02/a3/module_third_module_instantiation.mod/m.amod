@@ -1,0 +1,11 @@
+needs Score from tr
+
+pub struct P { pub x: i64 }
+
+impl Score for P {
+    fn score(&self) -> i64 { return self.x * 3 }
+}
+
+impl eq for P {
+    fn eq(&self, o: &P) -> bool { return self.x % 10 == o.x % 10 }
+}

@@ -1,0 +1,14 @@
+fn f(t: ((u8, i16), u32)) -> i64 {
+    return (t.0).0 as i64 + (t.0).1 as i64 + t.1 as i64
+}
+fn main() {
+    let n: i32 = -5
+    let p: (i64, (u16, f32)) = (n, (65535, 1.5))
+    println(f(((255, -300), 4000000000)))
+    println("{p.0} {(p.1).0} {(p.1).1}")
+    let o: Option<(u8, string)> = Some((7, "s"))
+    match o {
+        Some(v) => println("{v.0}{v.1}"),
+        None => println(0)
+    }
+}

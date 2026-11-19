@@ -1,0 +1,5 @@
+needs a
+pub fn id(x) -> i64 { return x + 0 }
+fn main() {
+    println(a.g(3))
+}

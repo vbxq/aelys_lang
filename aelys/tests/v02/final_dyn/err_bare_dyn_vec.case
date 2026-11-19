@@ -1,0 +1,12 @@
+trait Shape {
+    fn area(&self) -> i64
+}
+struct Sq { s: i64 }
+impl Shape for Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+
+fn main() -> i64 {
+    let v: Vec<dyn Shape> = Vec::new()
+    return 0
+}

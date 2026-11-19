@@ -5,6 +5,7 @@ use crate::unify::Substitution;
 mod expr;
 mod func;
 mod stmt;
+mod tuples;
 
 impl TypeInference {
     /// Apply substitution to typed statements

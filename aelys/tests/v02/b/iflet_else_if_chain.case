@@ -1,0 +1,16 @@
+fn pick(a: Option<i64>, b: Option<i64>) {
+    if let Some(x) = a {
+        println("a{x}")
+    } else if let Some(y) = b {
+        println("b{y}")
+    } else {
+        println("none")
+    }
+}
+
+fn main() -> i64 {
+    pick(Some(1), Some(9))
+    pick(None, Some(2))
+    pick(None, None)
+    return 0
+}

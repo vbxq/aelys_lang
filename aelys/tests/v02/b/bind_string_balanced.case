@@ -1,0 +1,13 @@
+fn tag(s: string) -> string {
+    return match s { "x" => "ex", t => t + "!" }
+}
+
+fn main() -> i64 {
+    println(tag("x"))
+    let mut last: string = ""
+    for i in 0..100 {
+        last = tag("w{i}")
+    }
+    println(last)
+    return 0
+}

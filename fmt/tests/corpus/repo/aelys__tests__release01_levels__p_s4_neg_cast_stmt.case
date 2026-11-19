@@ -1,0 +1,5 @@
+use std::process::ExitCode; fn f(i: i64) -> i64 { let arr = [1, 2, 3];
+    -(arr[i] as u8);
+    println!("survived");
+    0 }
+fn main() -> ExitCode { return ExitCode::from(f(10) as u8); }

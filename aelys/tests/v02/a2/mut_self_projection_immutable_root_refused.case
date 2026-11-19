@@ -1,0 +1,13 @@
+struct P { x: i64 }
+
+impl P {
+    fn bump(&mut self, d: i64) { self.x = self.x + d }
+}
+
+struct W { p: P }
+
+fn main() {
+    let w = W { p: P { x: 1 } }
+    w.p.bump(1)
+    println(w.p.x)
+}

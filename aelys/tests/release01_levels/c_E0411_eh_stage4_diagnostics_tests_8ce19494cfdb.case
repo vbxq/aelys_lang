@@ -1,0 +1,10 @@
+
+enum Result<T, E> { Ok(T), Err(E) }
+enum MyErr { Boom }
+
+fn get() -> Result<i64, MyErr> { return Result::Ok(1) }
+
+fn main() -> i64 {
+    get()
+    return 0
+}

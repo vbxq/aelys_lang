@@ -1,0 +1,8 @@
+fn main() -> i64 {
+    let limit: i64 = 10
+    let k = fn(o: Option<i64>) -> string {
+        return match o { Some(x) if x > limit => "hi", Some(_) => "lo", None => "none" }
+    }
+    println("{k(Some(11))} {k(Some(10))} {k(None)}")
+    return 0
+}

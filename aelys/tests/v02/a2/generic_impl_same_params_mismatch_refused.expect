@@ -1,0 +1,4 @@
+refuse E0301
+`pick` is defined for `Pair<T, T>`
+!__recv
+!__pre$

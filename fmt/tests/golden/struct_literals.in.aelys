@@ -1,0 +1,10 @@
+struct Node<T> { val: T, left: Option<Rc<Node<T>>>, right: Option<Rc<Node<T>>> }
+struct Tree<T> { root: Option<Rc<Node<T>>>, count: i64 }
+impl<T: Ord> Tree<T> {
+    fn new() -> Self { Tree { root: None, count: 0 } }
+}
+fn leaf<T>(x: T) -> Rc<Node<T>> { Rc::new(Node { val: x, left: None, right: None }) }
+fn pick(x: i64, node: Node<i64>) -> Option<Rc<Node<i64>>> {
+    let next = if x < node.val { node.left } else { node.right };
+    next
+}

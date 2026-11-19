@@ -1,0 +1,6 @@
+fn main() -> i64 {
+    let v = vec[10, 20, 30]
+    let a = &v[0]
+    let arr = [a]
+    return 0
+}

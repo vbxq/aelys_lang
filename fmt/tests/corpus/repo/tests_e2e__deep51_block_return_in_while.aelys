@@ -1,0 +1,19 @@
+use std::process::ExitCode; fn find_first(arr: [i64; 5], target: i64) -> i64 {
+    let mut i = 0;
+    while i < 5 {
+        if arr[i] == target {
+            return i;
+        }
+        i = i + 1;
+    }
+    -1
+}
+
+fn main() -> ExitCode {
+    let arr = [10, 20, 30, 40, 50];
+    let idx = find_first(arr, 30);
+    if idx == 2 {
+        return ExitCode::from(1);
+    }
+    return ExitCode::SUCCESS;
+}

@@ -1,0 +1,8 @@
+needs tree
+needs node
+fn main() {
+    let mut t = tree.Tree { kids: Vec::new(), tag: 5 }
+    t.kids.push(node.Node { leaf: 3, kind: tree.Kind::Big })
+    t.kids.push(node.Node { leaf: 4, kind: tree.Kind::Small })
+    println(tree.sum(t))
+}

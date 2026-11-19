@@ -1,0 +1,37 @@
+trait Grow {
+    fn grow(&mut self, by: i64)
+    fn size(&self) -> i64
+}
+struct Sq { s: i64 }
+struct Line { len: i64, hits: i64 }
+impl Grow for Sq {
+    fn grow(&mut self, by: i64) { self.s = self.s + by }
+    fn size(&self) -> i64 { return self.s * self.s }
+}
+impl Grow for Line {
+    fn grow(&mut self, by: i64) {
+        self.len = self.len * by
+        self.hits = self.hits + 1
+    }
+    fn size(&self) -> i64 { return self.len }
+}
+fn pump(g: &mut dyn Grow, n: i64) {
+    let mut i = 0
+    while i < n {
+        g.grow(2)
+        i = i + 1
+    }
+}
+fn main() -> i64 {
+    let mut a = Sq { s: 1 }
+    let mut b = Line { len: 3, hits: 0 }
+    pump(&mut a, 3)
+    pump(&mut b, 4)
+    println(a.s)
+    println(b.len)
+    println(b.hits)
+    let g: &mut dyn Grow = &mut a
+    g.grow(10)
+    println(g.size())
+    return 0
+}

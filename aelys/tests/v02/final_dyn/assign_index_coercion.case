@@ -1,0 +1,23 @@
+trait Shape {
+    fn area(&self) -> i64
+}
+struct Sq { s: i64 }
+struct Rect { w: i64, h: i64 }
+impl Shape for Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+impl Shape for Rect {
+    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+}
+fn main() -> i64 {
+    let mut s: Rc<dyn Shape> = Rc::new(Sq { s: 2 })
+    println(s.area())
+    s = Rc::new(Rect { w: 2, h: 2 })
+    println(s.area())
+    let mut v: Vec<Rc<dyn Shape>> = Vec::new()
+    v.push(s)
+    v.push(Rc::new(Sq { s: 5 }))
+    v[0] = Rc::new(Sq { s: 1 })
+    println(v[0].area() + v[1].area())
+    return 0
+}

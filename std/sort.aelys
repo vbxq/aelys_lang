@@ -1,0 +1,117 @@
+pub fn insertion_sort<T: ord>(s: &mut [T]) {
+    let mut i: i64 = 1
+    while i < s.len {
+        let x: T = s[i]
+        let mut j: i64 = i - 1
+        while j >= 0 and s[j] > x {
+            s[j + 1] = s[j]
+            j = j - 1
+        }
+        s[j + 1] = x
+        i = i + 1
+    }
+}
+
+pub fn binary_search<T: ord>(s: &[T], x: T) -> i64 {
+    let mut lo: i64 = 0
+    let mut hi: i64 = s.len - 1
+    while lo <= hi {
+        let mid: i64 = lo + (hi - lo) / 2
+        if s[mid] == x { return mid }
+        if s[mid] < x { lo = mid + 1 } else { hi = mid - 1 }
+    }
+    return -1
+}
+
+pub nogc fn strings(s: &mut [string]) { insertion_sort(s) }
+
+fn swap_at<T>(s: &mut [T], i: i64, j: i64) {
+    let t: T = s[i]
+    s[i] = s[j]
+    s[j] = t
+}
+
+fn sift_down<T: ord>(s: &mut [T], start: i64, end: i64) {
+    let mut root: i64 = start
+    while 2 * root + 1 < end {
+        let mut child: i64 = 2 * root + 1
+        if child + 1 < end and s[child] < s[child + 1] { child = child + 1 }
+        if s[root] < s[child] {
+            swap_at(s, root, child)
+            root = child
+        } else {
+            return
+        }
+    }
+}
+
+pub fn heap_sort<T: ord>(s: &mut [T]) {
+    let n: i64 = s.len
+    let mut start: i64 = n / 2 - 1
+    while start >= 0 {
+        sift_down(s, start, n)
+        start = start - 1
+    }
+    let mut end: i64 = n - 1
+    while end > 0 {
+        swap_at(s, 0, end)
+        sift_down(s, 0, end)
+        end = end - 1
+    }
+}
+
+fn merge_run<T: ord>(a: &[T], b: &mut [T], lo: i64, mid: i64, hi: i64) {
+    let mut i: i64 = lo
+    let mut j: i64 = mid
+    let mut k: i64 = lo
+    while k < hi {
+        if i < mid and (j >= hi or !(a[j] < a[i])) {
+            b[k] = a[i]
+            i = i + 1
+        } else {
+            b[k] = a[j]
+            j = j + 1
+        }
+        k = k + 1
+    }
+}
+
+pub fn merge_sort<T: ord>(s: &mut [T]) {
+    let n: i64 = s.len
+    if n < 2 { return }
+    let mut tmp = Vec::new()
+    for x in s { Vec::push(tmp, x) }
+    let t = Vec::try_as_unique_mut_slice(tmp)
+    let mut width: i64 = 1
+    let mut in_s: bool = true
+    while width < n {
+        let mut lo: i64 = 0
+        while lo < n {
+            let mut mid: i64 = lo + width
+            if mid > n { mid = n }
+            let mut hi: i64 = lo + 2 * width
+            if hi > n { hi = n }
+            if in_s { merge_run(s, t, lo, mid, hi) } else { merge_run(t, s, lo, mid, hi) }
+            lo = lo + 2 * width
+        }
+        in_s = !in_s
+        width = width * 2
+    }
+    if !in_s {
+        for i in 0..n { s[i] = t[i] }
+    }
+}
+
+pub fn sort_by<T>(s: &mut [T], f: fn(T, T) -> i64) {
+    let mut i: i64 = 1
+    while i < s.len {
+        let x: T = s[i]
+        let mut j: i64 = i - 1
+        while j >= 0 and f(s[j], x) > 0 {
+            s[j + 1] = s[j]
+            j = j - 1
+        }
+        s[j + 1] = x
+        i = i + 1
+    }
+}

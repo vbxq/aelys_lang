@@ -1,0 +1,23 @@
+fn mk(n: i64) -> Vec<i64> {
+    let mut d: Vec<i64> = Vec::new()
+    let mut i: i64 = 0
+    while i < n { Vec::push(d, i * 10)
+        i = i + 1 }
+    return d
+}
+
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 100 {
+        let nest = ((mk(1), 2), mk(3))
+        let (inner, last) = nest
+        let (v, k) = inner
+        let mut w = v
+        Vec::push(w, 1)
+        t = t + v.len * 1000 + w.len * 100 + k * 10 + last.len + nest.0.0.len
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

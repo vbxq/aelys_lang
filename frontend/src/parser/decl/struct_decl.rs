@@ -36,7 +36,8 @@ impl Parser {
         let mut fields = Vec::new();
         while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
             let field_span = self.peek().span;
-            let field_name = self.consume_identifier("field name")?;
+            let is_pub = self.match_token(&TokenKind::Pub);
+            let field_name = self.consume_member_name("field name")?;
             self.consume(&TokenKind::Colon, ":")?;
             let type_annotation = self.parse_type_annotation()?;
             let end_span = self.previous().span;
@@ -44,6 +45,7 @@ impl Parser {
             fields.push(StructFieldDecl {
                 name: field_name,
                 type_annotation,
+                is_pub,
                 span: field_span.merge(end_span),
             });
 

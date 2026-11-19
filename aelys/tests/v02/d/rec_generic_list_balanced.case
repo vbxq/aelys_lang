@@ -1,0 +1,32 @@
+enum List<T> { Nil, Cons(T, Rc<List<T>>) }
+fn sum(l: List<i64>) -> i64 {
+    match l {
+        List::Cons(x, rest) => x + sum(Rc::get(rest)),
+        List::Nil => 0,
+    }
+}
+fn len<T>(l: List<T>) -> i64 {
+    match l {
+        List::Cons(x, rest) => 1 + len(Rc::get(rest)),
+        List::Nil => 0,
+    }
+}
+fn mk(i: i64) -> string { return "w{i}" }
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut k: i64 = 0
+    while k < 50 {
+        let mut l: List<i64> = List::Nil
+        let mut s: List<string> = List::Nil
+        let mut i: i64 = 1
+        while i <= 100 {
+            l = List::Cons(i, Rc::new(l))
+            if i % 10 == 0 { s = List::Cons(mk(i), Rc::new(s)) }
+            i = i + 1
+        }
+        t = t + sum(l) + len(s) * 1000 + len(l)
+        k = k + 1
+    }
+    println(t)
+    return 0
+}

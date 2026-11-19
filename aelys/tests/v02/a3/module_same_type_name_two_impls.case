@@ -1,0 +1,13 @@
+needs Show from tr
+needs ma
+needs mb
+
+fn sh<T: Show>(x: T) -> i64 { return x.show() }
+
+fn main() -> i64 {
+    println(sh(ma.mk(1)))
+    println(sh(mb.mk(2)))
+    println(ma.mk(3).show())
+    println(mb.mk(3).show())
+    return 0
+}

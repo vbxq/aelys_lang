@@ -1,0 +1,17 @@
+needs std.str
+
+fn agree(a: string, b: string) -> bool {
+    let c = str.compare(a, b)
+    return ((a < b) == (c < 0)) and ((a == b) == (c == 0)) and ((a > b) == (c > 0)) and ((a <= b) == (c <= 0)) and ((a >= b) == (c >= 0))
+}
+
+fn main() {
+    println(agree("a", "b"))
+    println(agree("b", "a"))
+    println(agree("ab", "abc"))
+    println(agree("", ""))
+    println(agree("", "x"))
+    println(agree("é", "e"))
+    println(agree("日本", "日"))
+    println(agree("same", "same"))
+}

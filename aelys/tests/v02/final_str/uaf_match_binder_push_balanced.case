@@ -1,0 +1,27 @@
+fn warm(s: &str) -> String {
+    let mut w = String::with_capacity(32)
+    w.push_str(s)
+    return w
+}
+
+fn main() {
+    let mut o: Option<String> = Some(warm("ok"))
+    let mut seen = String::new()
+    match o {
+        Some(x) => {
+            let mut t = x
+            t.push_str("?")
+            seen = t
+        }
+        None => println("none"),
+    }
+    if let Some(x) = o {
+        let mut u = x
+        u.push_str("!")
+        println(u)
+    }
+    println(seen)
+    if let Some(x) = o {
+        println(x)
+    }
+}

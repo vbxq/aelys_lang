@@ -1,0 +1,22 @@
+struct Wide { big: u64, mid: u32, small: u8, half: u16 }
+
+fn show<T>(x: T) {
+    println("[{x}]")
+}
+
+fn pass(x: u64) -> u64 {
+    return x
+}
+
+fn main() {
+    let w = Wide { big: 18446744073709551615, mid: 4294967295, small: 255, half: 65535 }
+    println("{w.big} {w.mid} {w.small} {w.half}")
+    println(w.big)
+    show(w.big)
+    show(w.mid)
+    show(w.small)
+    show(w.half)
+    let m: u64 = 9223372036854775807
+    show(m + 1)
+    println(pass(9223372036854775808))
+}

@@ -1,0 +1,19 @@
+struct Cell { k: i64, t: T }
+enum T { Leaf(i64), Pair(i64, Rc<Cell>) }
+fn churn(i: i64) -> i64 {
+    let a: Rc<Cell> = Rc::new(Cell { k: i, t: T::Leaf(123) })
+    let b: Rc<Cell> = Rc::new(Cell { k: 1, t: T::Pair(9, a) })
+    let c: Rc<Cell> = Rc::new(Cell { k: 2, t: T::Leaf(456) })
+    a.t = T::Pair(7, b)
+    return Rc::get(a).k + Rc::get(b).k + Rc::get(c).k
+}
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        t = t + churn(i)
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

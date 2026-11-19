@@ -1,0 +1,11 @@
+nogc fn score(n: i64, c: char, b: bool) -> i64 {
+    let a: i64 = match n { 0 => 1, 1 | 2 => 10, 3..=9 => 100, _ => 1000 };
+    let k: i64 = match c { 'a'..='z' => 20, _ => 0 };
+    let m: i64 = match b { true => 20, false => 0 };
+    let g: i64 = match n { x if x > 5 => 7, _ => 1 };
+    a + k + m + g
+}
+
+fn main() {
+    println!("{}", score(4, 'q', true));
+}

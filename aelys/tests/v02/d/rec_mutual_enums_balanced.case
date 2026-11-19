@@ -1,0 +1,26 @@
+enum A { X(i64), ToB(Rc<B>) }
+enum B { Y(i64), ToA(Rc<A>), Stop }
+fn sa(a: A) -> i64 {
+    match a {
+        A::X(n) => n,
+        A::ToB(b) => 10 * sb(Rc::get(b)),
+    }
+}
+fn sb(b: B) -> i64 {
+    match b {
+        B::Y(n) => n + 1,
+        B::ToA(a) => sa(Rc::get(a)) + 2,
+        B::Stop => 0,
+    }
+}
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 100 {
+        let a = A::ToB(Rc::new(B::ToA(Rc::new(A::ToB(Rc::new(B::Y(i)))))))
+        t = t + sa(a)
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

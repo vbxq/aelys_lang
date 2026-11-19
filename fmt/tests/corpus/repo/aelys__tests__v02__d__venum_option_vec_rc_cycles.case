@@ -1,0 +1,24 @@
+fn mk(n: i64) -> Vec<i64> {
+    let mut d: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < n { Vec::push(d, i);
+        i = i + 1; }
+    d
+}
+
+enum Msg { Batch(Vec<i64>), Empty }
+fn pick(i: i64) -> Msg {
+    if i % 2 == 0 { return Msg::Empty; }
+    Msg::Batch(mk(i % 7))
+}
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
+    while i < 300 {
+        let o: Option<Vec<i64>> = if i % 3 == 0 { None } else { Some(mk(i % 4)) };
+        match o { Some(v) => { t = t + v.len(); } None => { t = t + 100; } }
+        match pick(i) { Msg::Batch(v) => { t = t + v.len() * 1000; } Msg::Empty => { } }
+        i = i + 1;
+    }
+    println!("{}", t);
+}

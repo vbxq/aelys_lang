@@ -1,0 +1,13 @@
+needs prog
+pub const A0: i64 = prog.P1 + 1
+pub const A1: i64 = prog.P2 + 1
+pub const A2: i64 = prog.P3 + 1
+pub const A3: i64 = prog.P4 + 1
+pub const A4: i64 = prog.P5 + 1
+pub const A5: i64 = prog.P6 + 1
+pub const A6: i64 = prog.P7 + 1
+pub const A7: i64 = prog.P8 + 1
+pub const A8: i64 = prog.P9 + 1
+pub const A9: i64 = prog.P10 + 1
+pub const A10: i64 = prog.P11 + 1
+pub const A11: i64 = prog.P12 + 1

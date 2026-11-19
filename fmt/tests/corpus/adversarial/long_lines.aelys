@@ -1,0 +1,23 @@
+fn main() {
+    let threshold = configuration.base_threshold * configuration.scale_factor + configuration.offset_correction;
+    println!("{}", Rc::get(Rc::get(Rc::get(a).next).next).v * 100 + Rc::get(Rc::get(a).next).v * 10 + Rc::get(a).v);
+    let result = some_function_with_a_long_name(first_argument_value, second_argument_value, third_argument);
+    let s = Tree { root: None, count: 0 };
+    let p = Parser { toks, pos: 0 };
+    const SINE: [i64; 16] = [0, 3211, 6392, 9512, 12539, 15446, 18204, 20787, 23170, 25329, 27245, 28898, 30273, 31356, 32137, 32609];
+    let total = items.iter().filter(|it| it.qty > 0).map(|it| it.qty * it.price).sum();
+    let short = xs.iter().sum();
+    if aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa && bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb || cccccccccccccccccccccccccccc {
+        go();
+    }
+    match token {
+        Token::Plus | Token::Minus | Token::Star | Token::Slash | Token::Percent | Token::Caret | Token::Amp => 1,
+        _ => 0,
+    }
+    let next = if x < node.val { node.left } else { node.right };
+    let next = if some_long_condition_value < node.value { node.left_child } else { node.right_child };
+}
+
+pub fn merge_sorted<T: Ord>(left: &[T], right: &[T], out: &mut Vec<T>, scratch: &mut Vec<T>) -> i64 { 0 }
+
+fn largest<T>(s: &[T]) -> T where T: Ord + Display { s[0] }

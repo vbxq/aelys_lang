@@ -1,0 +1,20 @@
+struct Pair<A, B> { a: A, b: B }
+struct Box1<T> { inner: Option<Pair<T, string>>, n: i64 }
+fn main() {
+    let mut i = 0
+    let mut t = 0
+    while i < 20 {
+        let b = Box1 { inner: Some(Pair { a: i, b: "p" + "{i}" }), n: 1 }
+        match b.inner {
+            Some(p) => { t = t + p.a * b.n },
+            None => { t = t - 1000 }
+        }
+        i = i + 1
+    }
+    let c: Box1<bool> = Box1 { inner: None, n: 7 }
+    match c.inner {
+        Some(p) => println(p.b),
+        None => println(c.n)
+    }
+    println(t)
+}

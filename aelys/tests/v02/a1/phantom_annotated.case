@@ -1,0 +1,6 @@
+struct Tag<T> { n: i64 }
+fn main() {
+    let t: Tag<string> = Tag { n: 41 }
+    let u: Tag<i64> = Tag { n: 1 }
+    println(t.n + u.n)
+}

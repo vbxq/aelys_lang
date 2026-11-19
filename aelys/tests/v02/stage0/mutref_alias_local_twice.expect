@@ -1,0 +1,2 @@
+refuse E0713
+cannot borrow `*r` as mutable while it is already borrowed

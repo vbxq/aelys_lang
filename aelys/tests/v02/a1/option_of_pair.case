@@ -1,0 +1,21 @@
+struct Pair<A, B> { a: A, b: B }
+fn find(k: i64) -> Option<Pair<i64, string>> {
+    if k > 0 {
+        return Some(Pair { a: k, b: "pos" })
+    }
+    return None
+}
+fn main() {
+    match find(3) {
+        Some(p) => println(p.b),
+        None => println("none")
+    }
+    match find(3) {
+        Some(p) => println(p.a * 2),
+        None => println(0)
+    }
+    match find(-1) {
+        Some(p) => println(p.b),
+        None => println("none")
+    }
+}

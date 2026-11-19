@@ -1,0 +1,13 @@
+trait Tr {
+    fn v(&self) -> i64
+}
+struct S { n: i64 }
+impl Tr for S {
+    fn v(&self) -> i64 { return self.n }
+}
+fn main() -> i64 {
+    let a: Rc<dyn Tr> = Rc::null()
+    println(1)
+    println(a.v())
+    return 0
+}

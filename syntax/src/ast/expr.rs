@@ -1,11 +1,26 @@
 use crate::Span;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefKind {
+    Shared,
+    Mut,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeAnnotation {
     pub name: String,
     pub type_param: Option<Box<TypeAnnotation>>,
+    /// multiple type parameters for generic types like `result<i64, string>`.
+    pub type_params: Vec<TypeAnnotation>,
     pub fn_params: Option<Vec<TypeAnnotation>>,
     pub fn_ret: Option<Box<TypeAnnotation>>,
+    pub array_size: Option<u64>,
+    pub array_size_name: Option<String>,
+    pub tuple_elems: Option<Vec<TypeAnnotation>>,
+    pub reference: Option<RefKind>,
+    pub is_slice: bool,
+    pub is_dyn: bool,
+    pub nogc: bool,
     pub span: Span,
 }
 
@@ -14,8 +29,16 @@ impl TypeAnnotation {
         Self {
             name,
             type_param: None,
+            type_params: Vec::new(),
             fn_params: None,
             fn_ret: None,
+            array_size: None,
+            array_size_name: None,
+            tuple_elems: None,
+            reference: None,
+            is_slice: false,
+            is_dyn: false,
+            nogc: false,
             span,
         }
     }
@@ -24,24 +47,160 @@ impl TypeAnnotation {
         Self {
             name,
             type_param: Some(Box::new(type_param)),
+            type_params: Vec::new(),
             fn_params: None,
             fn_ret: None,
+            array_size: None,
+            array_size_name: None,
+            tuple_elems: None,
+            reference: None,
+            is_slice: false,
+            is_dyn: false,
+            nogc: false,
             span,
         }
     }
 
-    pub fn function_type(params: Vec<TypeAnnotation>, ret: TypeAnnotation, span: Span) -> Self {
+    pub fn slice_referent(element: TypeAnnotation, span: Span) -> Self {
+        Self {
+            name: "[slice]".to_string(),
+            type_param: Some(Box::new(element)),
+            type_params: Vec::new(),
+            fn_params: None,
+            fn_ret: None,
+            array_size: None,
+            array_size_name: None,
+            tuple_elems: None,
+            reference: None,
+            is_slice: true,
+            is_dyn: false,
+            nogc: false,
+            span,
+        }
+    }
+
+    pub fn with_params(name: String, type_params: Vec<TypeAnnotation>, span: Span) -> Self {
+        let single = if type_params.len() == 1 {
+            Some(Box::new(type_params[0].clone()))
+        } else {
+            None
+        };
+        Self {
+            name,
+            type_param: single,
+            type_params,
+            fn_params: None,
+            fn_ret: None,
+            array_size: None,
+            array_size_name: None,
+            tuple_elems: None,
+            reference: None,
+            is_slice: false,
+            is_dyn: false,
+            nogc: false,
+            span,
+        }
+    }
+
+    pub fn function_type(
+        params: Vec<TypeAnnotation>,
+        ret: TypeAnnotation,
+        nogc: bool,
+        span: Span,
+    ) -> Self {
         Self {
             name: "fn".to_string(),
             type_param: None,
+            type_params: Vec::new(),
             fn_params: Some(params),
             fn_ret: Some(Box::new(ret)),
+            array_size: None,
+            array_size_name: None,
+            tuple_elems: None,
+            reference: None,
+            is_slice: false,
+            is_dyn: false,
+            nogc,
             span,
         }
+    }
+
+    pub fn array_sized(inner: TypeAnnotation, size: u64, span: Span) -> Self {
+        Self {
+            name: "array".to_string(),
+            type_param: Some(Box::new(inner)),
+            type_params: Vec::new(),
+            fn_params: None,
+            fn_ret: None,
+            array_size: Some(size),
+            array_size_name: None,
+            tuple_elems: None,
+            reference: None,
+            is_slice: false,
+            is_dyn: false,
+            nogc: false,
+            span,
+        }
+    }
+
+    pub fn tuple(elems: Vec<TypeAnnotation>, span: Span) -> Self {
+        let mut ann = Self::new("(tuple)".to_string(), span);
+        ann.tuple_elems = Some(elems);
+        ann
     }
 
     pub fn is_function_type(&self) -> bool {
         self.fn_params.is_some()
+    }
+}
+
+impl std::fmt::Display for TypeAnnotation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let list = |f: &mut std::fmt::Formatter<'_>, items: &[TypeAnnotation]| {
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{item}")?;
+            }
+            Ok(())
+        };
+        match self.reference {
+            Some(RefKind::Shared) => write!(f, "&")?,
+            Some(RefKind::Mut) => write!(f, "&mut ")?,
+            None => {}
+        }
+        if let Some(params) = &self.fn_params {
+            write!(f, "{}fn(", if self.nogc { "nogc " } else { "" })?;
+            list(f, params)?;
+            write!(f, ")")?;
+            if let Some(ret) = self.fn_ret.as_deref().filter(|r| r.name != "null") {
+                write!(f, " -> {ret}")?;
+            }
+            return Ok(());
+        }
+        if self.is_slice || self.array_size.is_some() {
+            write!(f, "[")?;
+            if let Some(elem) = &self.type_param {
+                write!(f, "{elem}")?;
+            }
+            if let Some(n) = self.array_size {
+                write!(f, "; {n}")?;
+            }
+            return write!(f, "]");
+        }
+        if self.is_dyn {
+            write!(f, "dyn ")?;
+        }
+        write!(f, "{}", self.name)?;
+        if !self.type_params.is_empty() {
+            write!(f, "<")?;
+            list(f, &self.type_params)?;
+            write!(f, ">")?;
+        } else if let Some(param) = &self.type_param {
+            write!(f, "<{param}>")?;
+        }
+        Ok(())
     }
 }
 
@@ -90,7 +249,6 @@ impl Expr {
     }
 }
 
-/// Part of a format string in the AST (after parsing expressions)
 #[derive(Debug, Clone)]
 pub enum FmtStringPart {
     Literal(String),
@@ -104,6 +262,7 @@ pub enum ExprKind {
     Int(i64),
     Float(f64),
     String(String),
+    Char(u32),
     Bool(bool),
     Null,
     FmtString(Vec<FmtStringPart>),
@@ -120,7 +279,6 @@ pub enum ExprKind {
         operand: Box<Expr>,
     },
 
-    // short-circuit (separate from Binary because different codegen)
     And {
         left: Box<Expr>,
         right: Box<Expr>,
@@ -140,7 +298,6 @@ pub enum ExprKind {
     },
     Grouping(Box<Expr>), // for precedence
 
-    // ternary: cond ? then : else
     If {
         condition: Box<Expr>,
         then_branch: Box<Expr>,
@@ -158,14 +315,12 @@ pub enum ExprKind {
         member: String,
     }, // module.symbol
 
-    // Arrays and Vecs
     ArrayLiteral {
-        element_type: Option<TypeAnnotation>, // Array<Int>[...] or Array[...]
         elements: Vec<Expr>,
     },
     ArraySized {
-        element_type: Option<TypeAnnotation>, // Array<int>(10) or Array(10) or [; 10]
         size: Box<Expr>,
+        fill_value: Option<Box<Expr>>, // [val; N] syntax
     },
     VecLiteral {
         element_type: Option<TypeAnnotation>,
@@ -180,6 +335,11 @@ pub enum ExprKind {
         index: Box<Expr>,
         value: Box<Expr>,
     },
+    FieldAssign {
+        object: Box<Expr>,
+        field: String,
+        value: Box<Expr>,
+    },
     Range {
         start: Option<Box<Expr>>,
         end: Option<Box<Expr>>,
@@ -190,15 +350,168 @@ pub enum ExprKind {
         range: Box<Expr>,
     },
 
+    Reference {
+        mutable: bool,
+        operand: Box<Expr>,
+    },
+    Deref(Box<Expr>),
+    DerefAssign {
+        target: Box<Expr>,
+        value: Box<Expr>,
+    },
+
     StructLiteral {
         name: String,
         fields: Vec<StructFieldInit>,
+    },
+
+    EnumVariant {
+        enum_name: String,
+        variant: String,
+        args: Vec<Expr>, // empty for unit variants
+        unqualified: bool,
     },
 
     Cast {
         expr: Box<Expr>,
         target: TypeAnnotation,
     },
+
+    Match {
+        scrutinee: Box<Expr>,
+        arms: Vec<MatchArm>,
+        origin: MatchOrigin,
+    },
+
+    Block {
+        stmts: Vec<crate::ast::Stmt>,
+        tail: Box<Expr>,
+    },
+
+    // postfix ?; desugared away in sema, has no typed-ast counterpart
+    Try(Box<Expr>),
+
+    // postfix catch; desugared to a match in sema, has no typed-ast counterpart
+    Catch {
+        scrutinee: Box<Expr>,
+        handler: CatchHandler,
+    },
+
+    Unsafe(Box<Expr>),
+
+    Tuple(Vec<Expr>),
+}
+
+#[derive(Debug, Clone)]
+pub enum CatchHandler {
+    Binding { name: String, body: Box<Expr> },
+    Arms(Vec<MatchArm>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatchOrigin {
+    Match,
+    IfLet,
+    WhileLet,
+    Catch,
+}
+
+#[derive(Debug, Clone)]
+pub struct MatchArm {
+    pub pattern: Pattern,
+    pub guard: Option<Box<Expr>>,
+    pub body: Box<Expr>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PatLit {
+    Int(i128),
+    Char(u32),
+    Bool(bool),
+    Str(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum Pattern {
+    Wildcard(Span),
+    Binding {
+        name: String,
+        mutable: bool,
+        sub: Option<Box<Pattern>>,
+        span: Span,
+    },
+    Lit(PatLit, Span),
+    Range {
+        lo: PatLit,
+        hi: PatLit,
+        span: Span,
+    },
+    ConstRange {
+        lo: Box<Pattern>,
+        hi: Box<Pattern>,
+        span: Span,
+    },
+    Variant {
+        enum_name: String,
+        variant: String,
+        fields: Vec<Pattern>,
+        span: Span,
+        unqualified: bool,
+    },
+    Struct {
+        name: String,
+        fields: Vec<(String, Pattern, Span)>,
+        rest: bool,
+        span: Span,
+    },
+    Tuple {
+        elems: Vec<Pattern>,
+        span: Span,
+    },
+    Or(Vec<Pattern>, Span),
+}
+
+impl Pattern {
+    pub fn span(&self) -> Span {
+        match self {
+            Pattern::Wildcard(span)
+            | Pattern::Binding { span, .. }
+            | Pattern::Lit(_, span)
+            | Pattern::Range { span, .. }
+            | Pattern::ConstRange { span, .. }
+            | Pattern::Variant { span, .. }
+            | Pattern::Struct { span, .. }
+            | Pattern::Tuple { span, .. }
+            | Pattern::Or(_, span) => *span,
+        }
+    }
+
+    pub fn flat_variant(enum_name: &str, variant: &str, bindings: Vec<String>, span: Span) -> Self {
+        Pattern::Variant {
+            enum_name: enum_name.to_string(),
+            variant: variant.to_string(),
+            fields: bindings
+                .into_iter()
+                .map(|name| Pattern::Binding {
+                    name,
+                    mutable: false,
+                    sub: None,
+                    span,
+                })
+                .collect(),
+            span,
+            unqualified: false,
+        }
+    }
+}
+
+pub fn prelude_variant_enum(name: &str) -> Option<&'static str> {
+    match name {
+        "Some" | "None" => Some("Option"),
+        "Ok" | "Err" => Some("Result"),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone)]

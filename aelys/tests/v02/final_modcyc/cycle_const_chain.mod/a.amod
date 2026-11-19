@@ -1,0 +1,3 @@
+needs b
+pub const X: i64 = b.Y + 1
+pub const Z: i64 = b.W * 2

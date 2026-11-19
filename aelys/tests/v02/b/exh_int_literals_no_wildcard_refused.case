@@ -1,0 +1,4 @@
+fn main() -> i64 {
+    let n: i64 = 0
+    return match n { 0 => 1, 1 => 2 }
+}

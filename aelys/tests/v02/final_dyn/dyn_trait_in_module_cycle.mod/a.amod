@@ -1,0 +1,15 @@
+needs b
+pub trait Shape {
+    fn area(&self) -> i64
+    fn tagged(&self) -> i64 { return self.area() + 1 }
+}
+pub fn make() -> Rc<dyn Shape> { return Rc::new(b.Sq { s: b.side() }) }
+pub fn total(v: Vec<Rc<dyn Shape>>) -> i64 {
+    let mut t = 0
+    let mut i = 0
+    while i < v.len() {
+        t = t + v[i].area()
+        i = i + 1
+    }
+    return t
+}

@@ -1,0 +1,23 @@
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+fn wrap_twice(x: i64) -> Option<Option<i64>> {
+    Option::Some(Option::Some(x))
+}
+
+fn unwrap_twice(o: Option<Option<i64>>) -> i64 {
+    match o {
+        Option::Some(inner) => match inner {
+            Option::Some(v) => v,
+            Option::None => -1,
+        }
+        Option::None => -2,
+    }
+}
+
+fn main() {
+    let x = wrap_twice(42);
+    println!("{}", unwrap_twice(x));
+}

@@ -1,0 +1,9 @@
+enum Shape { Sq(i64), Rect(i64, i64) }
+
+impl Shape {
+    fn Sq(n: i64) -> Self { return Shape::Rect(n, n) }
+}
+
+fn main() {
+    println(1)
+}

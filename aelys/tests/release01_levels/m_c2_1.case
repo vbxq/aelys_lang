@@ -1,0 +1,6 @@
+fn main() {
+    let k = 10
+    let z = 0
+    let y: u8 = 1 << 9
+    println("{y}")
+}

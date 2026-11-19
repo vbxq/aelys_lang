@@ -1,0 +1,17 @@
+struct Bx<T> { v: T, k: i64 }
+impl<T> Bx<T> {
+    fn kk(&self) -> i64 { return self.k * 2 }
+}
+fn s(i: i64) -> string { return "q{i}" }
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 100 {
+        let r: Rc<Bx<string>> = Rc::new(Bx { v: s(i), k: i })
+        let q: Rc<Bx<i64>> = Rc::new(Bx { v: 1, k: 3 })
+        t = t + Rc::get(r).kk() + Rc::get(q).kk() * 1000
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

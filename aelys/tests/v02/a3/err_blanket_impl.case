@@ -1,0 +1,27 @@
+trait Area {
+    fn area(&self) -> i64
+}
+
+struct Sq { s: i64 }
+struct Rect { w: i64, h: i64 }
+
+impl Area for Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+
+impl Area for Rect {
+    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+}
+
+trait Name {
+    fn name(&self) -> i64
+}
+
+impl<T: Area> Name for T {
+    fn name(&self) -> i64 { return 1 }
+}
+
+fn main() -> i64 {
+    println(Sq { s: 2 }.name())
+    return 0
+}

@@ -1,0 +1,6 @@
+needs helper
+
+fn main() {
+    println(helper.width("héllo"))
+    println("héllo".char_count())
+}

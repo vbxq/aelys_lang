@@ -1,0 +1,8 @@
+fn pair<T>(a: T, b: T) -> (T, T) {
+    return (a, b)
+}
+fn main() {
+    let r: Rc<i64> = Rc::new(5)
+    let s: Rc<i64> = Rc::new(6)
+    println(Rc::get(pair(r, s).0))
+}

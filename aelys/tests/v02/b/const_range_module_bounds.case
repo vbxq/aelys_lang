@@ -1,0 +1,20 @@
+needs m
+fn band(x: i64) -> i64 {
+    match x {
+        m.LO..=m.HI => { return 1 }
+        _ => { return 0 }
+    }
+    return 9
+}
+fn early(c: char) -> bool {
+    match c {
+        m.A..=m.F => { return true }
+        _ => { return false }
+    }
+    return false
+}
+fn main() -> i64 {
+    println("{band(9)} {band(10)} {band(20)} {band(21)}")
+    println("{early('c')} {early('g')}")
+    return 0
+}

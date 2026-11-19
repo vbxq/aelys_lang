@@ -1,0 +1,35 @@
+struct Box1<T> { v: T }
+
+impl<T: Display> Display for Box1<T> {
+    fn to_string(&self) -> string { return "[{self.v}]" }
+}
+
+trait Weigh {
+    fn w(&self) -> i64
+    fn ww(&self) -> i64 { return self.w() * 10 }
+}
+
+impl Weigh for i64 {
+    fn w(&self) -> i64 { return *self + 1 }
+}
+
+impl<T: Weigh> Weigh for Box1<T> {
+    fn w(&self) -> i64 { return self.v.w() + 100 }
+}
+
+fn sum<T: Weigh>(xs: &[T]) -> i64 {
+    let mut a: i64 = 0
+    for x in xs { a = a + x.ww() }
+    return a
+}
+
+fn main() {
+    let b = Box1 { v: Box1 { v: 7 } }
+    println(b)
+    println("<{b}>")
+    let arr: [Box1<i64>; 2] = [Box1 { v: 1 }, Box1 { v: 2 }]
+    println(sum(arr[..]))
+    println(b.ww())
+    let n: i64 = 4
+    println(n.ww())
+}

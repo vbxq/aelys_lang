@@ -1,0 +1,6 @@
+enum Pair<A, B> { Two(A, B), One(A) }
+
+fn main() {
+    let p: Pair<i64, string> = Pair::Two("s", 1)
+    println(0)
+}

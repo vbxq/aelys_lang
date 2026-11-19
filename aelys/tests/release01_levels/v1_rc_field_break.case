@@ -1,0 +1,11 @@
+
+struct Node { next: Rc<i64> }
+fn main() -> i64 {
+    let mut i: i64 = 0
+    while i < 3 {
+        let n: Node = Node { next: Rc::new(i) }
+        if i == 1 { break }
+        i = i + 1
+    }
+    return 0
+}

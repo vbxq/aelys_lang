@@ -1,8 +1,7 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason};
+use crate::constraint::{Constraint, ConstraintReason, TypeError};
 use crate::typed_ast::TypedExpr;
 use crate::types::InferType;
-use aelys_common::{Warning, WarningKind};
 use aelys_syntax::{BinaryOp, Span, UnaryOp};
 
 impl TypeInference {
@@ -14,26 +13,43 @@ impl TypeInference {
         span: Span,
     ) -> InferType {
         match op {
-            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
-                let result_type = self.type_gen.fresh();
-
+            BinaryOp::Add if left.ty.is_str() || right.ty.is_str() => {
                 self.constraints.push(Constraint::equal(
-                    left.ty.clone(),
                     right.ty.clone(),
-                    span,
-                    ConstraintReason::BinaryOp { op: op.to_string() },
-                ));
-
-                self.constraints.push(Constraint::equal(
                     left.ty.clone(),
-                    result_type.clone(),
                     span,
                     ConstraintReason::BinaryOp { op: op.to_string() },
                 ));
+                InferType::String
+            }
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
+                // a concrete type here lets downstream narrowing see the real type instead of an opaque var
+                let result_type = if left.ty == right.ty && left.ty.is_concrete() {
+                    left.ty.clone()
+                } else {
+                    let fresh = self.type_gen.fresh();
+
+                    self.constraints.push(Constraint::equal(
+                        right.ty.clone(),
+                        left.ty.clone(),
+                        span,
+                        ConstraintReason::BinaryOp { op: op.to_string() },
+                    ));
+
+                    self.constraints.push(Constraint::equal(
+                        left.ty.clone(),
+                        fresh.clone(),
+                        span,
+                        ConstraintReason::BinaryOp { op: op.to_string() },
+                    ));
+
+                    fresh
+                };
 
                 if op == BinaryOp::Add {
                     let mut options = InferType::all_numeric_types();
                     options.push(InferType::String);
+                    options.push(InferType::StrRef);
                     self.constraints.push(Constraint::one_of(
                         left.ty.clone(),
                         options,
@@ -53,21 +69,27 @@ impl TypeInference {
             }
 
             BinaryOp::Mod => {
-                let result_type = self.type_gen.fresh();
+                let result_type = if left.ty == right.ty && left.ty.is_concrete() {
+                    left.ty.clone()
+                } else {
+                    let fresh = self.type_gen.fresh();
 
-                self.constraints.push(Constraint::equal(
-                    left.ty.clone(),
-                    right.ty.clone(),
-                    span,
-                    ConstraintReason::BinaryOp { op: op.to_string() },
-                ));
+                    self.constraints.push(Constraint::equal(
+                        right.ty.clone(),
+                        left.ty.clone(),
+                        span,
+                        ConstraintReason::BinaryOp { op: op.to_string() },
+                    ));
 
-                self.constraints.push(Constraint::equal(
-                    left.ty.clone(),
-                    result_type.clone(),
-                    span,
-                    ConstraintReason::BinaryOp { op: op.to_string() },
-                ));
+                    self.constraints.push(Constraint::equal(
+                        left.ty.clone(),
+                        fresh.clone(),
+                        span,
+                        ConstraintReason::BinaryOp { op: op.to_string() },
+                    ));
+
+                    fresh
+                };
 
                 self.constraints.push(Constraint::one_of(
                     left.ty.clone(),
@@ -81,15 +103,37 @@ impl TypeInference {
 
             BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
                 self.constraints.push(Constraint::equal(
-                    left.ty.clone(),
                     right.ty.clone(),
+                    left.ty.clone(),
                     span,
                     ConstraintReason::Comparison,
                 ));
+                if [&left.ty, &right.ty].into_iter().any(|t| {
+                    matches!(t, InferType::Struct(..) | InferType::Enum(..))
+                        && self.impl_for("ord", t).is_some()
+                }) {
+                    return InferType::Bool;
+                }
+
+                if let Some((name, bounds)) = self
+                    .bounds_on_type_param(&left.ty)
+                    .or_else(|| self.bounds_on_type_param(&right.ty))
+                {
+                    if !bounds.needs_ord() {
+                        self.errors.push(TypeError::bound_missing(
+                            &name,
+                            &op.to_string(),
+                            "ord",
+                            &bounds.spelling(),
+                            span,
+                        ));
+                    }
+                    return InferType::Bool;
+                }
 
                 self.constraints.push(Constraint::one_of(
                     left.ty.clone(),
-                    InferType::all_numeric_types(),
+                    InferType::ord_types(),
                     span,
                     ConstraintReason::Comparison,
                 ));
@@ -98,19 +142,91 @@ impl TypeInference {
             }
 
             BinaryOp::Eq | BinaryOp::Ne => {
-                if left.ty.is_concrete() && right.ty.is_concrete() && left.ty != right.ty {
-                    self.warnings.push(Warning::new(
-                        WarningKind::IncompatibleComparison {
-                            left: left.ty.to_string(),
-                            right: right.ty.to_string(),
-                            op: op.to_string(),
-                        },
+                if [&left.ty, &right.ty].into_iter().any(|t| {
+                    matches!(t, InferType::Struct(..) | InferType::Enum(..))
+                        && self.impl_for("eq", t).is_some()
+                }) {
+                    self.constraints.push(Constraint::equal(
+                        right.ty.clone(),
+                        left.ty.clone(),
+                        span,
+                        ConstraintReason::Comparison,
+                    ));
+                    return InferType::Bool;
+                }
+                if let Some((name, bounds)) = self
+                    .bounds_on_type_param(&left.ty)
+                    .or_else(|| self.bounds_on_type_param(&right.ty))
+                {
+                    if !bounds.needs_eq() {
+                        self.errors.push(TypeError::bound_missing(
+                            &name,
+                            &op.to_string(),
+                            "eq",
+                            &bounds.spelling(),
+                            span,
+                        ));
+                        return InferType::Bool;
+                    }
+                    self.constraints.push(Constraint::equal(
+                        right.ty.clone(),
+                        left.ty.clone(),
+                        span,
+                        ConstraintReason::Comparison,
+                    ));
+                    return InferType::Bool;
+                }
+
+                for operand_ty in [&left.ty, &right.ty] {
+                    if let InferType::Enum(name, _) = operand_ty {
+                        if let Some(def) = self.type_table.get_enum(name) {
+                            if def.variants.iter().any(|v| !v.data.is_empty()) {
+                                self.errors.push(TypeError::member_access(
+                                    format!(
+                                        "comparison (`{}`) is not supported for enum `{}` \
+                                         because it has data variants; use `match` instead",
+                                        op,
+                                        crate::modules::source_type_name(name)
+                                    ),
+                                    span,
+                                ));
+                                return InferType::Bool;
+                            }
+                        }
+                    }
+                    if let InferType::Struct(name, _) = operand_ty {
+                        self.errors.push(TypeError::member_access(
+                            format!(
+                                "comparison (`{}`) is not supported for struct `{}`; write \
+                                 `impl eq for {}` to compare it",
+                                op,
+                                name,
+                                crate::modules::source_type_name(name)
+                            ),
+                            span,
+                        ));
+                        return InferType::Bool;
+                    }
+                }
+
+                if left.ty.is_concrete()
+                    && right.ty.is_concrete()
+                    && left.ty != right.ty
+                    && !(left.ty.is_str() && right.ty.is_str())
+                {
+                    // incompatible concrete types (e.g., bool == i64) cannot be
+                    self.errors.push(TypeError::member_access(
+                        format!(
+                            "comparison (`{}`) requires operands of the same type, \
+                             found `{}` and `{}`",
+                            op, left.ty, right.ty
+                        ),
                         span,
                     ));
                 } else {
                     self.constraints.push(Constraint::equal(
-                        left.ty.clone(),
                         right.ty.clone(),
+                        left.ty.clone(),
                         span,
                         ConstraintReason::Comparison,
                     ));
@@ -124,24 +240,30 @@ impl TypeInference {
             | BinaryOp::BitAnd
             | BinaryOp::BitOr
             | BinaryOp::BitXor => {
-                self.constraints.push(Constraint::equal(
-                    left.ty.clone(),
-                    right.ty.clone(),
-                    span,
-                    ConstraintReason::BitwiseOp { op: op.to_string() },
-                ));
+                let result_type = if left.ty == right.ty && left.ty.is_concrete() {
+                    left.ty.clone()
+                } else {
+                    self.constraints.push(Constraint::equal(
+                        right.ty.clone(),
+                        left.ty.clone(),
+                        span,
+                        ConstraintReason::BitwiseOp { op: op.to_string() },
+                    ));
+
+                    let fresh = self.type_gen.fresh();
+                    self.constraints.push(Constraint::equal(
+                        left.ty.clone(),
+                        fresh.clone(),
+                        span,
+                        ConstraintReason::BitwiseOp { op: op.to_string() },
+                    ));
+
+                    fresh
+                };
 
                 self.constraints.push(Constraint::one_of(
                     left.ty.clone(),
                     InferType::all_integer_types(),
-                    span,
-                    ConstraintReason::BitwiseOp { op: op.to_string() },
-                ));
-
-                let result_type = self.type_gen.fresh();
-                self.constraints.push(Constraint::equal(
-                    left.ty.clone(),
-                    result_type.clone(),
                     span,
                     ConstraintReason::BitwiseOp { op: op.to_string() },
                 ));
@@ -169,7 +291,17 @@ impl TypeInference {
                 ));
                 operand.ty.clone()
             }
-            UnaryOp::Not => InferType::Bool,
+            UnaryOp::Not => {
+                self.constraints.push(Constraint::equal(
+                    operand.ty.clone(),
+                    InferType::Bool,
+                    span,
+                    ConstraintReason::BinaryOp {
+                        op: "!".to_string(),
+                    },
+                ));
+                InferType::Bool
+            }
             UnaryOp::BitNot => {
                 self.constraints.push(Constraint::one_of(
                     operand.ty.clone(),

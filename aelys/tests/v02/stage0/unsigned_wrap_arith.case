@@ -1,0 +1,19 @@
+fn main() {
+    let z8: u8 = 0
+    let z16: u16 = 0
+    let z32: u32 = 0
+    let z64: u64 = 0
+    let a: u8 = z8 - 1
+    let b: u16 = z16 - 1
+    let c: u32 = z32 - 1
+    let d: u64 = z64 - 1
+    println("{a} {b} {c} {d}")
+    println(d)
+    let half: u64 = d / 2
+    let third: u64 = d / 3
+    println("{half} {third}")
+    let top: u64 = half + 1
+    println(top)
+    println(d == 18446744073709551615)
+    println(d > half)
+}

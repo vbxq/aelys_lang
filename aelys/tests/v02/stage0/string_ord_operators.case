@@ -1,0 +1,18 @@
+fn main() {
+    println("a" < "b")
+    println("b" < "a")
+    println("ab" < "abc")
+    println("abc" < "ab")
+    println("abc" <= "abc")
+    println("abc" < "abc")
+    println("" < "a")
+    println("" >= "")
+    println("a" > "")
+    println("é" > "z")
+    println("ê" > "é")
+    println("Z" < "a")
+    let x = "pe" + "ar"
+    let y = "pear"
+    println(x >= y)
+    println(x > y)
+}

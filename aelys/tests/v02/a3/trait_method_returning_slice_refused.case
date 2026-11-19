@@ -1,0 +1,8 @@
+trait View { fn view(&self) -> &[i64] }
+struct B { v: Vec<i64> }
+impl View for B { fn view(&self) -> &[i64] { return self.v.as_slice() } }
+fn main() {
+    let b = B { v: vec[11, 22, 33, 44] }
+    let r = b.view()
+    println(r[1])
+}

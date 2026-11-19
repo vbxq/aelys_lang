@@ -1,0 +1,14 @@
+struct Slot<T> { key: i64, val: Option<T> }
+fn main() {
+    let s = Slot { key: 1, val: Some("x") }
+    let t: Slot<i64> = Slot { key: 2, val: None }
+    match s.val {
+        Some(v) => println(v),
+        None => println("empty")
+    }
+    match t.val {
+        Some(v) => println(v),
+        None => println("empty")
+    }
+    println(s.key + t.key)
+}

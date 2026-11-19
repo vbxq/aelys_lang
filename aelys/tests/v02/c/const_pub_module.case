@@ -1,0 +1,6 @@
+needs cfg
+fn main() {
+    println(cfg.LIMIT + 1)
+    println(cfg.NAME)
+    println(cfg.limit_plus(0))
+}

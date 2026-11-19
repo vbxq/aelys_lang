@@ -1,0 +1,3 @@
+refuse E0410
+carrying an `Rc<T>` straight into a generic enum
+!unknown type

@@ -1,0 +1,11 @@
+needs std.slice
+
+nogc fn order(s: &mut [i64]) {
+    s.sort()
+}
+
+fn main() {
+    let mut a = [2, 1]
+    order(a[..])
+    println(a[0])
+}

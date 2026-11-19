@@ -1,0 +1,29 @@
+trait Bump {
+    fn bump(&mut self)
+}
+
+struct C { n: i64 }
+struct D { n: i64 }
+
+impl Bump for C {
+    fn bump(&mut self) { self.n = self.n + 3 }
+}
+
+impl Bump for D {
+    fn bump(&mut self) { self.n = self.n * 2 }
+}
+
+fn twice<T: Bump>(x: &mut T) {
+    x.bump()
+    x.bump()
+}
+
+fn main() -> i64 {
+    let mut c = C { n: 1 }
+    let mut d = D { n: 1 }
+    twice(&mut c)
+    twice(&mut d)
+    println(c.n)
+    println(d.n)
+    return 0
+}

@@ -1,0 +1,17 @@
+use std::process::ExitCode; fn count_down(n: i64) -> i64 {
+    let mut count = 0;
+    let mut n = n;  // rebind to make mutable
+    while n > 0 {
+        count = count + 1;
+        n = n - 1;
+    }
+    count
+}
+
+fn main() -> ExitCode {
+    let r = count_down(7);
+    if r == 7 {
+        return ExitCode::from(1);
+    }
+    return ExitCode::SUCCESS;
+}

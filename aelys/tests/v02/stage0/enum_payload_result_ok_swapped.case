@@ -1,0 +1,4 @@
+fn main() {
+    let r: Result<i64, string> = Ok("x")
+    println(0)
+}

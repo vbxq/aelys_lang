@@ -26,8 +26,15 @@ impl Lexer {
                 self.nesting_depth = self.nesting_depth.saturating_sub(1);
                 self.add_token(TokenKind::RParen);
             }
-            '{' => self.add_token(TokenKind::LBrace),
-            '}' => self.add_token(TokenKind::RBrace),
+            '{' => {
+                self.brace_saved_depths.push(self.nesting_depth);
+                self.nesting_depth = 0;
+                self.add_token(TokenKind::LBrace);
+            }
+            '}' => {
+                self.nesting_depth = self.brace_saved_depths.pop().unwrap_or(0);
+                self.add_token(TokenKind::RBrace);
+            }
             '[' => {
                 self.nesting_depth += 1;
                 self.add_token(TokenKind::LBracket);
@@ -50,6 +57,7 @@ impl Lexer {
                 }
             }
             '@' => self.add_token(TokenKind::At),
+            '?' => self.add_token(TokenKind::Question),
 
             '+' => {
                 if self.match_char('=') {
@@ -85,7 +93,13 @@ impl Lexer {
                     self.add_token(TokenKind::Percent);
                 }
             }
-            ':' => self.add_token(TokenKind::Colon),
+            ':' => {
+                if self.match_char(':') {
+                    self.add_token(TokenKind::ColonColon);
+                } else {
+                    self.add_token(TokenKind::Colon);
+                }
+            }
 
             '/' => {
                 if self.match_char('/') {
@@ -104,6 +118,8 @@ impl Lexer {
             '=' => {
                 if self.match_char('=') {
                     self.add_token(TokenKind::EqEq);
+                } else if self.match_char('>') {
+                    self.add_token(TokenKind::FatArrow);
                 } else {
                     self.add_token(TokenKind::Eq);
                 }
@@ -113,9 +129,7 @@ impl Lexer {
                 if self.match_char('=') {
                     self.add_token(TokenKind::BangEq);
                 } else {
-                    return Err(AelysError::Compile(
-                        self.error(CompileErrorKind::InvalidCharacter(c)),
-                    ));
+                    self.add_token(TokenKind::Not);
                 }
             }
 
@@ -158,7 +172,15 @@ impl Lexer {
 
             '"' => self.string()?,
 
+            '\'' => self.character()?,
+
             c if c.is_ascii_digit() => self.number()?,
+
+            'r' if self.peek() == '#'
+                && (self.peek_next().is_alphabetic() || self.peek_next() == '_') =>
+            {
+                self.raw_identifier()
+            }
 
             c if c.is_alphabetic() || c == '_' => self.identifier(),
 

@@ -1,0 +1,17 @@
+struct Bag { items: Vec<i64>, n: i64 }
+
+impl Bag {
+    fn add(&mut self, x: i64) {
+        self.items.push(x);
+        self.n = self.items.len();
+    }
+}
+
+fn main() {
+    let mut b = Bag { items: Vec::new(), n: 0 };
+    for i in 0..10 {
+        b.add(i * i);
+    }
+    println!("{}", b.n);
+    println!("{}", b.items[9] + b.items[3]);
+}

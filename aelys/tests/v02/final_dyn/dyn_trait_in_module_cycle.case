@@ -1,0 +1,13 @@
+needs a
+needs b
+fn main() -> i64 {
+    let mut v: Vec<Rc<dyn a.Shape>> = Vec::new()
+    v.push(a.make())
+    v.push(b.boxed(2, 3))
+    v.push(Rc::new(b.Sq { s: 3 }))
+    println(a.total(v))
+    let one: Rc<dyn a.Shape> = b.boxed(1, 1)
+    println(one.tagged())
+    println(one.area())
+    return 0
+}

@@ -1,0 +1,6 @@
+struct N { v: i64 }
+enum E { A(Vec<Rc<N>>), B }
+fn main() -> i64 {
+    let e = E::B
+    return 0
+}

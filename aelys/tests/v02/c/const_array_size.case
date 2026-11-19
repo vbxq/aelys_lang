@@ -1,0 +1,10 @@
+const N: i64 = 4
+fn fill() -> [i64; N] {
+    let mut a: [i64; N] = [0; N]
+    for i in 0..N { a[i] = i * i }
+    return a
+}
+fn main() {
+    let a = fill()
+    println("{a.len} {a[N - 1]}")
+}

@@ -1,0 +1,12 @@
+// Match where every arm is wildcard
+use std::process::ExitCode; enum Color { Red, Green, Blue }
+
+fn code(c: Color) -> i64 {
+    match c {
+        _ => 42,
+    }
+}
+
+fn main() -> ExitCode {
+    return ExitCode::from((code(Color::Red) + code(Color::Blue)) as u8);  // 84
+}

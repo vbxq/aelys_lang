@@ -1,0 +1,8 @@
+impl Display for i64 {
+    fn to_string(&self) -> string { return "n" }
+}
+
+fn main() -> i64 {
+    println(3)
+    return 0
+}

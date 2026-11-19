@@ -1,7 +1,7 @@
 use super::Parser;
 use aelys_common::Result;
 use aelys_common::error::CompileErrorKind;
-use aelys_syntax::{Stmt, StmtKind, TokenKind};
+use aelys_syntax::{Expr, ExprKind, MatchArm, MatchOrigin, Pattern, Stmt, StmtKind, TokenKind};
 
 impl Parser {
     pub fn statement(&mut self) -> Result<Stmt> {
@@ -33,6 +33,10 @@ impl Parser {
             return self.return_statement();
         }
 
+        if self.match_token(&TokenKind::Discard) {
+            return self.discard_statement();
+        }
+
         if self.match_token(&TokenKind::LBrace) {
             return Ok(Stmt::new(
                 StmtKind::Block(self.block_statements()?),
@@ -45,6 +49,31 @@ impl Parser {
 
     fn if_statement(&mut self) -> Result<Stmt> {
         let start_span = self.previous().span;
+        if self.match_token(&TokenKind::Let) {
+            let (pattern, scrutinee) = self.let_pattern_head()?;
+            self.consume(&TokenKind::LBrace, "{")?;
+            let then_branch = self.block_statement()?;
+            let else_branch = if self.match_token(&TokenKind::Else) {
+                if self.match_token(&TokenKind::If) {
+                    self.if_statement()?
+                } else {
+                    self.consume(&TokenKind::LBrace, "{")?;
+                    self.block_statement()?
+                }
+            } else {
+                let at = self.previous().span;
+                Stmt::new(StmtKind::Block(Vec::new()), at)
+            };
+            let span = start_span.merge(self.previous().span);
+            let expr = Self::if_let_match(
+                pattern,
+                scrutinee,
+                stmt_block_expr(then_branch),
+                stmt_block_expr(else_branch),
+                span,
+            );
+            return Ok(Stmt::new(StmtKind::Expression(expr), span));
+        }
         let condition = self.expression()?;
         self.consume(&TokenKind::LBrace, "{")?;
         let then_branch = self.block_statement()?;
@@ -74,6 +103,51 @@ impl Parser {
 
     fn while_statement(&mut self) -> Result<Stmt> {
         let start_span = self.previous().span;
+        if self.match_token(&TokenKind::Let) {
+            let (pattern, scrutinee) = self.let_pattern_head()?;
+            self.consume(&TokenKind::LBrace, "{")?;
+            let body = self.block_statement()?;
+            let span = start_span.merge(self.previous().span);
+            let body_span = body.span;
+            let exit = Expr::new(
+                ExprKind::Block {
+                    stmts: vec![Stmt::new(StmtKind::Break, span)],
+                    tail: Box::new(Expr::new(ExprKind::Null, span)),
+                },
+                span,
+            );
+            let matched = Expr::new(
+                ExprKind::Match {
+                    scrutinee: Box::new(scrutinee),
+                    arms: vec![
+                        MatchArm {
+                            pattern,
+                            guard: None,
+                            body: Box::new(stmt_block_expr(body)),
+                            span: body_span,
+                        },
+                        MatchArm {
+                            pattern: Pattern::Wildcard(span),
+                            guard: None,
+                            body: Box::new(exit),
+                            span,
+                        },
+                    ],
+                    origin: MatchOrigin::WhileLet,
+                },
+                span,
+            );
+            return Ok(Stmt::new(
+                StmtKind::While {
+                    condition: Expr::new(ExprKind::Bool(true), start_span),
+                    body: Box::new(Stmt::new(
+                        StmtKind::Block(vec![Stmt::new(StmtKind::Expression(matched), span)]),
+                        span,
+                    )),
+                },
+                span,
+            ));
+        }
         let condition = self.expression()?;
         self.consume(&TokenKind::LBrace, "{")?;
         let body = self.block_statement()?;
@@ -90,13 +164,19 @@ impl Parser {
 
     fn for_statement(&mut self) -> Result<Stmt> {
         let start_span = self.previous().span;
-        let iterator = self.consume_identifier("loop variable")?;
+        if self.check(&TokenKind::LParen) {
+            return Err(self.rule(
+                902,
+                "a tuple pattern in a for loop is not supported; bind the element and read its parts",
+                self.peek().span,
+            ));
+        }
+        let iterator = self.consume_value_name("loop variable")?;
         self.consume(&TokenKind::In, "in")?;
 
         let first_expr = self.expression()?;
 
         if self.check(&TokenKind::DotDot) || self.check(&TokenKind::DotDotEq) {
-            // Range-based for: for i in start..end { }
             let inclusive = if self.match_token(&TokenKind::DotDotEq) {
                 true
             } else {
@@ -105,7 +185,8 @@ impl Parser {
             };
             let end = self.expression()?;
 
-            let step = if self.match_token(&TokenKind::Step) {
+            let step = if matches!(&self.peek().kind, TokenKind::Identifier(w) if w == "step") {
+                self.advance();
                 Some(self.expression()?)
             } else {
                 None
@@ -127,7 +208,6 @@ impl Parser {
                 start_span.merge(end_span),
             ))
         } else {
-            // ForEach: for item in collection { }
             self.consume(&TokenKind::LBrace, "{")?;
             let body = self.block_statement()?;
             let end_span = self.previous().span;
@@ -146,6 +226,10 @@ impl Parser {
     fn return_statement(&mut self) -> Result<Stmt> {
         let start_span = self.previous().span;
 
+        if self.check(&TokenKind::RBrace) || self.is_at_end() {
+            return Ok(Stmt::new(StmtKind::Return(None), start_span));
+        }
+
         if self.check(&TokenKind::Semicolon) {
             self.consume_semicolon()?;
             return Ok(Stmt::new(StmtKind::Return(None), start_span));
@@ -157,6 +241,18 @@ impl Parser {
 
         Ok(Stmt::new(
             StmtKind::Return(Some(value)),
+            start_span.merge(end_span),
+        ))
+    }
+
+    fn discard_statement(&mut self) -> Result<Stmt> {
+        let start_span = self.previous().span;
+        let value = self.expression()?;
+        self.consume_semicolon()?;
+        let end_span = self.previous().span;
+
+        Ok(Stmt::new(
+            StmtKind::Discard(value),
             start_span.merge(end_span),
         ))
     }
@@ -181,12 +277,18 @@ impl Parser {
     pub(crate) fn block_statements(&mut self) -> Result<Vec<Stmt>> {
         let mut stmts = Vec::new();
 
-        while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
-            if self.match_token(&TokenKind::Semicolon) {
-                continue;
+        self.block_depth += 1;
+        let collected = (|this: &mut Self| -> Result<()> {
+            while !this.check(&TokenKind::RBrace) && !this.is_at_end() {
+                if this.match_token(&TokenKind::Semicolon) {
+                    continue;
+                }
+                stmts.push(this.declaration()?);
             }
-            stmts.push(self.declaration()?);
-        }
+            Ok(())
+        })(self);
+        self.block_depth -= 1;
+        collected?;
 
         self.consume(&TokenKind::RBrace, "}")?;
         Ok(stmts)
@@ -202,4 +304,15 @@ impl Parser {
             }))
         }
     }
+}
+
+fn stmt_block_expr(stmt: Stmt) -> Expr {
+    let span = stmt.span;
+    Expr::new(
+        ExprKind::Block {
+            stmts: vec![stmt],
+            tail: Box::new(Expr::new(ExprKind::Null, span)),
+        },
+        span,
+    )
 }

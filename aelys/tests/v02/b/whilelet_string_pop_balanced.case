@@ -1,0 +1,15 @@
+fn at(v: &Vec<string>, i: i64) -> Option<string> {
+    if i >= Vec::len(*v) { return None }
+    return Some((*v)[i])
+}
+
+fn main() -> i64 {
+    let v: Vec<string> = vec["a" + "", "b", "c"]
+    let mut n: i64 = 0
+    while let Some(s) = at(&v, n) {
+        println(s + "!")
+        n = n + 1
+    }
+    println(n)
+    return 0
+}

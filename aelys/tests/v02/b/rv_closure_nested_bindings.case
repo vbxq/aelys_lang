@@ -1,0 +1,12 @@
+enum E { A(i64), B(i64), C }
+
+fn main() -> i64 {
+    let k = fn(o: Option<Option<i64>>, e: E, n: i64) -> i64 {
+        let a: i64 = match o { Some(Some(x)) => x, _ => 0 }
+        let b: i64 = match e { E::A(x) | E::B(x) => x, E::C => 0 }
+        let c: i64 = match n { m @ 1..=5 => m * 100, _ => 0 }
+        return a + b + c
+    }
+    println(k(Some(Some(1)), E::B(20), 3))
+    return 0
+}

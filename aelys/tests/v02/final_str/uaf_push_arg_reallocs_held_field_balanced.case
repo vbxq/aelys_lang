@@ -1,0 +1,17 @@
+struct P { s: String }
+
+fn two<A, B>(a: A, b: B) -> A {
+    return a
+}
+
+fn tight(s: &str) -> String {
+    let mut w = String::with_capacity(s.len())
+    w.push_str(s)
+    return w
+}
+
+fn main() {
+    let mut p = P { s: tight("pppp") }
+    let r = two(p.s, p.s.push_str("0123456789abcdef0123456789abcdef"))
+    println(r)
+}

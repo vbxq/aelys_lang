@@ -1,0 +1,8 @@
+needs prog
+pub const LIMIT: i64 = prog.BASE * 2
+pub struct Widget { pub cfg: prog.Cfg, pub k: i64 }
+impl Widget {
+    pub fn size(&self) -> i64 { return self.cfg.doubled() + self.k }
+}
+pub fn twice(c: prog.Cfg) -> i64 { return c.doubled() + prog.base() }
+pub fn make(k: i64) -> Widget { return Widget { cfg: prog.Cfg { n: k }, k: k } }

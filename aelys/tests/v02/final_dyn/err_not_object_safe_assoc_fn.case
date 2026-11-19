@@ -1,0 +1,6 @@
+trait Make {
+    fn area(&self) -> i64
+    fn make(v: i64) -> Self
+}
+fn f(x: &dyn Make) -> i64 { return x.area() }
+fn main() -> i64 { return 0 }

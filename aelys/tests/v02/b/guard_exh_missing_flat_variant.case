@@ -1,0 +1,6 @@
+enum Color { Red, Green, Blue }
+
+fn main() -> i64 {
+    let c: Color = Color::Red
+    return match c { Color::Red => 1, Color::Green => 2 }
+}

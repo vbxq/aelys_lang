@@ -1,0 +1,11 @@
+struct Pair<A, B> { a: A, b: B }
+fn main() {
+    let xs = [Pair { a: 1, b: 5 }, Pair { a: 2, b: 6 }, Pair { a: 3, b: 7 }]
+    let mut i = 0
+    let mut t = 0
+    while i < 3 {
+        t = t + xs[i].a * 10 + xs[i].b
+        i = i + 1
+    }
+    println(t)
+}

@@ -1,0 +1,4 @@
+fn main() -> i64 {
+    unsafe extern fn f()
+    return 0
+}

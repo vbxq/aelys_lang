@@ -1,0 +1,12 @@
+needs std.sort
+
+nogc fn go(s: &mut [i64]) -> i64 {
+    sort.insertion_sort(s)
+    return sort.binary_search(s, 7)
+}
+
+fn main() {
+    let mut a = [9, 3, 7, 1, 5]
+    let i = go(a[..])
+    println("{i} {a[0]}{a[1]}{a[2]}{a[3]}{a[4]}")
+}

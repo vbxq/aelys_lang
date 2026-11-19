@@ -1,0 +1,6 @@
+fn f(and: i64) -> i64 {
+    return and
+}
+fn main() {
+    println("{f(1)}")
+}

@@ -1,0 +1,6 @@
+
+fn main() -> i64 {
+    let v: Vec<i64> = vec[1,2,3]
+    let r = &mut v[0]
+    return 0
+}

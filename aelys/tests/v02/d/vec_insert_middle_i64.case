@@ -1,0 +1,7 @@
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[1, 2, 4]
+    Vec::insert(v, 2, 3)
+    for i in 0..v.len { println(v[i]) }
+    println(v.len)
+    return 0
+}

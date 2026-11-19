@@ -1,0 +1,7 @@
+needs geom
+impl geom.Pt {
+    pub fn norm2(&self) -> i64 { return self.x * self.x + self.y * self.y }
+    pub fn origin() -> Self { return geom.Pt { x: 0, y: 0 } }
+    pub fn shift(&mut self, d: i64) { self.x = self.x + d }
+}
+pub fn twice(p: geom.Pt) -> i64 { return p.norm2() * 2 }

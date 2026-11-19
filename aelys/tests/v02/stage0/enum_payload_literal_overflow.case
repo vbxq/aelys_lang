@@ -1,0 +1,4 @@
+fn main() {
+    let o: Option<u8> = Some(300)
+    println(0)
+}

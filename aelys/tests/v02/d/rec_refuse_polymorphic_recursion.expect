@@ -1,0 +1,2 @@
+refuse E0902
+enum `P<T>` names itself with different type arguments in variant `N`

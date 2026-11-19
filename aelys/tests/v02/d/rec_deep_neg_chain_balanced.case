@@ -1,0 +1,25 @@
+enum Expr { Num(i64), Neg(Rc<Expr>) }
+fn depth(e: Expr) -> i64 {
+    let mut cur: Expr = e
+    let mut d: i64 = 0
+    let mut go: bool = true
+    while go {
+        match cur {
+            Expr::Neg(x) => { d = d + 1
+                cur = Rc::get(x) }
+            Expr::Num(n) => { d = d + n
+                go = false }
+        }
+    }
+    return d
+}
+fn main() -> i64 {
+    let mut e: Expr = Expr::Num(7)
+    let mut i: i64 = 0
+    while i < 100000 {
+        e = Expr::Neg(Rc::new(e))
+        i = i + 1
+    }
+    println(depth(e))
+    return 0
+}

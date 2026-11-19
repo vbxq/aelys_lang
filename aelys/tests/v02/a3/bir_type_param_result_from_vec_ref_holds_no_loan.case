@@ -1,0 +1,28 @@
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn churn() -> Vec<string> {
+    let mut keep: Vec<string> = Vec::new()
+    let mut i: i64 = 10
+    while i < 50 {
+        Vec::push(keep, "Q" + "{i}")
+        i = i + 1
+    }
+    return keep
+}
+fn take_first<T>(v: &mut Vec<T>, x: T) -> T {
+    let old: T = (*v)[0]
+    (*v)[0] = x
+    return old
+}
+fn cycle<T>(v: &mut Vec<T>, x: T) -> T {
+    let old: T = take_first(v, x)
+    Vec::push(*v, old)
+    return (*v)[0]
+}
+fn main() -> i64 {
+    let mut v: Vec<string> = Vec::new()
+    Vec::push(v, victim(1))
+    let r: string = cycle(&mut v, victim(2))
+    let k = churn()
+    println("{r} {v[0]} {v[1]} {v.len()}")
+    return 0
+}

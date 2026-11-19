@@ -1,0 +1,9 @@
+fn total(items: Vec<Item>) -> i64 {
+    let short = items.iter().count();
+    let total = items
+        .iter()
+        .filter(|it| it.qty > 0)
+        .map(|it| it.qty * it.price)
+        .sum();
+    total + short
+}

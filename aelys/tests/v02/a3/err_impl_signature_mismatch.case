@@ -1,0 +1,14 @@
+trait Area {
+    fn area(&self) -> i64
+}
+
+struct Sq { s: i64 }
+
+impl Area for Sq {
+    fn area(&self) -> string { return "big" }
+}
+
+fn main() -> i64 {
+    println(Sq { s: 2 }.area())
+    return 0
+}

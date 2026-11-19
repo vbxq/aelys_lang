@@ -1,0 +1,28 @@
+enum Group<T> { Many(Vec<T>), One(T), Zero }
+fn s(i: i64) -> string { return "g{i}" }
+fn size<T>(g: Group<T>) -> i64 {
+    match g {
+        Group::Many(v) => { return v.len }
+        Group::One(x) => { return 1 }
+        Group::Zero => { return 0 }
+    }
+    return -1
+}
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 200 {
+        let mut v: Vec<string> = Vec::new()
+        Vec::push(v, s(i))
+        Vec::push(v, s(1))
+        let g = Group::Many(v)
+        let h = g
+        Vec::push(v, s(2))
+        let one: Group<string> = Group::One(s(i))
+        let z: Group<i64> = Group::Zero
+        t = t + size(g) * 100 + size(h) * 10 + size(one) + size(z) + v.len * 1000
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

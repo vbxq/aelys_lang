@@ -1,0 +1,11 @@
+needs geom
+needs ext
+fn main() {
+    let p = geom.Pt { x: 3, y: 4 }
+    println(p.norm2())
+    println(geom.Pt::origin().norm2())
+    let mut q = geom.Pt { x: 1, y: 1 }
+    q.shift(2)
+    println(q.x * 10 + q.y)
+    println(ext.twice(p))
+}

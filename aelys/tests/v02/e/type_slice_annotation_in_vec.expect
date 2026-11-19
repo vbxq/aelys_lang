@@ -1,0 +1,4 @@
+refuse E0301
+unknown type `Foo`
+aborting due to 1 previous error
+![slice]

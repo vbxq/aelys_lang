@@ -1,0 +1,22 @@
+trait Shape {
+    fn area(&self) -> i64
+}
+struct Sq { s: i64 }
+struct Rect { w: i64, h: i64 }
+impl Shape for Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+impl Shape for Rect {
+    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+}
+struct Scene { main: Rc<dyn Shape>, extra: i64 }
+fn score(sc: &Scene) -> i64 { return sc.main.area() + sc.extra }
+fn main() -> i64 {
+    let mut sc = Scene { main: Rc::new(Sq { s: 6 }), extra: 4 }
+    println(score(&sc))
+    sc.main = Rc::new(Rect { w: 1, h: 1 })
+    println(score(&sc))
+    let copy = sc
+    println(copy.main.area())
+    return 0
+}

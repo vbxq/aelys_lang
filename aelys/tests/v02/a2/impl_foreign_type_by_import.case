@@ -1,0 +1,10 @@
+needs Pt, mk from geom
+
+impl Pt {
+    fn get(&self) -> i64 { return self.x }
+}
+
+fn main() {
+    let p: Pt = mk(4)
+    println(p.get())
+}

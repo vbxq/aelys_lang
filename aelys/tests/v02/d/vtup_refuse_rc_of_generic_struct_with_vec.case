@@ -1,0 +1,6 @@
+struct W<T> { v: Vec<T> }
+fn main() -> i64 {
+    let r: Rc<W<i64>> = Rc::new(W { v: Vec::new() })
+    println(Rc::get(r).v.len)
+    return 0
+}

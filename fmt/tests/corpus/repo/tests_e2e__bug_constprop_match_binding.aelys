@@ -1,0 +1,17 @@
+// Test: const_prop must not propagate through match pattern bindings.
+// let x = 5; match e { Some(x) => x should be the payload, not 5 }
+use std::process::ExitCode; enum Maybe { Just(i64), Nothing }
+
+fn main() -> ExitCode {
+    let x: i64 = 5;
+    let m = Maybe::Just(42);
+    let result: i64 = match m {
+        Maybe::Just(x) => x,
+        Maybe::Nothing => 0,
+    };
+    // result should be 42 (from payload), not 5 (from outer x)
+    if result == 42 {
+        return ExitCode::SUCCESS;
+    }
+    return ExitCode::from(result as u8);
+}

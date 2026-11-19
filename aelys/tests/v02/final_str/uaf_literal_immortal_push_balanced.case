@@ -1,0 +1,26 @@
+fn mk() -> String {
+    return "base"
+}
+
+fn main() {
+    let mut a = mk()
+    a.push_str("1")
+    let mut b = mk()
+    b.push('2')
+    println(a)
+    println(b)
+    println(mk())
+    let mut c = String::from("lit")
+    c += "x"
+    println(c)
+    let mut d: String = "lit"
+    d.push_str("y")
+    println(d)
+    println("lit")
+    let mut e = String::new()
+    e.push_str("")
+    println(e.len())
+    e.push('q')
+    println(e)
+    println(String::new().len())
+}

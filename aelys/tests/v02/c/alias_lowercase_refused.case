@@ -1,0 +1,4 @@
+type i64 = string
+fn main() {
+    println(1)
+}

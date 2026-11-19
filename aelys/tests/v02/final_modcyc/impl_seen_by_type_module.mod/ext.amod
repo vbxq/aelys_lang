@@ -1,0 +1,4 @@
+needs Pt from geom
+impl Pt {
+    pub fn half(&self) -> i64 { return self.v / 2 }
+}

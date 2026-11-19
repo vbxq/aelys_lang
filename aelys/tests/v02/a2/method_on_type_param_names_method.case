@@ -1,0 +1,8 @@
+struct P { x: i64 }
+impl P {
+    fn get(&self) -> i64 { return self.x }
+}
+fn g<T>(t: T) -> i64 { return t.get() }
+fn main() {
+    println(g(P { x: 1 }))
+}

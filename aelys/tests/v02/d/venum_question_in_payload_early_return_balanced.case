@@ -1,0 +1,30 @@
+enum Expr { Num(i64), Neg(Rc<Expr>), Bin(char, Rc<Expr>, Rc<Expr>) }
+struct Pair { name: string, e: Rc<Expr> }
+fn leaf(i: i64) -> Option<Rc<Expr>> {
+    if i % 3 == 2 { return None }
+    return Some(Rc::new(Expr::Num(i)))
+}
+fn s(i: i64) -> string { return "s{i}" }
+fn build(i: i64) -> Option<Rc<Expr>> {
+    let lhs = Rc::new(Expr::Num(5))
+    let e = Rc::new(Expr::Bin('+', lhs, Rc::new(Expr::Neg(leaf(i)?))))
+    let p = Pair { name: s(i), e: leaf(i + 1)? }
+    return Some(Rc::new(Expr::Bin('+', e, Rc::new(Expr::Bin('+', p.e, Rc::new(Expr::Num(p.name.len())))))))
+}
+fn ev(e: Rc<Expr>) -> i64 {
+    return match Rc::get(e) {
+        Expr::Num(n) => n,
+        Expr::Neg(x) => -ev(x),
+        Expr::Bin(_, l, r) => ev(l) + ev(r),
+    }
+}
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 300 {
+        match build(i) { Some(e) => { t = t + ev(e) } None => { t = t + 1000 } }
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

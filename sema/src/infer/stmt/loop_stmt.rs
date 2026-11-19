@@ -1,8 +1,8 @@
 use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason};
-use crate::typed_ast::TypedStmtKind;
+use crate::typed_ast::{TypedExpr, TypedExprKind, TypedStmtKind};
 use crate::types::InferType;
-use aelys_syntax::{Expr, Span, Stmt};
+use aelys_syntax::{Expr, ExprKind, Span, Stmt};
 
 impl TypeInference {
     pub(super) fn infer_if_stmt(
@@ -20,8 +20,20 @@ impl TypeInference {
             ConstraintReason::IfCondition,
         ));
 
+        self.env.push_scope();
+        let saved_then_literals = self.literal_init_vars.clone();
         let typed_then = self.infer_stmt(then_branch);
-        let typed_else = else_branch.map(|e| Box::new(self.infer_stmt(e)));
+        self.env.pop_scope();
+        self.literal_init_vars = saved_then_literals;
+
+        let typed_else = else_branch.map(|e| {
+            self.env.push_scope();
+            let saved_else_literals = self.literal_init_vars.clone();
+            let typed = self.infer_stmt(e);
+            self.env.pop_scope();
+            self.literal_init_vars = saved_else_literals;
+            Box::new(typed)
+        });
 
         TypedStmtKind::If {
             condition: typed_cond,
@@ -84,9 +96,11 @@ impl TypeInference {
         }
 
         self.env.push_scope();
+        let saved_for_literals = self.literal_init_vars.clone();
         self.env.define_local(iterator.to_string(), InferType::I64);
         let typed_body = self.infer_stmt(body);
         self.env.pop_scope();
+        self.literal_init_vars = saved_for_literals;
 
         TypedStmtKind::For {
             iterator: iterator.to_string(),
@@ -105,21 +119,69 @@ impl TypeInference {
         body: &Stmt,
         _span: Span,
     ) -> TypedStmtKind {
-        let typed_iterable = self.infer_expr(iterable);
+        let typed_iterable = match &iterable.kind {
+            ExprKind::Call { callee, args } if args.is_empty() => match &callee.kind {
+                ExprKind::Member { object, member } if member == "chars" || member == "bytes" => {
+                    let typed_object = self.infer_expr(object);
+                    if typed_object.ty.is_str() && member == "chars" {
+                        typed_object
+                    } else if typed_object.ty.is_str() {
+                        let span = typed_object.span;
+                        TypedExpr::new(
+                            TypedExprKind::Member {
+                                object: Box::new(typed_object),
+                                member: "bytes".to_string(),
+                            },
+                            InferType::Slice {
+                                elem: Box::new(InferType::U8),
+                                mutable: false,
+                            },
+                            span,
+                        )
+                    } else {
+                        let pretyped = self.stash_pretyped(typed_object);
+                        let call = Expr::new(
+                            ExprKind::Call {
+                                callee: Box::new(Expr::new(
+                                    ExprKind::Member {
+                                        object: Box::new(pretyped),
+                                        member: member.clone(),
+                                    },
+                                    callee.span,
+                                )),
+                                args: Vec::new(),
+                            },
+                            iterable.span,
+                        );
+                        self.infer_expr(&call)
+                    }
+                }
+                _ => self.infer_expr(iterable),
+            },
+            _ => self.infer_expr(iterable),
+        };
 
         let elem_type = match &typed_iterable.ty {
-            InferType::String => InferType::String,
+            InferType::String | InferType::StrRef => InferType::Char,
             InferType::Vec(inner) => (**inner).clone(),
-            InferType::Array(inner) => (**inner).clone(),
+            InferType::Array(inner, _) => (**inner).clone(),
+            InferType::Slice { elem, .. } => (**elem).clone(),
             InferType::Dynamic => InferType::Dynamic,
-            _ => InferType::Dynamic,
+            InferType::Var(_) => self.defer_read(
+                &typed_iterable.ty,
+                crate::infer::projection::ProjKind::Element,
+                typed_iterable.span,
+            ),
+            _other => InferType::Dynamic,
         };
 
         self.env.push_scope();
+        let saved_foreach_literals = self.literal_init_vars.clone();
         self.env
             .define_local(iterator.to_string(), elem_type.clone());
         let typed_body = self.infer_stmt(body);
         self.env.pop_scope();
+        self.literal_init_vars = saved_foreach_literals;
 
         TypedStmtKind::ForEach {
             iterator: iterator.to_string(),

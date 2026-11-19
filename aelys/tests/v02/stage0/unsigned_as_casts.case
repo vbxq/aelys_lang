@@ -1,0 +1,17 @@
+fn main() {
+    let m: u64 = 18446744073709551615
+    let n: i64 = -1
+    let s: i8 = -56
+    let a: u8 = n as u8
+    let b: u32 = n as u32
+    let c: u64 = n as u64
+    let d: i64 = m as i64
+    let e: u8 = s as u8
+    let f: i8 = e as i8
+    let g: u64 = b as u64
+    let h: u16 = m as u16
+    println("{a} {b} {c} {d}")
+    println("{e} {f} {g} {h}")
+    println(n as u64)
+    println(m as i64)
+}

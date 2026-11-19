@@ -1,0 +1,9 @@
+struct In { s: string, t: string }
+struct Out { inner: In, u: string }
+let ga: [string; 3] = ["a", "b", "c"]
+let g = Out { inner: In { s: "x", t: "y" }, u: "z" }
+let h: string = "solo"
+fn main() {
+    println("{ga[0]} {ga[1]} {ga[2]}")
+    println("{g.inner.s} {g.inner.t} {g.u} {h}")
+}

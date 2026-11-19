@@ -1,0 +1,113 @@
+needs std.slice
+needs std.str
+
+struct Shape { n: i64, m: i64, p: i64 }
+
+impl Shape {
+    fn a_at(&self, i: i64, k: i64) -> i64 { return i * self.m + k }
+    fn b_at(&self, k: i64, j: i64) -> i64 { return k * self.p + j }
+    fn out_at(&self, i: i64, j: i64) -> i64 { return i * self.p + j }
+}
+
+nogc fn matmul(a: &[i64], b: &[i64], out: &mut [i64], s: Shape) {
+    for i in 0..s.n {
+        for j in 0..s.p {
+            let mut acc: i64 = 0
+            for k in 0..s.m { acc = acc + a[s.a_at(i, k)] * b[s.b_at(k, j)] }
+            out[s.out_at(i, j)] = acc
+        }
+    }
+}
+
+nogc fn transpose(src: &[i64], dst: &mut [i64], rows: i64, cols: i64) {
+    for r in 0..rows {
+        for c in 0..cols { dst[c * rows + r] = src[r * cols + c] }
+    }
+}
+
+nogc fn trace(a: &[i64], n: i64) -> i64 {
+    let mut t: i64 = 0
+    for i in 0..n { t = t + a[i * n + i] }
+    return t
+}
+
+nogc fn peak(a: &[i64]) -> i64 {
+    return match slice.max(a) { Some(v) => v, None => 0 }
+}
+
+struct Matrix { rows: i64, cols: i64, data: Vec<i64> }
+
+impl Matrix {
+    fn from_fn(rows: i64, cols: i64, f: fn(i64, i64) -> i64) -> Self {
+        let mut data: Vec<i64> = Vec::with_capacity(rows * cols)
+        for r in 0..rows {
+            for c in 0..cols { data.push(f(r, c)) }
+        }
+        return Matrix { rows: rows, cols: cols, data: data }
+    }
+
+    fn zeros(rows: i64, cols: i64) -> Self { return Matrix::from_fn(rows, cols, fn(r: i64, c: i64) -> i64 { return 0 }) }
+
+    fn mul(&self, other: &Matrix) -> Result<Matrix, string> {
+        if self.cols != other.rows {
+            return Err("cannot multiply {self.rows}x{self.cols} by {other.rows}x{other.cols}")
+        }
+        let mut out = Matrix::zeros(self.rows, other.cols)
+        let size = self.rows * other.cols
+        matmul(self.data.as_slice(), other.data.as_slice(), out.data[0..size], Shape { n: self.rows, m: self.cols, p: other.cols })
+        return Ok(out)
+    }
+
+    fn transposed(&self) -> Matrix {
+        let mut out = Matrix::zeros(self.cols, self.rows)
+        let size = self.rows * self.cols
+        transpose(self.data.as_slice(), out.data[0..size], self.rows, self.cols)
+        return out
+    }
+
+    fn pow(&self, k: i64) -> Result<Matrix, string> {
+        let mut acc = Matrix::from_fn(self.rows, self.cols, fn(r: i64, c: i64) -> i64 { return if r == c { 1 } else { 0 } })
+        for i in 0..k { acc = acc.mul(self)? }
+        return Ok(acc)
+    }
+}
+
+impl Display for Matrix {
+    fn to_string(&self) -> string {
+        let mut s = ""
+        for r in 0..self.rows {
+            if r > 0 { s = s + "\n" }
+            for c in 0..self.cols {
+                let cell = str.from_int(self.data[r * self.cols + c])
+                s = s + str.repeat(" ", 6 - cell.len()) + cell
+            }
+        }
+        return s
+    }
+}
+
+fn main() -> i64 {
+    let a = Matrix::from_fn(2, 3, fn(r: i64, c: i64) -> i64 { return r * 3 + c + 1 })
+    let b = Matrix::from_fn(3, 2, fn(r: i64, c: i64) -> i64 { return 7 + r * 2 + c })
+    println("A =\n{a}\nB =\n{b}")
+    match a.mul(&b) {
+        Ok(ab) => {
+            println("A*B =")
+            println(ab)
+            println("trace {trace(ab.data.as_slice(), 2)}, peak {peak(ab.data.as_slice())}")
+            let (bt, at) = (b.transposed(), a.transposed())
+            if let Ok(btat) = bt.mul(&at) {
+                let abt = ab.transposed()
+                println("transpose identity: {slice.eq(abt.data.as_slice(), btat.data.as_slice())}")
+            }
+        }
+        Err(e) => println("error: {e}")
+    }
+    if let Err(e) = a.mul(&a) { println("error: {e}") }
+    let m = Matrix::from_fn(3, 3, fn(r: i64, c: i64) -> i64 { return if r == c { 2 } else { 1 } })
+    match (m.pow(3), m.pow(10)) {
+        (Ok(m3), Ok(m10)) => println("M^3 =\n{m3}\ntrace(M^10) = {trace(m10.data.as_slice(), 3)}"),
+        (Err(e), _) | (_, Err(e)) => println("error: {e}")
+    }
+    return 0
+}

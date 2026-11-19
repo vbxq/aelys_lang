@@ -1,0 +1,2 @@
+fn g(r: &i64) -> &mut i64 { return r }
+fn main() -> i64 { return 0 }

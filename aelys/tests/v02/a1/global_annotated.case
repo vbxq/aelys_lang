@@ -1,0 +1,5 @@
+struct Pair<A, B> { a: A, b: B }
+let G: Pair<i64, i64> = Pair { a: 4, b: 2 }
+fn main() {
+    println(G.a * 10 + G.b)
+}

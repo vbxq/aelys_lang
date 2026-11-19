@@ -1,0 +1,5 @@
+struct P { a: i64 }
+fn main() {
+    let p: P<i64> = P { a: 1 }
+    println(p.a)
+}

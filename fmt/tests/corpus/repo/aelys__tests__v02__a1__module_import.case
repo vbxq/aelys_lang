@@ -1,0 +1,7 @@
+mod m;
+fn main() {
+    let p: m::Pair<i64, String> = m::mk(5, "mod");
+    let q = m::Pair { a: 1, b: 2 };
+    println!("{}", p.a + q.b);
+    println!("{}", p.b);
+}

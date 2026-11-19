@@ -1,0 +1,16 @@
+use std::fmt; struct P { x: i64, y: i64 }
+
+impl fmt::Display for P {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "P({},{})", self.x, self.y) }
+}
+
+fn show<T: fmt::Display>(x: T) {
+    println!("[{x}]");
+}
+
+fn main() {
+    show(P { x: 3, y: 4 });
+    show(5);
+    show("hi");
+    show(true);
+}

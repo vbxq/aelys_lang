@@ -1,0 +1,65 @@
+use crate::parser::{Parser, self, ast};
+use std::collections::{HashMap};
+use std::vec::Vec;
+
+mod lexer;
+mod ast;
+
+struct P(i64, i64);
+struct Unit;
+pub struct Gen<T: Ord + Display, U> where U: Clone { a: T, b: U }
+trait Show: Display { fn show(&self) -> String; fn twice(&self) -> String { format!("{}{}", self.show(), self.show()) } }
+impl<T: Ord> Show for Gen<T, i64> where T: Display { fn show(&self) -> String { "g".to_string() } }
+type Pair = (i64, i64);
+static mut COUNTER: i64 = 0;
+const LIMIT: i64 = 1_000_000;
+extern "C" { fn puts(s: *const u8) -> i32; nogc fn abs(x: i32) -> i32; }
+#[inline(always)]
+nogc fn fast(x: i64) -> i64 { x << 2 >> 1 }
+
+#[fmt::skip]
+const TABLE: [i64; 4] = [ 1,   2,
+                          3,   4 ];
+
+fn forms(v: Vec<Vec<i64>>, t: (i64,)) -> Option<i64> {
+    let (a, b) = (1, 2);
+    let single = (a,);
+    let r = 0..10;
+    let r2 = ..=b;
+    let all = ..;
+    let raw = r#"raw "string""#;
+    let r#type = 'x';
+    let byte = b'a';
+    let esc = "tab\there é";
+    let multi = "line one
+line two";
+    let neg = -x as i64;
+    let refs = &mut v[0..2];
+    let dbl = &&a;
+    let f = || 0;
+    let g = move |x: i64, y| x + y;
+    let h = |x| -> i64 { x * 2 };
+    let w = vec![0; 16];
+    let q = p.0 + p.1;
+    let tup = t.0.0;
+    let s = Vec::<i64>::new();
+    let shifted = a >> 2 >= b;
+    let x = v.get(0)?.len();
+    'outer: loop {
+        for i in (0..10).step_by(2) {
+            if i == 4 { continue 'outer; }
+            if i > 8 { break 'outer; }
+        }
+    }
+    let n = loop { break 5; };
+    while let Some(x) = it.next() { use_it(x); }
+    if let Some(y) = opt { y } else { 0 };
+    let Some(z) = opt else { return None };
+    match p { P(a, b) if a > b => a, P { 0: a, .. } => a, }
+    match c { 'a'..='z' | 'A'..='Z' => 1, x @ 0..=9 => x, _ => {} }
+    unsafe { COUNTER += 1; }
+    x += 1; y -= 2; z <<= 3; z >>= 1; z ^= 4; z |= 1; z &= 7;
+    assert!(a < b, "a {} b {}", a, b);
+    assert_eq!(a, b);
+    return Some(a)
+}

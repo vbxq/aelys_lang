@@ -1,0 +1,3 @@
+needs a
+pub const Y: i64 = 40
+pub const W: i64 = a.X + 10

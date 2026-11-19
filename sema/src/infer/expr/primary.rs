@@ -1,8 +1,9 @@
 use super::TypeInference;
-use crate::constraint::TypeError;
-use crate::typed_ast::TypedExprKind;
+use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
+use crate::typed_ast::{TypedExpr, TypedExprKind};
 use crate::types::InferType;
-use aelys_syntax::Span;
+use aelys_syntax::{Expr, Span};
+use std::collections::HashMap;
 
 impl TypeInference {
     pub(super) fn infer_identifier_expr(
@@ -10,17 +11,1418 @@ impl TypeInference {
         name: &str,
         span: Span,
     ) -> (TypedExprKind, InferType) {
+        if let Some(typed) = self.take_pretyped(name) {
+            return (typed.kind, typed.ty);
+        }
+        if self.foreign_sigs_shadowed_by_local(name) {
+            self.foreign_shadowed_spans.insert((span.start, span.end));
+        }
+        if self.env.lookup_local(name).is_none() {
+            self.note_generic_value(name, span);
+        }
+        if let Some(found) = self.const_literal(name, span) {
+            return found;
+        }
+        if self.failed_const(name) {
+            return (TypedExprKind::Identifier(name.to_string()), InferType::Dynamic);
+        }
+        if self.env.lookup(name).is_none() && self.env.lookup_function_ref(name).is_none() {
+            if let Some((qualified, ty)) = self.resolve_import_alias(name) {
+                self.note_generic_value(&qualified, span);
+                return (TypedExprKind::Identifier(qualified), ty);
+            }
+        }
+
         let ty = self
             .env
             .lookup(name)
             .or_else(|| self.env.lookup_function_ref(name))
             .cloned()
             .unwrap_or_else(|| {
-                self.errors
-                    .push(TypeError::undefined_variable(name.to_string(), span));
-                InferType::Dynamic
+                match self.module_bound_elsewhere(name) {
+                    Some((module, binding)) => {
+                        self.errors.push(TypeError::module_bound_elsewhere(
+                            name.to_string(),
+                            module,
+                            binding,
+                            span,
+                        ));
+                    }
+                    None => self
+                        .errors
+                        .push(TypeError::undefined_variable(name.to_string(), span)),
+                }
+
+                // register the variable with dynamic type to prevent repeated "undefined variable" errors for each subsequent use
+                let recovery_ty = InferType::Dynamic;
+                self.env.define_local(name.to_string(), recovery_ty.clone());
+
+                recovery_ty
             });
 
         (TypedExprKind::Identifier(name.to_string()), ty)
+    }
+
+    pub(super) fn instantiate_enum_type_param(
+        &mut self,
+        ty: &InferType,
+        type_param_names: &[String],
+        mapping: &mut HashMap<String, InferType>,
+    ) -> InferType {
+        match ty {
+            InferType::Struct(name, args) if args.is_empty() && type_param_names.contains(name) => {
+                mapping
+                    .entry(name.clone())
+                    .or_insert_with(|| self.type_gen.fresh())
+                    .clone()
+            }
+            InferType::Function { params, ret, nogc } => {
+                let new_params = params
+                    .iter()
+                    .map(|p| self.instantiate_enum_type_param(p, type_param_names, mapping))
+                    .collect();
+                let new_ret =
+                    Box::new(self.instantiate_enum_type_param(ret, type_param_names, mapping));
+                InferType::Function {
+                    params: new_params,
+                    ret: new_ret,
+                    nogc: *nogc,
+                }
+            }
+            InferType::Array(inner, len) => InferType::Array(
+                Box::new(self.instantiate_enum_type_param(inner, type_param_names, mapping)),
+                *len,
+            ),
+            InferType::Vec(inner) => InferType::Vec(Box::new(self.instantiate_enum_type_param(
+                inner,
+                type_param_names,
+                mapping,
+            ))),
+            InferType::Rc(inner) => InferType::Rc(Box::new(self.instantiate_enum_type_param(
+                inner,
+                type_param_names,
+                mapping,
+            ))),
+            InferType::Ref { referent, mutable } => InferType::Ref {
+                referent: Box::new(self.instantiate_enum_type_param(
+                    referent,
+                    type_param_names,
+                    mapping,
+                )),
+                mutable: *mutable,
+            },
+            InferType::Slice { elem, mutable } => InferType::Slice {
+                elem: Box::new(self.instantiate_enum_type_param(elem, type_param_names, mapping)),
+                mutable: *mutable,
+            },
+            InferType::Tuple(elems) => InferType::Tuple(
+                elems
+                    .iter()
+                    .map(|e| self.instantiate_enum_type_param(e, type_param_names, mapping))
+                    .collect(),
+            ),
+            InferType::Enum(name, args) => {
+                let new_args = args
+                    .iter()
+                    .map(|a| self.instantiate_enum_type_param(a, type_param_names, mapping))
+                    .collect();
+                InferType::Enum(name.clone(), new_args)
+            }
+            InferType::Struct(name, args) if !args.is_empty() => {
+                let new_args = args
+                    .iter()
+                    .map(|a| self.instantiate_enum_type_param(a, type_param_names, mapping))
+                    .collect();
+                InferType::Struct(name.clone(), new_args)
+            }
+            other => other.clone(),
+        }
+    }
+
+    pub(super) fn unqualified_variant_refusal(
+        &mut self,
+        enum_name: &str,
+        variant: &str,
+        span: Span,
+    ) -> Option<TypeError> {
+        let imported = self.imported_type_name(enum_name);
+        let resolved = imported.clone().unwrap_or_else(|| enum_name.to_string());
+        let origin = match &imported {
+            Some(qualified) => match qualified.rsplit_once('.') {
+                Some((module, _)) => format!("imported from `{module}`"),
+                None => "imported".to_string(),
+            },
+            None => "declared in this module".to_string(),
+        };
+        let (reason, help) = if let Some(def) = self.type_table.get_enum(&resolved) {
+            if def.variants.iter().any(|v| v.name == variant) {
+                return None;
+            }
+            (
+                format!(
+                    "`{variant}` names a variant of the `{enum_name}` in scope, which is the enum \
+                     `{enum_name}` {origin}; it has no variant `{variant}`"
+                ),
+                None,
+            )
+        } else if self.type_table.has_struct(&resolved) {
+            (
+                format!(
+                    "`{variant}` names a variant of the `{enum_name}` in scope, which is the \
+                     struct `{enum_name}` {origin}, not an enum"
+                ),
+                None,
+            )
+        } else {
+            (
+                format!(
+                    "`{variant}` names a variant of `{enum_name}`, and no `{enum_name}` is in scope"
+                ),
+                Some(format!(
+                    "the prelude brings `{enum_name}` into scope unless `--no-prelude` is given; \
+                     otherwise declare or import an enum `{enum_name}`"
+                )),
+            )
+        };
+        Some(TypeError {
+            kind: TypeErrorKind::Mismatch {
+                expected: InferType::Dynamic,
+                found: InferType::Dynamic,
+            },
+            span,
+            reason: ConstraintReason::Other(reason),
+            secondary_spans: Vec::new(),
+            help,
+            suggestion: None,
+        })
+    }
+
+    pub(super) fn infer_enum_variant(
+        &mut self,
+        enum_name: &str,
+        variant: &str,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        // intercepted here, before the enum lookup that would never find them
+        if enum_name == "Rc" && variant == "new" {
+            return self.infer_rc_new(args, span);
+        }
+        if enum_name == "Rc" && variant == "get" {
+            return self.infer_rc_get(args, span);
+        }
+        if enum_name == "Rc" && variant == "null" {
+            return self.infer_rc_null(args, span);
+        }
+        if enum_name == "Rc" && variant == "is_null" {
+            return self.infer_rc_is_null(args, span);
+        }
+        if enum_name == "Vec" && variant == "new" {
+            return self.infer_vec_new(args, span);
+        }
+        if enum_name == "Vec" && variant == "push" {
+            return self.infer_vec_push(args, span);
+        }
+        if enum_name == "Vec" && variant == "pop" {
+            return self.infer_vec_pop(args, span);
+        }
+        if enum_name == "Vec" && variant == "get" {
+            return self.infer_vec_get(args, span);
+        }
+        if enum_name == "Vec" && variant == "insert" {
+            return self.infer_vec_insert(args, span);
+        }
+        if enum_name == "Vec" && (variant == "remove" || variant == "clear") {
+            return self.infer_vec_remove_or_clear(variant, args, span);
+        }
+        if enum_name == "Vec" && variant == "with_capacity" {
+            return self.infer_vec_with_capacity(args, span);
+        }
+        if enum_name == "Vec" && variant == "try_as_unique_mut_slice" {
+            return self.infer_vec_try_as_unique_mut_slice(args, span);
+        }
+        if enum_name == "Vec" && (variant == "len" || variant == "as_slice") {
+            return self.infer_vec_read(variant, args, span);
+        }
+        // the parser refuses a lowercase struct or enum name, so this head can never shadow a user type
+        if enum_name == "string" && variant == "substring_bytes" {
+            return self.infer_substring_bytes(args, span);
+        }
+        if enum_name == "string" && variant == "from_char" {
+            return self.infer_string_from_char(args, span);
+        }
+        if enum_name == "String"
+            && matches!(variant, "new" | "from" | "with_capacity")
+            && !self.type_table.has_struct(enum_name)
+            && !self.type_table.has_enum(enum_name)
+        {
+            return self.infer_string_ctor(variant, args, span);
+        }
+        if enum_name == "char" && (variant == "from_i64" || variant == "is_scalar") {
+            return self.infer_char_intrinsic(variant, args, span);
+        }
+
+        if let Some(known) = intrinsic_methods(enum_name) {
+            self.errors.push(TypeError {
+                kind: TypeErrorKind::Mismatch {
+                    expected: InferType::Dynamic,
+                    found: InferType::Dynamic,
+                },
+                span,
+                reason: ConstraintReason::Other(format!(
+                    "unknown method '{}' on {}; supported: {}",
+                    variant,
+                    enum_name,
+                    known
+                        .iter()
+                        .map(|m| format!("'{m}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )),
+                secondary_spans: Vec::new(),
+                help: None,
+                suggestion: None,
+            });
+            return (TypedExprKind::Null, InferType::Dynamic);
+        }
+
+        if enum_name == "Self" {
+            self.errors.push(TypeError::self_outside_impl(span));
+            for a in args {
+                self.infer_expr(a);
+            }
+            return (TypedExprKind::Null, InferType::Dynamic);
+        }
+        if !self.type_table.has_struct(enum_name)
+            && !self.type_table.has_enum(enum_name)
+            && !self.import_aliases.contains_key(enum_name)
+        {
+            if let Some((tp, bounds)) =
+                self.bounds_on_type_param(&InferType::Struct(enum_name.to_string(), Vec::new()))
+            {
+                return self.param_path_call(&tp, &bounds, variant, args, span);
+            }
+            if let Some(q) = self.resolve_trait_name(enum_name) {
+                return self.trait_path_call(&q, variant, args, span);
+            }
+        }
+        let resolved = self.air_type_name(enum_name, span);
+        let enum_name = resolved.as_str();
+        if let crate::infer::impls::MethodLookup::Found(entry) =
+            self.lookup_method(enum_name, variant, span)
+        {
+            return self.infer_method_path_call(enum_name, entry, args, span);
+        }
+        let enum_def = self.type_table.get_enum(enum_name).cloned();
+        match enum_def {
+            Some(def) => {
+                if let Some(v) = def.variants.iter().find(|v| v.name == variant) {
+                    let expected_arity = v.data.len();
+                    let actual_arity = args.len();
+
+                    if expected_arity != actual_arity {
+                        self.errors.push(TypeError {
+                            kind: TypeErrorKind::ArityMismatch {
+                                expected: expected_arity,
+                                found: actual_arity,
+                            },
+                            span,
+                            reason: ConstraintReason::Other(format!(
+                                "enum variant '{}::{}' expects {} argument{}, got {}",
+                                crate::modules::source_type_name(enum_name),
+                                variant,
+                                expected_arity,
+                                if expected_arity == 1 { "" } else { "s" },
+                                actual_arity,
+                            )),
+                            secondary_spans: Vec::new(),
+                            help: None,
+                            suggestion: None,
+                        });
+                        let typed_args: Vec<TypedExpr> =
+                            args.iter().map(|a| self.infer_expr(a)).collect();
+                        return (
+                            TypedExprKind::EnumVariant {
+                                enum_name: enum_name.to_string(),
+                                variant: variant.to_string(),
+                                tag: v.tag,
+                                args: typed_args,
+                            },
+                            InferType::Dynamic,
+                        );
+                    }
+
+                    let is_generic = !def.type_params.is_empty();
+                    let mut type_param_mapping: HashMap<String, InferType> = HashMap::new();
+
+                    let mut typed_args = Vec::with_capacity(args.len());
+                    for (i, arg_expr) in args.iter().enumerate() {
+                        let mut typed_arg = self.infer_expr(arg_expr);
+
+                        let rc_slot = def.variants.len() > 1
+                            && (v.data[i].is_rc()
+                                || matches!(&v.data[i], InferType::Struct(p, _) if def.type_params.contains(p)));
+                        self.check_carrier(crate::infer::projection::CarrierCheck::Surface {
+                            ty: typed_arg.ty.clone(),
+                            generic: is_generic.then_some("enum"),
+                            rc_slot,
+                            span: arg_expr.span,
+                            what: format!("payload {i} of enum variant `{enum_name}::{variant}`"),
+                        });
+
+                        let expected_ty = if is_generic {
+                            self.instantiate_enum_type_param(
+                                &v.data[i],
+                                &def.type_params,
+                                &mut type_param_mapping,
+                            )
+                        } else {
+                            v.data[i].clone()
+                        };
+
+                        self.coerce_dyn(&mut typed_arg, &expected_ty);
+                        self.try_narrow_literal(&mut typed_arg, &expected_ty);
+
+                        if typed_arg.ty != expected_ty
+                            && typed_arg.ty.can_implicit_widen_to(&expected_ty)
+                        {
+                            let vspan = typed_arg.span;
+                            let original = std::mem::replace(
+                                &mut typed_arg,
+                                TypedExpr {
+                                    kind: TypedExprKind::Null,
+                                    ty: InferType::Null,
+                                    span: vspan,
+                                },
+                            );
+                            typed_arg = TypedExpr {
+                                kind: TypedExprKind::Cast {
+                                    expr: Box::new(original),
+                                    target: expected_ty.clone(),
+                                },
+                                ty: expected_ty.clone(),
+                                span: vspan,
+                            };
+                        }
+
+                        self.constraints.push(Constraint::flows(
+                            typed_arg.ty.clone(),
+                            expected_ty,
+                            arg_expr.span,
+                            ConstraintReason::Other(format!(
+                                "argument {} of enum variant '{}::{}'",
+                                i, enum_name, variant,
+                            )),
+                        ));
+
+                        typed_args.push(typed_arg);
+                    }
+
+                    // lowering can pre-mangle the enum name for monomorphization.
+                    let type_args: Vec<InferType> = if is_generic {
+                        def.type_params
+                            .iter()
+                            .map(|param| {
+                                type_param_mapping
+                                    .get(param)
+                                    .cloned()
+                                    .unwrap_or_else(|| self.type_gen.fresh())
+                            })
+                            .collect()
+                    } else {
+                        Vec::new()
+                    };
+                    let result_ty = InferType::Enum(enum_name.to_string(), type_args);
+
+                    (
+                        TypedExprKind::EnumVariant {
+                            enum_name: enum_name.to_string(),
+                            variant: variant.to_string(),
+                            tag: v.tag,
+                            args: typed_args,
+                        },
+                        result_ty,
+                    )
+                } else {
+                    let variant_names: Vec<_> =
+                        def.variants.iter().map(|v| v.name.as_str()).collect();
+                    self.errors.push(TypeError {
+                        kind: TypeErrorKind::Mismatch {
+                            expected: InferType::Dynamic,
+                            found: InferType::Dynamic,
+                        },
+                        span,
+                        reason: ConstraintReason::Other(format!(
+                            "unknown variant '{}' on enum '{}'; known variants: {}",
+                            variant,
+                            crate::modules::source_type_name(enum_name),
+                            variant_names.join(", ")
+                        )),
+                        secondary_spans: Vec::new(),
+                        help: None,
+                        suggestion: None,
+                    });
+                    (TypedExprKind::Null, InferType::Dynamic)
+                }
+            }
+            None => {
+                self.errors.push(TypeError {
+                    kind: TypeErrorKind::Mismatch {
+                        expected: InferType::Dynamic,
+                        found: InferType::Dynamic,
+                    },
+                    span,
+                    reason: ConstraintReason::UnknownType {
+                        name: enum_name.to_string(),
+                    },
+                    secondary_spans: Vec::new(),
+                    help: None,
+                    suggestion: None,
+                });
+                (TypedExprKind::Null, InferType::Dynamic)
+            }
+        }
+    }
+
+    fn infer_rc_new(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!("Rc::new expects exactly 1 argument, got {}", args.len()),
+                span,
+            ));
+            // still type the args, so downstream inference stays stable
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Rc".to_string(),
+                    variant: "new".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+
+        let typed_arg = self.infer_expr(&args[0]);
+        let inner = typed_arg.ty.clone();
+        if let InferType::Vec(elem) = &inner
+            && self.type_table.contains_rc_nominal(elem)
+        {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "the `Rc` payload has type `{inner}`, a `Vec` that holds an `Rc`: a \
+                     `Vec<Rc<T>>` inside an `Rc` is not supported yet, the cycle collector \
+                     does not trace a Vec buffer"
+                ),
+                args[0].span,
+            ));
+        }
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Rc".to_string(),
+                variant: "new".to_string(),
+                tag: 0,
+                args: vec![typed_arg],
+            },
+            InferType::Rc(Box::new(inner)),
+        )
+    }
+
+    fn infer_rc_get(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!("Rc::get expects exactly 1 argument, got {}", args.len()),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Rc".to_string(),
+                    variant: "get".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+
+        let typed_arg = self.infer_expr(&args[0]);
+        let result_ty = match &typed_arg.ty {
+            InferType::Rc(inner) if matches!(inner.as_ref(), InferType::Dyn(_)) => {
+                self.errors.push(TypeError::coded(
+                    "E0760",
+                    format!(
+                        "`Rc::get` would read a `{inner}` by value, and it has no size known at \
+                         compile time; call its methods on the `Rc` itself"
+                    ),
+                    "unsized trait object",
+                    span,
+                ));
+                InferType::Dynamic
+            }
+            InferType::Rc(inner) => inner.as_ref().clone(),
+            InferType::Var(_) => {
+                self.errors.push(TypeError::rc_get_unresolved(span));
+                InferType::Dynamic
+            }
+            other => {
+                self.errors.push(TypeError {
+                    kind: TypeErrorKind::Mismatch {
+                        expected: InferType::Rc(Box::new(InferType::Dynamic)),
+                        found: other.clone(),
+                    },
+                    span,
+                    reason: ConstraintReason::Other(format!(
+                        "Rc::get expects an `Rc<T>` argument, got `{other}`"
+                    )),
+                    secondary_spans: Vec::new(),
+                    help: None,
+                    suggestion: None,
+                });
+                InferType::Dynamic
+            }
+        };
+        if result_ty.is_rc() {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "`Rc::get` here reads an `Rc<T>` out of an `{}`; a nested `Rc` payload is \
+                     not supported yet, store one `Rc<T>` layer instead",
+                    typed_arg.ty
+                ),
+                span,
+            ));
+        }
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Rc".to_string(),
+                variant: "get".to_string(),
+                tag: 0,
+                args: vec![typed_arg],
+            },
+            result_ty,
+        )
+    }
+
+    fn infer_rc_null(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if !args.is_empty() {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!("Rc::null expects 0 arguments, got {}", args.len()),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Rc".to_string(),
+                    variant: "null".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+        let inner = self.type_gen.fresh();
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Rc".to_string(),
+                variant: "null".to_string(),
+                tag: 0,
+                args: vec![],
+            },
+            InferType::Rc(Box::new(inner)),
+        )
+    }
+
+    fn infer_rc_is_null(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+        if typed_args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "Rc::is_null expects exactly 1 argument, got {}",
+                    typed_args.len()
+                ),
+                span,
+            ));
+        } else {
+            match &typed_args[0].ty {
+                InferType::Rc(_) => {}
+                InferType::Var(_) => {
+                    let inner = self.type_gen.fresh();
+                    self.constraints.push(Constraint::equal(
+                        typed_args[0].ty.clone(),
+                        InferType::Rc(Box::new(inner)),
+                        typed_args[0].span,
+                        ConstraintReason::Other(
+                            "Rc::is_null expects an `Rc<T>` argument".to_string(),
+                        ),
+                    ));
+                }
+                other => {
+                    self.errors.push(TypeError {
+                        kind: TypeErrorKind::Mismatch {
+                            expected: InferType::Rc(Box::new(InferType::Dynamic)),
+                            found: other.clone(),
+                        },
+                        span,
+                        reason: ConstraintReason::Other(format!(
+                            "Rc::is_null expects an `Rc<T>` argument, got `{other}`"
+                        )),
+                        secondary_spans: Vec::new(),
+                        help: None,
+                        suggestion: None,
+                    });
+                }
+            }
+        }
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Rc".to_string(),
+                variant: "is_null".to_string(),
+                tag: 0,
+                args: typed_args,
+            },
+            InferType::Bool,
+        )
+    }
+
+    fn infer_vec_new(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if !args.is_empty() {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!("Vec::new expects 0 arguments, got {}", args.len()),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Vec".to_string(),
+                    variant: "new".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+        let elem = self.type_gen.fresh();
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: "new".to_string(),
+                tag: 0,
+                args: vec![],
+            },
+            InferType::Vec(Box::new(elem)),
+        )
+    }
+
+    pub(crate) fn reject_rc_vec_push(&mut self, ty: &InferType, span: Span) {
+        if !ty.is_rc() && self.type_table.contains_rc_nominal(ty) {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "element pushed to a Vec has type `{}` which embeds an `Rc<T>`; \
+                     storing an Rc (directly or inside a struct/enum) in a Vec is not supported yet",
+                    ty
+                ),
+                span,
+            ));
+        }
+    }
+
+    fn infer_vec_push(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if args.len() != 2 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!("Vec::push expects exactly 2 arguments, got {}", args.len()),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Vec".to_string(),
+                    variant: "push".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Null,
+            );
+        }
+        let typed_vec = self.infer_expr(&args[0]);
+        let mut typed_elem = self.infer_expr(&args[1]);
+
+        match &typed_vec.ty {
+            InferType::Vec(inner) => {
+                self.coerce_dyn(&mut typed_elem, inner);
+                self.try_narrow_literal(&mut typed_elem, inner);
+                self.constraints.push(Constraint::flows(
+                    typed_elem.ty.clone(),
+                    (**inner).clone(),
+                    args[1].span,
+                    ConstraintReason::ArrayElement,
+                ));
+            }
+            InferType::Var(_) | InferType::Dynamic => {
+                self.constraints.push(Constraint::equal(
+                    typed_vec.ty.clone(),
+                    InferType::Vec(Box::new(typed_elem.ty.clone())),
+                    args[0].span,
+                    ConstraintReason::ArrayElement,
+                ));
+            }
+            other => {
+                self.errors.push(TypeError {
+                    kind: TypeErrorKind::Mismatch {
+                        expected: InferType::Vec(Box::new(InferType::Dynamic)),
+                        found: other.clone(),
+                    },
+                    span,
+                    reason: ConstraintReason::Other(format!(
+                        "Vec::push expects a `Vec<T>` first argument, got `{other}`"
+                    )),
+                    secondary_spans: Vec::new(),
+                    help: None,
+                    suggestion: None,
+                });
+            }
+        }
+
+        self.check_carrier(crate::infer::projection::CarrierCheck::VecPush {
+            ty: typed_elem.ty.clone(),
+            span: args[1].span,
+        });
+
+        // the copy-on-write path memcpys elements flat, so an element that owns a vec buffer
+        if self.type_table.contains_vec_by_value(&typed_elem.ty) {
+            self.errors.push(TypeError::vec_out_of_surface(
+                format!(
+                    "element pushed to a Vec has type `{}`, which holds a `Vec<T>` by value; \
+                     a Vec inside a Vec/array is not supported yet (the buffer would be shared \
+                     without a retain, the transitive Vec retain/release is not implemented)",
+                    typed_elem.ty
+                ),
+                args[1].span,
+            ));
+        }
+
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: "push".to_string(),
+                tag: 0,
+                args: vec![typed_vec, typed_elem],
+            },
+            InferType::Null,
+        )
+    }
+
+    fn infer_vec_pop(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!("Vec::pop expects exactly 1 argument, got {}", args.len()),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Vec".to_string(),
+                    variant: "pop".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+
+        let typed_vec = self.infer_expr(&args[0]);
+        let inner = match &typed_vec.ty {
+            InferType::Vec(inner) => inner.as_ref().clone(),
+            InferType::Var(_) | InferType::Dynamic => {
+                let elem = self.type_gen.fresh();
+                self.constraints.push(Constraint::equal(
+                    typed_vec.ty.clone(),
+                    InferType::Vec(Box::new(elem.clone())),
+                    args[0].span,
+                    ConstraintReason::ArrayElement,
+                ));
+                elem
+            }
+            other => {
+                self.errors.push(TypeError {
+                    kind: TypeErrorKind::Mismatch {
+                        expected: InferType::Vec(Box::new(InferType::Dynamic)),
+                        found: other.clone(),
+                    },
+                    span: args[0].span,
+                    reason: ConstraintReason::Other(format!(
+                        "Vec::pop expects a `Vec<T>` argument, got `{other}`"
+                    )),
+                    secondary_spans: Vec::new(),
+                    help: None,
+                    suggestion: None,
+                });
+                InferType::Dynamic
+            }
+        };
+
+        let result = self.option_of(inner, span);
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: "pop".to_string(),
+                tag: 0,
+                args: vec![typed_vec],
+            },
+            result,
+        )
+    }
+
+    fn option_of(&mut self, inner: InferType, span: Span) -> InferType {
+        let name = self.air_type_name("Option", span);
+        if self.type_table.get_enum(&name).is_none() {
+            self.errors.push(TypeError::rc_out_of_surface(
+                "this Vec operation returns `Option<T>`, and no `Option` enum is in scope".to_string(),
+                span,
+            ));
+            return InferType::Dynamic;
+        }
+        InferType::Enum(name, vec![inner])
+    }
+
+    fn vec_intrinsic_arity(
+        &mut self,
+        variant: &str,
+        args: &[Expr],
+        want: usize,
+        span: Span,
+    ) -> Option<(TypedExprKind, InferType)> {
+        if args.len() == want {
+            return None;
+        }
+        self.errors.push(TypeError::rc_out_of_surface(
+            format!(
+                "Vec::{} expects exactly {} argument{}, got {}",
+                variant,
+                want,
+                if want == 1 { "" } else { "s" },
+                args.len()
+            ),
+            span,
+        ));
+        let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+        Some((
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: variant.to_string(),
+                tag: 0,
+                args: typed_args,
+            },
+            InferType::Dynamic,
+        ))
+    }
+
+    fn vec_receiver_inner(&mut self, variant: &str, typed_vec: &TypedExpr, span: Span) -> InferType {
+        match &typed_vec.ty {
+            InferType::Vec(inner) => inner.as_ref().clone(),
+            InferType::Var(_) | InferType::Dynamic => {
+                let elem = self.type_gen.fresh();
+                self.constraints.push(Constraint::equal(
+                    typed_vec.ty.clone(),
+                    InferType::Vec(Box::new(elem.clone())),
+                    span,
+                    ConstraintReason::ArrayElement,
+                ));
+                elem
+            }
+            other => {
+                self.errors.push(TypeError {
+                    kind: TypeErrorKind::Mismatch {
+                        expected: InferType::Vec(Box::new(InferType::Dynamic)),
+                        found: other.clone(),
+                    },
+                    span,
+                    reason: ConstraintReason::Other(format!(
+                        "Vec::{variant} expects a `Vec<T>` first argument, got `{other}`"
+                    )),
+                    secondary_spans: Vec::new(),
+                    help: None,
+                    suggestion: None,
+                });
+                InferType::Dynamic
+            }
+        }
+    }
+
+    fn vec_index_arg(&mut self, variant: &str, arg: &Expr) -> TypedExpr {
+        let typed = self.infer_expr(arg);
+        self.constraints.push(Constraint::equal(
+            typed.ty.clone(),
+            InferType::I64,
+            arg.span,
+            ConstraintReason::Other(format!("the index of Vec::{variant} is an `i64`")),
+        ));
+        typed
+    }
+
+    fn infer_vec_get(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if let Some(bad) = self.vec_intrinsic_arity("get", args, 2, span) {
+            return bad;
+        }
+        let typed_vec = self.infer_expr(&args[0]);
+        let inner = self.vec_receiver_inner("get", &typed_vec, args[0].span);
+        let typed_index = self.vec_index_arg("get", &args[1]);
+        let result = self.option_of(inner, span);
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: "get".to_string(),
+                tag: 0,
+                args: vec![typed_vec, typed_index],
+            },
+            result,
+        )
+    }
+
+    fn infer_vec_insert(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if let Some(bad) = self.vec_intrinsic_arity("insert", args, 3, span) {
+            return bad;
+        }
+        let typed_vec = self.infer_expr(&args[0]);
+        let inner = self.vec_receiver_inner("insert", &typed_vec, args[0].span);
+        let typed_index = self.vec_index_arg("insert", &args[1]);
+        let mut typed_elem = self.infer_expr(&args[2]);
+        self.coerce_dyn(&mut typed_elem, &inner);
+        self.try_narrow_literal(&mut typed_elem, &inner);
+        self.constraints.push(Constraint::flows(
+            typed_elem.ty.clone(),
+            inner,
+            args[2].span,
+            ConstraintReason::ArrayElement,
+        ));
+        self.check_carrier(crate::infer::projection::CarrierCheck::VecPush {
+            ty: typed_elem.ty.clone(),
+            span: args[2].span,
+        });
+        if self.type_table.contains_vec_by_value(&typed_elem.ty) {
+            self.errors.push(TypeError::vec_out_of_surface(
+                format!(
+                    "element inserted into a Vec has type `{}`, which holds a `Vec<T>` by value; \
+                     a Vec inside a Vec/array is not supported yet",
+                    typed_elem.ty
+                ),
+                args[2].span,
+            ));
+        }
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: "insert".to_string(),
+                tag: 0,
+                args: vec![typed_vec, typed_index, typed_elem],
+            },
+            InferType::Null,
+        )
+    }
+
+    fn infer_vec_remove_or_clear(
+        &mut self,
+        variant: &str,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        let want = if variant == "remove" { 2 } else { 1 };
+        if let Some(bad) = self.vec_intrinsic_arity(variant, args, want, span) {
+            return bad;
+        }
+        let typed_vec = self.infer_expr(&args[0]);
+        let inner = self.vec_receiver_inner(variant, &typed_vec, args[0].span);
+        let mut typed_args = vec![typed_vec];
+        let result = if variant == "remove" {
+            typed_args.push(self.vec_index_arg(variant, &args[1]));
+            inner
+        } else {
+            InferType::Null
+        };
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: variant.to_string(),
+                tag: 0,
+                args: typed_args,
+            },
+            result,
+        )
+    }
+
+    fn infer_vec_with_capacity(
+        &mut self,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        if let Some(bad) = self.vec_intrinsic_arity("with_capacity", args, 1, span) {
+            return bad;
+        }
+        let typed_cap = self.infer_expr(&args[0]);
+        self.constraints.push(Constraint::equal(
+            typed_cap.ty.clone(),
+            InferType::I64,
+            args[0].span,
+            ConstraintReason::Other("the capacity of Vec::with_capacity is an `i64`".to_string()),
+        ));
+        let elem = self.type_gen.fresh();
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: "with_capacity".to_string(),
+                tag: 0,
+                args: vec![typed_cap],
+            },
+            InferType::Vec(Box::new(elem)),
+        )
+    }
+
+    fn infer_substring_bytes(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+        if typed_args.len() != 3 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "string::substring_bytes expects exactly 3 arguments, got {}",
+                    typed_args.len()
+                ),
+                span,
+            ));
+        } else {
+            self.constraints.push(Constraint::equal(
+                typed_args[0].ty.clone(),
+                InferType::String,
+                args[0].span,
+                ConstraintReason::Other(
+                    "string::substring_bytes takes the string it slices".to_string(),
+                ),
+            ));
+            for i in 1..3 {
+                self.constraints.push(Constraint::equal(
+                    typed_args[i].ty.clone(),
+                    InferType::I64,
+                    args[i].span,
+                    ConstraintReason::Other(
+                        "string::substring_bytes takes byte offsets".to_string(),
+                    ),
+                ));
+            }
+        }
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "string".to_string(),
+                variant: "substring_bytes".to_string(),
+                tag: 0,
+                args: typed_args,
+            },
+            InferType::String,
+        )
+    }
+
+    fn infer_string_ctor(
+        &mut self,
+        variant: &str,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        let arity = usize::from(variant != "new");
+        let mut typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+        if typed_args.len() != arity {
+            self.errors.push(TypeError::coded(
+                "E0302",
+                format!(
+                    "`String::{variant}` takes {arity} argument{}, found {}",
+                    if arity == 1 { "" } else { "s" },
+                    typed_args.len()
+                ),
+                "wrong number of arguments",
+                span,
+            ));
+            return (TypedExprKind::Null, InferType::String);
+        }
+        match variant {
+            "new" => (TypedExprKind::String(String::new()), InferType::String),
+            "from" => {
+                let arg = typed_args.remove(0);
+                self.constraints.push(Constraint::flows(
+                    arg.ty.clone(),
+                    InferType::StrRef,
+                    arg.span,
+                    ConstraintReason::Other("`String::from` takes a string".to_string()),
+                ));
+                (arg.kind, InferType::String)
+            }
+            _ => {
+                self.constraints.push(Constraint::equal(
+                    typed_args[0].ty.clone(),
+                    InferType::I64,
+                    typed_args[0].span,
+                    ConstraintReason::Other("`String::with_capacity` takes a byte count".to_string()),
+                ));
+                (
+                    TypedExprKind::EnumVariant {
+                        enum_name: "string".to_string(),
+                        variant: "with_capacity".to_string(),
+                        tag: 0,
+                        args: typed_args,
+                    },
+                    InferType::String,
+                )
+            }
+        }
+    }
+
+    fn infer_string_from_char(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+        if typed_args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "string::from_char expects exactly 1 argument, got {}",
+                    typed_args.len()
+                ),
+                span,
+            ));
+        } else {
+            self.constraints.push(Constraint::equal(
+                typed_args[0].ty.clone(),
+                InferType::Char,
+                args[0].span,
+                ConstraintReason::Other(
+                    "string::from_char takes the character it encodes".to_string(),
+                ),
+            ));
+        }
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "string".to_string(),
+                variant: "from_char".to_string(),
+                tag: 0,
+                args: typed_args,
+            },
+            InferType::String,
+        )
+    }
+
+    fn infer_char_intrinsic(
+        &mut self,
+        variant: &str,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+        if typed_args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "char::{} expects exactly 1 argument, got {}",
+                    variant,
+                    typed_args.len()
+                ),
+                span,
+            ));
+        } else {
+            self.constraints.push(Constraint::equal(
+                typed_args[0].ty.clone(),
+                InferType::I64,
+                args[0].span,
+                ConstraintReason::Other(format!("char::{variant} takes a code point")),
+            ));
+        }
+        let ret = if variant == "from_i64" {
+            InferType::Char
+        } else {
+            InferType::Bool
+        };
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "char".to_string(),
+                variant: variant.to_string(),
+                tag: 0,
+                args: typed_args,
+            },
+            ret,
+        )
+    }
+
+    fn infer_vec_read(
+        &mut self,
+        variant: &str,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        if args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "Vec::{} expects exactly 1 argument, got {}",
+                    variant,
+                    args.len()
+                ),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Vec".to_string(),
+                    variant: variant.to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+
+        let typed_vec = self.infer_expr(&args[0]);
+        if variant == "as_slice" && !crate::place_spine::denotes_a_place(&typed_vec) {
+            self.errors.push(TypeError::no_place(
+                "the receiver of Vec::as_slice",
+                args[0].span,
+            ));
+        }
+        let inner = match &typed_vec.ty {
+            InferType::Vec(inner) => inner.as_ref().clone(),
+            InferType::Var(_) | InferType::Dynamic => {
+                let elem = self.type_gen.fresh();
+                self.constraints.push(Constraint::equal(
+                    typed_vec.ty.clone(),
+                    InferType::Vec(Box::new(elem.clone())),
+                    args[0].span,
+                    ConstraintReason::ArrayElement,
+                ));
+                elem
+            }
+            other => {
+                self.errors.push(TypeError {
+                    kind: TypeErrorKind::Mismatch {
+                        expected: InferType::Vec(Box::new(InferType::Dynamic)),
+                        found: other.clone(),
+                    },
+                    span: args[0].span,
+                    reason: ConstraintReason::Other(format!(
+                        "Vec::{} expects a `Vec<T>` argument, got `{other}`",
+                        variant
+                    )),
+                    secondary_spans: Vec::new(),
+                    help: None,
+                    suggestion: None,
+                });
+                return (
+                    TypedExprKind::EnumVariant {
+                        enum_name: "Vec".to_string(),
+                        variant: variant.to_string(),
+                        tag: 0,
+                        args: vec![typed_vec],
+                    },
+                    InferType::Dynamic,
+                );
+            }
+        };
+        let result_ty = if variant == "len" {
+            InferType::I64
+        } else {
+            InferType::Slice {
+                elem: Box::new(inner),
+                mutable: false,
+            }
+        };
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: variant.to_string(),
+                tag: 0,
+                args: vec![typed_vec],
+            },
+            result_ty,
+        )
+    }
+
+    fn infer_vec_try_as_unique_mut_slice(
+        &mut self,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        if args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "Vec::try_as_unique_mut_slice expects exactly 1 argument, got {}",
+                    args.len()
+                ),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Vec".to_string(),
+                    variant: "try_as_unique_mut_slice".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+
+        let typed_vec = self.infer_expr(&args[0]);
+        self.check_write_target(&typed_vec, "Vec::try_as_unique_mut_slice", args[0].span);
+        let inner = match &typed_vec.ty {
+            InferType::Vec(inner) => inner.as_ref().clone(),
+            InferType::Var(_) | InferType::Dynamic => {
+                let elem = self.type_gen.fresh();
+                self.constraints.push(Constraint::equal(
+                    typed_vec.ty.clone(),
+                    InferType::Vec(Box::new(elem.clone())),
+                    args[0].span,
+                    ConstraintReason::ArrayElement,
+                ));
+                elem
+            }
+            other => {
+                self.errors.push(TypeError {
+                    kind: TypeErrorKind::Mismatch {
+                        expected: InferType::Vec(Box::new(InferType::Dynamic)),
+                        found: other.clone(),
+                    },
+                    span: args[0].span,
+                    reason: ConstraintReason::Other(format!(
+                        "Vec::try_as_unique_mut_slice expects a `Vec<T>` argument, got `{other}`"
+                    )),
+                    secondary_spans: Vec::new(),
+                    help: None,
+                    suggestion: None,
+                });
+                InferType::Dynamic
+            }
+        };
+
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: "try_as_unique_mut_slice".to_string(),
+                tag: 0,
+                args: vec![typed_vec],
+            },
+            InferType::Slice {
+                elem: Box::new(inner),
+                mutable: true,
+            },
+        )
+    }
+}
+
+pub(crate) fn intrinsic_methods(head: &str) -> Option<&'static [&'static str]> {
+    match head {
+        "Vec" => Some(&[
+            "new",
+            "push",
+            "pop",
+            "get",
+            "insert",
+            "remove",
+            "clear",
+            "with_capacity",
+            "len",
+            "as_slice",
+            "try_as_unique_mut_slice",
+        ]),
+        "Rc" => Some(&["new", "get", "null", "is_null"]),
+        "string" => Some(&["substring_bytes", "from_char"]),
+        "String" => Some(&["new", "from", "with_capacity"]),
+        "char" => Some(&["from_i64", "is_scalar"]),
+        _ => None,
     }
 }

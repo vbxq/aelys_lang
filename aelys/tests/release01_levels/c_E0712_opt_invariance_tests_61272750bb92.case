@@ -1,0 +1,10 @@
+struct Resource { id: i64 }
+fn touch(r: &Resource) {
+}
+fn main() -> i64 {
+    let a = Resource{id: 1}
+    let r = &a
+    let b = a
+    touch(r)
+    return 0
+}

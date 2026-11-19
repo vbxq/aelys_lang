@@ -1,0 +1,10 @@
+fn f(o: Option<i64>, b: bool) -> i64 {
+    if let Some(s) = o { return s } else if b { return 1 } else { return 2 }
+}
+
+fn main() -> i64 {
+    println(f(Some(7), false))
+    println(f(None, true))
+    println(f(None, false))
+    return 0
+}

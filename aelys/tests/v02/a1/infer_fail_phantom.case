@@ -1,0 +1,5 @@
+struct Tag<T> { n: i64 }
+fn main() {
+    let t = Tag { n: 1 }
+    println(t.n)
+}

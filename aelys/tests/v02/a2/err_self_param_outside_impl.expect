@@ -1,0 +1,4 @@
+refuse E0101
+a `self` parameter is only valid in a method of an `impl` block
+!__recv
+!__pre$

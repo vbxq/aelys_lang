@@ -1,0 +1,7 @@
+fn main() -> i64 {
+    let o: Option<i64> = None
+    while let Some(Nnoe) = o {
+        println("x")
+    }
+    return 0
+}

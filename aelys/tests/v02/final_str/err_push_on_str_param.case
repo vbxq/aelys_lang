@@ -1,0 +1,7 @@
+fn f(s: &str) {
+    s.push('x')
+}
+
+fn main() {
+    f("a")
+}

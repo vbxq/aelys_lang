@@ -1,0 +1,8 @@
+fn main() -> i64 { let m: u64 = 9223372036854775807
+    let a = m * 2 + 1
+    let b: u64 = 1
+    let c: u64 = 3
+    let s: u64 = 60
+    let r: u64 = 7
+    println("{a > b} {a / c} {a >> s} {a % r} {a < b}")
+    return 0 }

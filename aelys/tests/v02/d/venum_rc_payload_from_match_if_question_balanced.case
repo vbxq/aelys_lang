@@ -1,0 +1,35 @@
+enum Expr { Num(i64), Neg(Rc<Expr>), Bin(char, Rc<Expr>, Rc<Expr>) }
+struct Box { e: Rc<Expr>, k: i64 }
+fn leaf(i: i64) -> Result<Rc<Expr>, string> {
+    if i % 7 == 6 { return Err("bad{i}") }
+    return Ok(Rc::new(Expr::Num(i)))
+}
+fn build(i: i64, shared: Rc<Expr>) -> Result<Rc<Expr>, string> {
+    let l = Rc::new(Expr::Neg(leaf(i)?))
+    let pick = Rc::new(Expr::Bin('+', l, if i % 2 == 0 { Rc::new(Expr::Num(1)) } else { shared }))
+    let m = Rc::new(Expr::Bin('*', pick, match i % 3 { 0 => shared, 1 => leaf(i)?, _ => Rc::new(Expr::Num(2)) }))
+    let b = Box { e: match leaf(i) { Ok(x) => x, Err(e) => shared }, k: 1 }
+    return Ok(Rc::new(Expr::Bin('+', m, b.e)))
+}
+fn ev(e: Rc<Expr>) -> i64 {
+    return match Rc::get(e) {
+        Expr::Num(n) => n,
+        Expr::Neg(x) => -ev(x),
+        Expr::Bin('+', l, r) => ev(l) + ev(r),
+        Expr::Bin(_, l, r) => ev(l) * ev(r),
+    }
+}
+fn main() -> i64 {
+    let shared = Rc::new(Expr::Num(10))
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 300 {
+        match build(i, shared) {
+            Ok(e) => { t = t + ev(e) }
+            Err(s) => { t = t + s.len() * 1000 }
+        }
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

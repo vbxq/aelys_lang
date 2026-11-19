@@ -1,0 +1,17 @@
+struct P { x: i64, y: i64 }
+
+impl Display for P {
+    fn to_string(&self) -> string { return "P({self.x},{self.y})" }
+}
+
+fn show<T: Display>(x: T) {
+    println("[{x}]")
+}
+
+fn main() -> i64 {
+    show(P { x: 3, y: 4 })
+    show(5)
+    show("hi")
+    show(true)
+    return 0
+}

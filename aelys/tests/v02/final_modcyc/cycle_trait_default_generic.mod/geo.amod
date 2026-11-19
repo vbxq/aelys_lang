@@ -1,0 +1,7 @@
+needs shapes
+needs Shape from shapes
+pub const BONUS: i64 = 100
+pub struct Circle { pub r: i64 }
+impl Shape for Circle {
+    fn area(&self) -> i64 { return self.r * self.r * 3 }
+}

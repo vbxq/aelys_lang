@@ -1,0 +1,4 @@
+fn main() -> i64 {
+    let o: Option<Option<i64>> = Some(None)
+    return match o { Some(Nnoe) => 0, _ => 1 }
+}

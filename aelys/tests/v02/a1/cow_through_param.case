@@ -1,0 +1,15 @@
+struct Pair<A, B> { a: A, b: B }
+fn bump(p: Pair<i64, string>) -> Pair<i64, string> {
+    let mut q = p
+    q.a = q.a + 100
+    q.b = "bumped"
+    return q
+}
+fn main() {
+    let x = Pair { a: 1, b: "x" }
+    let y = bump(x)
+    println(x.a)
+    println(x.b)
+    println(y.a)
+    println(y.b)
+}

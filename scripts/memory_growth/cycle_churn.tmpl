@@ -1,0 +1,17 @@
+struct Node { val: i64, next: Rc<Node> }
+fn churn(i: i64) -> i64 {
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: a })
+    a.next = b
+    return Rc::get(Rc::get(a).next).val
+}
+fn main() -> i64 {
+    let mut i: i64 = 0
+    let mut n: i64 = 0
+    while i < NN {
+        n = n + churn(i)
+        i = i + 1
+    }
+    println(n)
+    return 0
+}

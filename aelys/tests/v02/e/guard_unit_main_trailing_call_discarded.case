@@ -1,0 +1,7 @@
+fn g() -> i64 {
+    println("g")
+    return 4
+}
+fn main() {
+    g()
+}

@@ -1,0 +1,4 @@
+needs cfg
+fn main() {
+    println(cfg.HIDDEN)
+}

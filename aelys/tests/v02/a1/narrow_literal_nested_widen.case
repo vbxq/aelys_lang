@@ -1,0 +1,5 @@
+struct P<A, B> { a: A, b: B }
+struct W<T> { v: T }
+fn f(w: W<P<i64, i8>>) -> i64 { return (w.v.b as i64) + w.v.a }
+fn main() { let n: i32 = 7
+ println(f(W { v: P { a: n, b: -100 } })) }

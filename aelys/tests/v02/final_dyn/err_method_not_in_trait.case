@@ -1,0 +1,13 @@
+trait Shape {
+    fn area(&self) -> i64
+}
+struct Sq { s: i64 }
+impl Shape for Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+
+impl Sq {
+    fn side(&self) -> i64 { return self.s }
+}
+fn f(s: &dyn Shape) -> i64 { return s.side() }
+fn main() -> i64 { return 0 }

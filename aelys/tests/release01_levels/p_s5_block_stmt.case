@@ -1,0 +1,4 @@
+fn f(d: i64) -> i64 { let k = { 10 / d }
+    println("survived")
+    return 0 }
+fn main() -> i64 { return f(0) }

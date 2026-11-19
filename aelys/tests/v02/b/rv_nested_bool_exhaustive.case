@@ -1,0 +1,8 @@
+fn f(o: Option<bool>) -> i64 {
+    return match o { Some(true) => 1, Some(false) => 2, None => 3 }
+}
+
+fn main() -> i64 {
+    println("{f(Some(true))} {f(Some(false))} {f(None)}")
+    return 0
+}

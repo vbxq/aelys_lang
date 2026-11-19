@@ -1,0 +1,5 @@
+type A = B
+type B = (A, i64)
+fn main() {
+    let x: A = 0
+}

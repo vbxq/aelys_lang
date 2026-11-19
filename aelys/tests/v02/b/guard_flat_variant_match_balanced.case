@@ -1,0 +1,16 @@
+fn wrap(s: string) -> Option<string> { return Some(s + "!") }
+
+fn main() -> i64 {
+    let o: Option<string> = wrap("hi")
+    let s: string = match o { Some(v) => v, None => "" }
+    println(s)
+    let r: Result<i64, string> = Err("x")
+    let n: i64 = match r { Ok(v) => v, Err(_) => -1 }
+    println(n)
+    let q: Option<i64> = Some(3)
+    match q {
+        Some(v) => println(v),
+        _ => println(0)
+    }
+    return 0
+}

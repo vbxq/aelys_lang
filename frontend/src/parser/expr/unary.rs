@@ -54,6 +54,27 @@ impl Parser {
             ));
         }
 
+        if self.match_token(&TokenKind::Ampersand) {
+            let start = self.previous().span;
+            let mutable = self.match_token(&TokenKind::Mut);
+            let operand = self.unary()?;
+            let span = start.merge(operand.span);
+            return Ok(Expr::new(
+                ExprKind::Reference {
+                    mutable,
+                    operand: Box::new(operand),
+                },
+                span,
+            ));
+        }
+
+        if self.match_token(&TokenKind::Star) {
+            let start = self.previous().span;
+            let operand = self.unary()?;
+            let span = start.merge(operand.span);
+            return Ok(Expr::new(ExprKind::Deref(Box::new(operand)), span));
+        }
+
         self.call()
     }
 }

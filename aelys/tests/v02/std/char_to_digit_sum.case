@@ -1,0 +1,12 @@
+needs std.str
+
+fn main() {
+    let mut sum = 0
+    for c in "a1b22" {
+        sum = sum + match c.to_digit() {
+            Some(d) => d,
+            None => 0,
+        }
+    }
+    println(sum)
+}

@@ -1,0 +1,15 @@
+fn first_or<T>(o: Option<Option<T>>, d: T) -> T {
+    return match o { Some(Some(x)) => x, _ => d }
+}
+
+fn main() -> i64 {
+    let a: Option<Option<i64>> = Some(Some(7))
+    let b: Option<Option<i64>> = Some(None)
+    println(first_or(a, 0))
+    println(first_or(b, 0))
+    let c: Option<Option<string>> = Some(Some("h" + "i"))
+    let d: Option<Option<string>> = None
+    println(first_or(c, "def"))
+    println(first_or(d, "def"))
+    return 0
+}

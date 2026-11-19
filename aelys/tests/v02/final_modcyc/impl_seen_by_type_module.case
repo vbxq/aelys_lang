@@ -1,0 +1,6 @@
+needs geom
+needs ext
+fn main() {
+    println(geom.describe(geom.mk(6)))
+    println(geom.mk(2).half())
+}

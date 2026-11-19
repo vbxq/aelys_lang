@@ -1,0 +1,8 @@
+
+fn bad<T>(x: T) -> i64 {
+    return x()
+}
+
+fn main() -> i64 {
+    return bad(1)
+}

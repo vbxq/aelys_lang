@@ -1,0 +1,18 @@
+struct Bag { n: i64, items: Vec<i64> }
+fn bump(b: Bag) -> i64 {
+    let mut c = b
+    c.items[0] = c.items[0] + 1
+    Vec::push(c.items, 5)
+    return c.items.len + c.items[0]
+}
+fn main() -> i64 {
+    let b = Bag { n: 0, items: vec[10, 20] }
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        t = t + bump(b)
+        i = i + 1
+    }
+    println(t + b.items[0] * 100 + b.items.len)
+    return 0
+}

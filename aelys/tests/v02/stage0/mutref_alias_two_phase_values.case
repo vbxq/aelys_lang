@@ -1,0 +1,28 @@
+struct C { n: i64 }
+
+fn get(c: &C) -> i64 {
+    return (*c).n
+}
+
+fn add(c: &mut C, d: i64) {
+    (*c).n = (*c).n + d
+}
+
+fn f(a: &mut Vec<i64>, n: i64) -> i64 {
+    Vec::push(*a, n)
+    return (*a).len
+}
+
+fn m(c: &mut C, v: &mut Vec<i64>) -> i64 {
+    add(c, get(c))
+    add(c, (*c).n * 2)
+    return f(v, (*v)[1] + (*v).len)
+}
+
+fn main() {
+    let mut c = C { n: 5 }
+    let mut v: Vec<i64> = vec[1, 2]
+    println(m(&mut c, &mut v))
+    println(c.n)
+    println(v[2])
+}

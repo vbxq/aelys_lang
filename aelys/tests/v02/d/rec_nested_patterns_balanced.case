@@ -1,0 +1,35 @@
+enum Expr { Num(i64), Neg(Rc<Expr>), Bin(char, Rc<Expr>, Rc<Expr>) }
+
+fn ev(e: Expr) -> i64 {
+    match e {
+        Expr::Num(n) => n,
+        Expr::Neg(x) => -ev(Rc::get(x)),
+        Expr::Bin('+', l, r) => ev(Rc::get(l)) + ev(Rc::get(r)),
+        Expr::Bin('-', l, r) => ev(Rc::get(l)) - ev(Rc::get(r)),
+        Expr::Bin(_, l, r) => ev(Rc::get(l)) * ev(Rc::get(r)),
+    }
+}
+fn classify(o: Option<Rc<Expr>>) -> i64 {
+    match o {
+        Some(x) => match Rc::get(x) {
+            Expr::Num(n) if n > 50 => 1,
+            Expr::Num(n) => if n % 2 == 0 { 2 } else { 3 },
+            Expr::Neg(_) | Expr::Bin(_, _, _) => 4,
+        },
+        None => 7,
+    }
+}
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 120 {
+        let op = if i % 3 == 0 { '+' } else if i % 3 == 1 { '-' } else { '*' }
+        let e = Expr::Bin(op, Rc::new(Expr::Num(i)), Rc::new(Expr::Neg(Rc::new(Expr::Num(2)))))
+        t = t + ev(e)
+        t = t + classify(Some(Rc::new(Expr::Num(i)))) * 100
+        if i % 4 == 0 { t = t + classify(None) }
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

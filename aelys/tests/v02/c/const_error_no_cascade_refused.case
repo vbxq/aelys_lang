@@ -1,0 +1,4 @@
+const B: u8 = 200 + 100
+fn main() {
+    println(B)
+}

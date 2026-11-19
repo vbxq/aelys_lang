@@ -1,0 +1,4 @@
+pub trait Score {
+    fn score(&self) -> i64
+    fn bonus(&self) -> i64 { return self.score() + 1000 }
+}
