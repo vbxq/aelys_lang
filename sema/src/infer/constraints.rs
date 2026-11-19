@@ -62,13 +62,33 @@ impl TypeInference {
         }
     }
 
+    fn qualify_own_types(&self, a: InferType, b: InferType) -> (InferType, InferType) {
+        let path = &self.module_imports.module_path;
+        if path.is_empty() || !(a.names_user_module_type() || b.names_user_module_type()) {
+            return (a, b);
+        }
+        let own: std::collections::HashSet<String> = self
+            .type_table
+            .nominal_names()
+            .filter(|n| !n.starts_with("__") && !self.imported_types.contains(*n))
+            .cloned()
+            .collect();
+        (
+            crate::modules::qualify_infer_type(&a, path, &own),
+            crate::modules::qualify_infer_type(&b, path, &own),
+        )
+    }
+
     fn name_the_type_params(&self, mut err: TypeError) -> TypeError {
         use crate::constraint::TypeErrorKind;
         err.kind = match err.kind {
-            TypeErrorKind::Mismatch { expected, found } => TypeErrorKind::Mismatch {
-                expected: self.recover_param_name(&expected),
-                found: self.recover_param_name(&found),
-            },
+            TypeErrorKind::Mismatch { expected, found } => {
+                let (expected, found) = self.qualify_own_types(
+                    self.recover_param_name(&expected),
+                    self.recover_param_name(&found),
+                );
+                TypeErrorKind::Mismatch { expected, found }
+            }
             TypeErrorKind::RefMutability { found, required } => TypeErrorKind::RefMutability {
                 found: self.recover_param_name(&found),
                 required: self.recover_param_name(&required),

@@ -213,6 +213,7 @@ fn build_imports(
                 target,
                 span,
             } => {
+                imports.symbol_sources.push(exports[*target].clone());
                 for (item, local) in names {
                     if let Err(kind) = import_symbol(&mut imports, &exports[*target], item, local)
                         && !tolerant

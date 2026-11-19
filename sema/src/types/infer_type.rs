@@ -478,10 +478,32 @@ impl InferType {
 
     pub fn shown_pair(a: &InferType, b: &InferType) -> (String, String) {
         let (left, right) = (a.to_string(), b.to_string());
-        if left == right && a != b {
+        if a != b && (left == right || a.names_user_module_type() || b.names_user_module_type()) {
             (a.qualified().to_string(), b.qualified().to_string())
         } else {
             (left, right)
+        }
+    }
+
+    pub fn names_user_module_type(&self) -> bool {
+        match self {
+            InferType::Struct(name, args) | InferType::Enum(name, args) => {
+                crate::modules::module_of_type(name)
+                    .is_some_and(|m| !crate::modules::is_std_module(m))
+                    || args.iter().any(InferType::names_user_module_type)
+            }
+            InferType::Function { params, ret, .. } => {
+                params.iter().any(InferType::names_user_module_type) || ret.names_user_module_type()
+            }
+            InferType::Array(inner, _)
+            | InferType::Vec(inner)
+            | InferType::Rc(inner)
+            | InferType::Ref {
+                referent: inner, ..
+            }
+            | InferType::Slice { elem: inner, .. } => inner.names_user_module_type(),
+            InferType::Tuple(elems) => elems.iter().any(InferType::names_user_module_type),
+            _ => false,
         }
     }
 

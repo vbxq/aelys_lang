@@ -15,7 +15,11 @@ pub fn localize_imports(imports: &mut ModuleImports) {
     let own = Own {
         head: format!("{TYPE_HEAD}{}.", imports.module_path),
     };
-    for exports in imports.namespaces.values_mut() {
+    for exports in imports
+        .namespaces
+        .values_mut()
+        .chain(imports.symbol_sources.iter_mut())
+    {
         own.exports(Arc::make_mut(exports));
     }
     for value in imports.values.values_mut() {

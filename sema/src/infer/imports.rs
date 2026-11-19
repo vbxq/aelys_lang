@@ -6,11 +6,13 @@ use aelys_syntax::{Expr, ExprKind, Span};
 
 impl TypeInference {
     pub(crate) fn install_imports(&mut self, imports: ModuleImports) {
-        for exports in imports.namespaces.values() {
+        for exports in imports.namespaces.values().chain(&imports.symbol_sources) {
             for def in exports.reachable.values() {
                 self.register_module_type_body(def);
             }
             self.register_module_types(exports);
+        }
+        for exports in imports.namespaces.values() {
             for item in exports.values.values() {
                 self.define_imported_value(item);
             }

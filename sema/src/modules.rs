@@ -127,6 +127,7 @@ impl ModuleExports {
 pub struct ModuleImports {
     pub is_importable: bool,
     pub namespaces: HashMap<String, Arc<ModuleExports>>,
+    pub symbol_sources: Vec<Arc<ModuleExports>>,
     pub values: HashMap<String, ModuleValue>,
     pub types: HashMap<String, ModuleType>,
     pub variants: HashMap<String, (ModuleType, String)>,

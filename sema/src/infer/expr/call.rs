@@ -19,7 +19,9 @@ impl TypeInference {
     ) -> InferType {
         match ty {
             InferType::Struct(name, args)
-                if args.is_empty() && !self.type_table.has_struct(name) =>
+                if args.is_empty()
+                    && !self.type_table.has_struct(name)
+                    && crate::modules::module_of_type(name).is_none() =>
             {
                 if let Some(bound) = mapping.get(name) {
                     return bound.clone();
