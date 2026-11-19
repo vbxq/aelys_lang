@@ -1332,7 +1332,7 @@ fn main() {
 ```
 
 ```diagnostic
-error[E0750]: the trait `Shape` is used as a type, and trait objects are not supported; take a type parameter `<T: Shape>` instead
+error[E0750]: the trait `Shape` is used as a type; write `dyn Shape` for a trait object, or take a type parameter `<T: Shape>`
  --> main.aelys:5:20
   |
 5 | fn total(shapes: &[Shape]) -> i64 {

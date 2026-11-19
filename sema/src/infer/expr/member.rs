@@ -64,9 +64,14 @@ impl TypeInference {
         }
         let builtin = matches!(
             base,
-            InferType::String | InferType::Slice { .. } | InferType::Vec(_) | InferType::Array(..)
+            InferType::String
+                | InferType::StrRef
+                | InferType::Slice { .. }
+                | InferType::Vec(_)
+                | InferType::Array(..)
         );
-        if builtin && (member == "len" || (member == "bytes" && matches!(base, InferType::String))) {
+        let string = matches!(base, InferType::String | InferType::StrRef);
+        if builtin && (member == "len" || (member == "bytes" && string)) {
             let receiver = receiver_text(object).unwrap_or_else(|| "v".to_string());
             let (message, fix) = if member == "len" {
                 (format!("`{receiver}.len` is a method; write `{receiver}.len()`"), ".len()")
