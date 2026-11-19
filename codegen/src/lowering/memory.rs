@@ -50,13 +50,13 @@ impl<'a> FunctionCodegen<'a> {
         ptr: PointerValue<'static>,
         value: BasicValueEnum<'static>,
     ) -> Result<Option<InstructionValue<'static>>, CodegenError> {
-        if let Some((src, align)) = self.forwardable_aggregate_load(value) {
+        if let Some((src, src_align)) = self.forwardable_aggregate_load(value) {
             let size = value
                 .get_type()
                 .size_of()
                 .ok_or_else(|| CodegenError::LlvmError("unsized aggregate copy".to_string()))?;
             self.builder
-                .build_memmove(ptr, align, src, align, size)
+                .build_memmove(ptr, alignment_of(value.get_type()), src, src_align, size)
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
             return Ok(None);
         }
