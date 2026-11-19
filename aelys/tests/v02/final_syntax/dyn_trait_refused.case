@@ -1,9 +1,0 @@
-trait Shape {
-    fn area(&self) -> i64;
-}
-
-fn total(s: &dyn Shape) -> i64 {
-    s.area()
-}
-
-fn main() {}

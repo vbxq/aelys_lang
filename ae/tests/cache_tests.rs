@@ -69,7 +69,7 @@ fn a_module_behind_a_symlinked_directory_is_tracked() {
     let dir = project(
         "c_symlink",
         "",
-        "needs shared.lib\n\nfn main() -> i64 {\n    println(lib.val())\n    return 0\n}\n",
+        "use shared::lib;\n\nfn main() {\n    println!(\"{}\", lib::val());\n}\n",
     );
     let lib = dir.join("outside/lib.aelys");
     write(&lib, "pub fn val() -> i64 {\n    1\n}\n");
