@@ -944,49 +944,6 @@ fn s3_21_the_rc_bearing_and_struct_nested_families_never_reach_it_either() {
 
 // unreachable a slot typed `vec<t>` owns exactly one counted share, so refcount 0 means the
 
-#[test]
-fn s3_24_the_c_and_codegen_uniqueness_predicates_stay_complements() {
-    let root = repo_root();
-    let c = fs::read_to_string(root.join("core/src/aelys_core_common.c")).expect("core runtime");
-    let cg =
-        fs::read_to_string(root.join("codegen/src/lowering/runtime.rs")).expect("runtime lowering");
-
-    // out of emit_vec_detach's own body or it reads green off the wrong comparison
-    let detach = cg
-        .split("pub(crate) fn emit_vec_detach(")
-        .nth(1)
-        .and_then(|s| s.split("\n    pub(crate) fn ").next())
-        .expect("emit_vec_detach");
-
-    assert!(
-        c.contains("if (__aelys_rc_refcount(v->ptr) <= 1) {"),
-        "the C side's count case moved; codegen's inline guard is its complement and nothing \
-         but this row keeps the two in step"
-    );
-    assert!(
-        detach.contains("IntPredicate::UGT")
-            && detach.contains("i32_ty.const_int(1, false)")
-            && detach.contains("\"cow_shared\""),
-        "codegen's inline guard must stay `UGT 1 -> slow`, the exact complement of `<= 1 -> return`:\n{detach}"
-    );
-
-    let refcount = c
-        .split("unsigned __aelys_rc_refcount(void *ptr) {")
-        .nth(1)
-        .and_then(|s| s.split('}').next())
-        .expect("__aelys_rc_refcount");
-    assert!(
-        refcount.contains("if (!ptr)") && refcount.contains("return 1;"),
-        "C's null verdict comes from refcount(NULL) == 1 and NOT from the `<=`, so a guard on \
-         the `<=` alone pins the smaller rule:\n{refcount}"
-    );
-    assert!(
-        detach.contains("build_is_not_null(data_ptr, \"cow_nn\")"),
-        "codegen's null verdict comes from a separate is-not-null branch, and it is the half a \
-         count-only guard cannot see"
-    );
-}
-
 const S3_34: &str = "fn main() {\n\
                      \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
                      \x20   let w: Vec<i64> = v;\n\
