@@ -3,6 +3,9 @@ use crate::{
 };
 use std::collections::HashMap;
 
+const GLOBAL_GET: &str = "__aelys_global_get_";
+const GLOBAL_SET: &str = "__aelys_global_set_";
+
 pub fn drop_unreached(program: &mut AirProgram, candidate: impl Fn(&AirFunction) -> bool) {
     let by_name: HashMap<&str, usize> = program
         .functions
@@ -16,6 +19,12 @@ pub fn drop_unreached(program: &mut AirProgram, candidate: impl Fn(&AirFunction)
         .enumerate()
         .map(|(i, f)| (f.id.0, i))
         .collect();
+    let global_by_name: HashMap<&str, usize> = program
+        .globals
+        .iter()
+        .enumerate()
+        .map(|(i, g)| (g.name.as_str(), i))
+        .collect();
     let mut stack: Vec<usize> = (0..program.functions.len())
         .filter(|&i| {
             let function = &program.functions[i];
@@ -28,14 +37,24 @@ pub fn drop_unreached(program: &mut AirProgram, candidate: impl Fn(&AirFunction)
         .iter()
         .flat_map(|vt| vt.fns.iter().map(String::as_str))
         .collect();
-    for global in &program.globals {
-        if let Some(init) = &global.init {
-            const_names(init, &mut names);
-        }
-    }
     let mut live = vec![false; program.functions.len()];
+    let mut live_globals = vec![false; program.globals.len()];
     loop {
-        stack.extend(names.drain(..).filter_map(|n| by_name.get(n).copied()));
+        while let Some(name) = names.pop() {
+            if let Some(&i) = by_name.get(name) {
+                stack.push(i);
+            }
+            let global = name
+                .strip_prefix(GLOBAL_GET)
+                .or_else(|| name.strip_prefix(GLOBAL_SET))
+                .unwrap_or(name);
+            if let Some(&g) = global_by_name.get(global)
+                && !std::mem::replace(&mut live_globals[g], true)
+                && let Some(init) = &program.globals[g].init
+            {
+                const_names(init, &mut names);
+            }
+        }
         let Some(i) = stack.pop() else { break };
         if std::mem::replace(&mut live[i], true) {
             continue;
@@ -44,6 +63,8 @@ pub fn drop_unreached(program: &mut AirProgram, candidate: impl Fn(&AirFunction)
         function_refs(&program.functions[i], &mut names, &mut ids);
         stack.extend(ids.into_iter().filter_map(|id| by_id.get(&id).copied()));
     }
+    let mut kept = live_globals.iter();
+    program.globals.retain(|_| *kept.next().unwrap());
     if live.iter().all(|&l| l) {
         return;
     }
@@ -139,8 +160,10 @@ fn rvalue_refs<'a>(rvalue: &'a Rvalue, names: &mut Vec<&'a str>, ids: &mut Vec<u
 }
 
 fn place_names<'a>(place: &'a Place, names: &mut Vec<&'a str>) {
-    if let Place::Index(_, op) = place {
-        operand_names(op, names);
+    match place {
+        Place::Global(name) => names.push(name),
+        Place::Index(_, op) => operand_names(op, names),
+        Place::Local(_) | Place::Field(..) | Place::Deref(_) => {}
     }
 }
 
