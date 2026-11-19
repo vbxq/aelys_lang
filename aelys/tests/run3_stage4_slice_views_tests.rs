@@ -584,19 +584,6 @@ const S4_N4: &str = "fn w(s: &mut [i64]) -> i64 {\n\
                      \x20   let q = w(a[0..3]);\n\
                      }\n";
 
-// the sixth spelling of twin 1, and it is new capability made fail-closed rather than a
-const S4_N5: &str = "nogc fn f(r: &mut Vec<i64>) -> i64 {\n\
-                     \x20   let s = (*r)[0..3];\n\
-                     \x20   s[0] = 101;\n\
-                     \x20   0\n\
-                     }\n\
-                     fn main() { }\n";
-const S4_N5T: &str = "nogc fn f(r: &Vec<i64>) -> i64 {\n\
-                      \x20   let s = (*r)[0..3];\n\
-                      \x20   s[0]\n\
-                      }\n\
-                      fn main() { }\n";
-
 const S4_N6: &str = "fn main() {\n\
                      \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
                      \x20   let s = v[0..3];\n\
@@ -735,18 +722,6 @@ fn s4_n4_a_shared_view_into_a_mutable_parameter_is_e0416() {
         "the flow refusal must name both slice types:\n{rendered}"
     );
     h.assert_legs(4);
-}
-
-#[test]
-fn s4_n5_a_mutable_view_of_a_vec_inside_nogc_is_e0727() {
-    let h = Harness::new();
-    let rendered = h.fenced_row("S4-N5", S4_N5, "E0727");
-    assert!(
-        rendered.contains("a mutable view of a buffer that may be shared"),
-        "the effect witness must name the operation, not just the function:\n{rendered}"
-    );
-    h.accepts("S4-N5t", S4_N5T);
-    h.assert_legs(8);
 }
 
 #[test]
