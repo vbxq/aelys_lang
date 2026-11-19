@@ -894,12 +894,13 @@ static uint32_t *aelys_str_cap(const char *ptr) {
     return (uint32_t *)(ptr - AELYS_RC_HEADER_SIZE + 12);
 }
 
+/* a capacity the word cannot hold is stored as 0, which only ever forces a reallocation */
 static char *aelys_str_alloc_cap(long long cap) {
-    if (cap > (long long)UINT32_MAX) {
+    if (cap > LLONG_MAX - AELYS_RC_HEADER_SIZE) {
         __aelys_panic("String capacity overflow", 24);
     }
     char *buf = aelys_str_alloc(cap);
-    *aelys_str_cap(buf) = (uint32_t)cap;
+    *aelys_str_cap(buf) = cap > (long long)UINT32_MAX ? 0 : (uint32_t)cap;
     return buf;
 }
 
