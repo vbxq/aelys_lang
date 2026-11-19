@@ -120,7 +120,7 @@ impl TypeInference {
             return Err(value);
         };
         let names_target = matches!(&left.kind, TypedExprKind::Identifier(n) if n == name);
-        if !names_target || !right.ty.is_str() || !self.cannot_write_locals(right) {
+        if !names_target || !right.ty.is_str() || crate::place_spine::may_write_local(right, name) {
             return Err(value);
         }
         let TypedExprKind::Binary { left, right, .. } = value.kind else {
@@ -132,51 +132,5 @@ impl TypeInference {
             tag: 0,
             args: vec![*left, *right],
         })
-    }
-
-    fn cannot_write_locals(&self, e: &TypedExpr) -> bool {
-        let go = |e: &TypedExpr| self.cannot_write_locals(e);
-        match &e.kind {
-            TypedExprKind::Int(_)
-            | TypedExprKind::Float(_)
-            | TypedExprKind::Bool(_)
-            | TypedExprKind::Char(_)
-            | TypedExprKind::String(_)
-            | TypedExprKind::Null
-            | TypedExprKind::Identifier(_) => true,
-            TypedExprKind::FmtString(parts) => parts.iter().all(|p| match p {
-                crate::typed_ast::TypedFmtStringPart::Expr(e) => go(e),
-                _ => true,
-            }),
-            TypedExprKind::Grouping(inner)
-            | TypedExprKind::Unary { operand: inner, .. }
-            | TypedExprKind::Cast { expr: inner, .. }
-            | TypedExprKind::Member { object: inner, .. } => go(inner),
-            TypedExprKind::Binary { left, right, .. }
-            | TypedExprKind::And { left, right }
-            | TypedExprKind::Or { left, right }
-            | TypedExprKind::Index {
-                object: left,
-                index: right,
-            }
-            | TypedExprKind::Slice {
-                object: left,
-                range: right,
-            } => go(left) && go(right),
-            TypedExprKind::Range { start, end, .. } => {
-                start.as_deref().is_none_or(go) && end.as_deref().is_none_or(go)
-            }
-            TypedExprKind::EnumVariant {
-                enum_name,
-                variant,
-                args,
-                ..
-            } => !(enum_name == "string" && variant.starts_with("push")) && args.iter().all(go),
-            TypedExprKind::Call { callee, args } => {
-                matches!(&callee.kind, TypedExprKind::Identifier(f) if self.env.lookup_local(f).is_none())
-                    && args.iter().all(go)
-            }
-            _ => false,
-        }
     }
 }

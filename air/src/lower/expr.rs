@@ -1603,7 +1603,7 @@ impl<'a> LoweringContext<'a> {
             && let Some(id) = self.lookup_local(name)
             && !self.capture_slots.contains_key(&id)
         {
-            if !args.iter().any(|a| super::pin::may_write_local(a, name)) {
+            if !args.iter().any(|a| aelys_sema::may_write_local(a, name)) {
                 return Callee::FnPtr(id);
             }
             let pinned = self.pin_str_read(Operand::Copy(id), None);

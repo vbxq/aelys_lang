@@ -1,8 +1,6 @@
 use super::LoweringContext;
 use crate::*;
-use aelys_sema::{
-    InferType, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedStmt, TypedStmtKind,
-};
+use aelys_sema::{InferType, TypedExpr, TypedExprKind, TypedFmtStringPart, may_write_local};
 
 // only a form known to free nothing answers false, so a new form fails closed
 pub(super) fn may_free(expr: &TypedExpr) -> bool {
@@ -38,111 +36,12 @@ pub(super) fn may_free(expr: &TypedExpr) -> bool {
             variant,
             args,
             ..
-        } => (enum_name == "Vec" && variant == "clear") || args.iter().any(may_free),
+        } => {
+            (enum_name == "Vec" && variant == "clear")
+                || (enum_name == "string" && (variant == "push_str" || variant == "push"))
+                || args.iter().any(may_free)
+        }
         _ => true,
-    }
-}
-
-fn names(expr: &TypedExpr, name: &str) -> bool {
-    matches!(&peel(expr).kind, TypedExprKind::Identifier(n) if n == name)
-}
-
-pub(super) fn may_write_local(expr: &TypedExpr, name: &str) -> bool {
-    let w = |e: &TypedExpr| may_write_local(e, name);
-    match &expr.kind {
-        TypedExprKind::Int(_)
-        | TypedExprKind::Float(_)
-        | TypedExprKind::Bool(_)
-        | TypedExprKind::Char(_)
-        | TypedExprKind::String(_)
-        | TypedExprKind::Null
-        | TypedExprKind::Identifier(_)
-        | TypedExprKind::Lambda(_)
-        | TypedExprKind::LambdaInner { .. } => false,
-        TypedExprKind::Assign { name: n, value } => n == name || w(value),
-        TypedExprKind::Reference {
-            mutable, operand, ..
-        } => (*mutable && names(operand, name)) || w(operand),
-        TypedExprKind::IndexAssign {
-            object,
-            index,
-            value,
-        } => names(object, name) || w(object) || w(index) || w(value),
-        TypedExprKind::FieldAssign { object, value, .. } => {
-            names(object, name) || w(object) || w(value)
-        }
-        TypedExprKind::DerefAssign { target, value } => w(target) || w(value),
-        TypedExprKind::Grouping(inner) | TypedExprKind::Deref(inner) => w(inner),
-        TypedExprKind::Unary { operand, .. } => w(operand),
-        TypedExprKind::Cast { expr, .. } => w(expr),
-        TypedExprKind::Member { object, .. } => w(object),
-        TypedExprKind::Binary { left, right, .. }
-        | TypedExprKind::And { left, right }
-        | TypedExprKind::Or { left, right } => w(left) || w(right),
-        TypedExprKind::Index { object, index } => w(object) || w(index),
-        TypedExprKind::Slice { object, range } => w(object) || w(range),
-        TypedExprKind::Range { start, end, .. } => {
-            start.as_deref().is_some_and(w) || end.as_deref().is_some_and(w)
-        }
-        TypedExprKind::FmtString(parts) => parts
-            .iter()
-            .any(|part| matches!(part, TypedFmtStringPart::Expr(e) if w(e))),
-        TypedExprKind::Call { callee, args } => w(callee) || args.iter().any(w),
-        TypedExprKind::EnumVariant {
-            enum_name, args, ..
-        } => args
-            .iter()
-            .any(|a| (enum_name == "Vec" && names(a, name)) || w(a)),
-        TypedExprKind::ArrayLiteral { elements } | TypedExprKind::VecLiteral { elements, .. } => {
-            elements.iter().any(w)
-        }
-        TypedExprKind::ArraySized { size, fill_value } => {
-            w(size) || fill_value.as_deref().is_some_and(w)
-        }
-        TypedExprKind::StructLiteral { fields, .. } => fields.iter().any(|(_, e)| w(e)),
-        TypedExprKind::If {
-            condition,
-            then_branch,
-            else_branch,
-        } => w(condition) || w(then_branch) || w(else_branch),
-        TypedExprKind::Match {
-            scrutinee, arms, ..
-        } => w(scrutinee) || arms.iter().any(|arm| arm.exprs().any(w)),
-        TypedExprKind::ResultAssert { scrutinee, .. } => w(scrutinee),
-        TypedExprKind::Block { stmts, tail } => {
-            stmts.iter().any(|s| stmt_may_write_local(s, name)) || w(tail)
-        }
-    }
-}
-
-fn stmt_may_write_local(stmt: &TypedStmt, name: &str) -> bool {
-    let w = |e: &TypedExpr| may_write_local(e, name);
-    let ws = |s: &TypedStmt| stmt_may_write_local(s, name);
-    match &stmt.kind {
-        TypedStmtKind::Expression(e) => w(e),
-        TypedStmtKind::Let { initializer, .. } => w(initializer),
-        TypedStmtKind::Block(stmts) => stmts.iter().any(ws),
-        TypedStmtKind::If {
-            condition,
-            then_branch,
-            else_branch,
-        } => w(condition) || ws(then_branch) || else_branch.as_deref().is_some_and(ws),
-        TypedStmtKind::While { condition, body } => w(condition) || ws(body),
-        TypedStmtKind::For {
-            start,
-            end,
-            step,
-            body,
-            ..
-        } => w(start) || w(end) || step.as_ref().as_ref().is_some_and(w) || ws(body),
-        TypedStmtKind::ForEach { iterable, body, .. } => w(iterable) || ws(body),
-        TypedStmtKind::Return(value) => value.as_ref().is_some_and(w),
-        TypedStmtKind::Break
-        | TypedStmtKind::Continue
-        | TypedStmtKind::Function(_)
-        | TypedStmtKind::Needs(_)
-        | TypedStmtKind::StructDecl { .. }
-        | TypedStmtKind::EnumDecl { .. } => false,
     }
 }
 
