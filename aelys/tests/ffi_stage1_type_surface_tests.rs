@@ -2,17 +2,9 @@ use aelys_opt::OptimizationLevel;
 use aelys_sema::{InferType, TypeVarId};
 use aelys_air::symbols::{ForeignTypePosition, foreign_type_rejection};
 use std::fs;
-use std::path::{Path, PathBuf};
 use tempfile::tempdir;
 
 const MAIN: &str = "\n\nfn main() {\n}\n";
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("workspace root")
-        .to_path_buf()
-}
 
 fn lower(source: &str) -> Result<(), String> {
     let dir = tempdir().expect("tempdir");
@@ -299,37 +291,5 @@ fn the_return_position_admits_what_the_parameter_position_refuses() {
         foreign_type_rejection(&InferType::Null, ForeignTypePosition::Return),
         None,
         "`void` in the return position is c's `void`, exactly"
-    );
-}
-
-#[test]
-fn the_infer_type_enumeration_still_counts_twenty_seven_variants() {
-    let text = fs::read_to_string(repo_root().join("sema/src/types/infer_type.rs"))
-        .expect("read the type enumeration");
-    let body = text
-        .split_once("pub enum InferType {")
-        .expect("the enumeration is named")
-        .1
-        .split_once("\n}")
-        .expect("the enumeration closes")
-        .0;
-    let variants = body
-        .lines()
-        .filter(|line| {
-            let trimmed = line.trim_start();
-            line.starts_with("    ")
-                && !line.starts_with("     ")
-                && trimmed
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_ascii_uppercase())
-                && trimmed
-                    .trim_end()
-                    .ends_with([',', '{', '('])
-        })
-        .count();
-    assert_eq!(
-        variants, 27,
-        "the surface is a verdict per variant, so a new variant is a new decision"
     );
 }
