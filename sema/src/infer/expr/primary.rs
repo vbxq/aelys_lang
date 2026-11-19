@@ -251,7 +251,7 @@ impl TypeInference {
         if enum_name == "string" && variant == "from_char" {
             return self.infer_string_from_char(args, span);
         }
-        if enum_name == "String"
+        if matches!(enum_name, "String" | "string")
             && matches!(variant, "new" | "from" | "with_capacity")
             && !self.type_table.has_struct(enum_name)
             && !self.type_table.has_enum(enum_name)
@@ -1420,7 +1420,7 @@ pub(crate) fn intrinsic_methods(head: &str) -> Option<&'static [&'static str]> {
             "try_as_unique_mut_slice",
         ]),
         "Rc" => Some(&["new", "get", "null", "is_null"]),
-        "string" => Some(&["substring_bytes", "from_char"]),
+        "string" => Some(&["substring_bytes", "from_char", "new", "from", "with_capacity"]),
         "String" => Some(&["new", "from", "with_capacity"]),
         "char" => Some(&["from_i64", "is_scalar"]),
         _ => None,

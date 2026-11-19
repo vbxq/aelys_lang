@@ -250,6 +250,7 @@ pub fn may_write_local(expr: &TypedExpr, name: &str) -> bool {
         TypedExprKind::Block { stmts, tail } => {
             stmts.iter().any(|s| stmt_may_write_local(s, name)) || w(tail)
         }
+        TypedExprKind::Loop(body) => stmt_may_write_local(body, name),
     }
 }
 
@@ -274,9 +275,8 @@ fn stmt_may_write_local(stmt: &TypedStmt, name: &str) -> bool {
             ..
         } => w(start) || w(end) || step.as_ref().as_ref().is_some_and(w) || ws(body),
         TypedStmtKind::ForEach { iterable, body, .. } => w(iterable) || ws(body),
-        TypedStmtKind::Return(value) => value.as_ref().is_some_and(w),
-        TypedStmtKind::Break
-        | TypedStmtKind::Continue
+        TypedStmtKind::Return(value) | TypedStmtKind::Break(value) => value.as_ref().is_some_and(w),
+        TypedStmtKind::Continue
         | TypedStmtKind::Function(_)
         | TypedStmtKind::Needs(_)
         | TypedStmtKind::StructDecl { .. }
