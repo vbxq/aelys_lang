@@ -800,10 +800,8 @@ impl TypeInference {
                 self.validate_expr(value, generic_scope, declared_type_params);
                 self.check_write_target(object, "an indexed assignment", expr.span);
                 if matches!(object.ty, InferType::Ref { mutable: false, .. }) {
-                    self.errors.push(TypeError::shared_mut(
-                        "an indexed assignment through a shared reference",
-                        expr.span,
-                    ));
+                    self.errors
+                        .push(TypeError::shared_mut("an indexed assignment", expr.span));
                 }
                 self.check_deferred_write(
                     ProjKind::IndexWrite,
