@@ -1,0 +1,6 @@
+#[repr(i32, u8)]
+enum E { A, B }
+
+fn main() {
+    println!("{}", E::B as i64);
+}
