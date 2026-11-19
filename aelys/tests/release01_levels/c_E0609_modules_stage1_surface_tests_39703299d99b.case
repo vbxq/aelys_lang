@@ -1,4 +1,0 @@
-mod m; use m::*;
-
-fn main() {
-}

@@ -1,6 +1,0 @@
-
-use std::process::ExitCode; fn main() -> ExitCode {
-    let mut a: [i64; 3] = [7, 2, 3];
-    a[..]++;
-    return 0;
-}

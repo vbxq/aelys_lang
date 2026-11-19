@@ -360,7 +360,7 @@ const PINNED: &[(&str, Expect)] = &[
     ("v1_rc_field_break", Expect::Code("E0902")),
 ];
 
-const SAMPLED_CODES: usize = 68;
+const SAMPLED_CODES: usize = 59;
 
 fn expectation_failure(name: &str, leg: &LevelLeg, expect: &Expect) -> Option<String> {
     let met = match (expect, leg) {

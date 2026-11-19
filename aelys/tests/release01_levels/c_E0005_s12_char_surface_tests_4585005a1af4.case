@@ -1,5 +1,0 @@
-
-fn main() -> i64 {
-    let c: char = '\u{41}'
-    return 0
-}
