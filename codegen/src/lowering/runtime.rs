@@ -725,6 +725,15 @@ impl<'a> FunctionCodegen<'a> {
         )
     }
 
+    pub(crate) fn ensure_str_slice_function(&self) -> FunctionValue<'static> {
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        let i64_ty = self.context.i64_type().into();
+        self.declare_string_returning_fn(
+            "__aelys_str_slice",
+            &[ptr_ty, i64_ty, i64_ty, i64_ty, i64_ty, ptr_ty, i64_ty],
+        )
+    }
+
     pub(crate) fn emit_div_zero_check(
         &mut self,
         divisor: IntValue<'static>,

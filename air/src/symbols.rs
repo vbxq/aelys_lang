@@ -19,6 +19,7 @@ pub const STRING_PRODUCER_SYMBOLS: &[&str] = &[
     "__aelys_str_concat",
     "__aelys_str_from_char",
     "__aelys_str_substring_bytes",
+    "__aelys_str_slice",
     "__aelys_to_string",
     "__aelys_str_fmt_pad",
     "__aelys_str_fmt_precision",
@@ -29,6 +30,7 @@ pub const STRING_PRODUCER_SYMBOLS: &[&str] = &[
 pub const STRING_READER_SYMBOLS: &[&str] = &[
     "__aelys_str_concat",
     "__aelys_str_substring_bytes",
+    "__aelys_str_slice",
     "__aelys_str_char_count",
     "__aelys_str_decode_at",
     "__aelys_str_fmt_pad",

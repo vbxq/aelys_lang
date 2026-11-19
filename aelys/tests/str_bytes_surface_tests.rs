@@ -538,6 +538,51 @@ fn sb7_a_range_outside_the_string_panics_at_the_constructor() {
     h.assert_legs(6);
 }
 
+const SB7B_SLICE_PANICS: [(&str, &str, &str); 3] = [
+    (
+        "SB-7b-cut",
+        r#"
+fn main() {
+    let s: String = "éab"
+    println(s[0..1])
+}
+"#,
+        "string slice `s[0..1]`: byte 1 is not a character boundary; it holds 0xa9",
+    ),
+    (
+        "SB-7b-reversed",
+        r#"
+fn main() {
+    let s: String = "abc"
+    let i = 3
+    let j = 1
+    println(s[i..=j])
+}
+"#,
+        "string slice `s[3..=1]`: the range ends before it starts",
+    ),
+    (
+        "SB-7b-max",
+        r#"
+fn main() {
+    let s: String = "abc"
+    let j = 9223372036854775807
+    println(s[0..=j])
+}
+"#,
+        "string slice `s[0..=9223372036854775807]`: the range is not inside a string of 3 bytes",
+    ),
+];
+
+#[test]
+fn sb7b_a_slice_panic_names_the_slice_and_its_exact_range() {
+    let h = Harness::new();
+    for (id, src, says) in SB7B_SLICE_PANICS {
+        h.panic_row(id, src, says);
+    }
+    h.assert_legs(18);
+}
+
 const SB8_INDEX_REFUSED: &str = r#"
 fn main() -> i64 {
     let s: string = "éab"

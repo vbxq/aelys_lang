@@ -995,6 +995,63 @@ AelysString __aelys_str_substring_bytes(const char *s_ptr, long long s_len,
     return __aelys_str_concat(s_ptr + lo, hi - lo, "", 0);
 }
 
+/* shape bit 0: start written, bit 1: end written, bit 2: inclusive end; the end is raw so ..=MAX cannot wrap */
+AelysString __aelys_str_slice(const char *s_ptr, long long s_len, long long lo, long long hi,
+                              long long shape, const char *what_ptr, long long what_len) {
+    char range[64];
+    char message[320];
+    int at = 0;
+    if (shape & 1) {
+        at += snprintf(range + at, sizeof range - at, "%lld", lo);
+    }
+    at += snprintf(range + at, sizeof range - at, "%s", (shape & 4) ? "..=" : "..");
+    if (shape & 2) {
+        snprintf(range + at, sizeof range - at, "%lld", hi);
+    }
+    if (what_len > 64) {
+        what_len = 64;
+    }
+    long long start = (shape & 1) ? lo : 0;
+    int past_max = (shape & 6) == 6 && hi == LLONG_MAX;
+    long long end = !(shape & 2) ? s_len : (shape & 4) ? (past_max ? hi : hi + 1) : hi;
+    const char *why = NULL;
+    char detail[160];
+    if (start < 0 || ((shape & 2) && hi < 0) || past_max || start > s_len || end > s_len) {
+        snprintf(detail, sizeof detail, "the range is not inside a string of %lld byte%s", s_len,
+                 s_len == 1 ? "" : "s");
+        why = detail;
+    } else if (end < start) {
+        why = "the range ends before it starts";
+    } else {
+        const unsigned char *data = (const unsigned char *)s_ptr;
+        long long cut = -1;
+        if (start < s_len && (data[start] & 0xC0) == 0x80) {
+            cut = start;
+        } else if (end < s_len && (data[end] & 0xC0) == 0x80) {
+            cut = end;
+        }
+        if (cut >= 0) {
+            snprintf(detail, sizeof detail,
+                     "byte %lld is not a character boundary; it holds 0x%02x, a utf-8 "
+                     "continuation byte",
+                     cut, (unsigned)data[cut]);
+            why = detail;
+        }
+    }
+    if (why == NULL) {
+        return __aelys_str_concat(s_ptr + start, end - start, "", 0);
+    }
+    int written = snprintf(message, sizeof message, "string slice `%.*s[%s]`: %s", (int)what_len,
+                           what_ptr, range, why);
+    if (written < 0) {
+        __aelys_panic("string slice out of bounds", 26);
+    }
+    if (written > (int)sizeof message - 1) {
+        written = (int)sizeof message - 1;
+    }
+    __aelys_panic(message, written);
+}
+
 AelysString __aelys_str_fmt_pad(const char *s_ptr, long long s_len, long long width,
                                 long long align, long long fill, long long zero) {
     long long chars = 0;

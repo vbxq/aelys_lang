@@ -903,6 +903,7 @@ const MANAGED_RUNTIME: &[&str] = &[
     "__aelys_str_concat",
     "__aelys_str_from_char",
     "__aelys_str_substring_bytes",
+    "__aelys_str_slice",
     "__aelys_to_string_char",
     "__aelys_to_string_f64",
     "__aelys_to_string_i64",

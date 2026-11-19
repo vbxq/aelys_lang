@@ -395,6 +395,36 @@ impl<'a> FunctionCodegen<'a> {
                 )?));
             }
 
+            if name == "__aelys_str_slice" {
+                if args.len() != 5
+                    || !arg_values[0].is_struct_value()
+                    || !arg_values[4].is_struct_value()
+                {
+                    return Err(CodegenError::UnsupportedInstruction(
+                        "__aelys_str_slice expects a string, three integers and a string"
+                            .to_string(),
+                    ));
+                }
+                let (s_ptr, s_len) =
+                    self.string_parts_from_value(arg_values[0].into_struct_value())?;
+                let (what_ptr, what_len) =
+                    self.string_parts_from_value(arg_values[4].into_struct_value())?;
+                let function = self.ensure_str_slice_function();
+                return Ok(Some(self.call_sret_returning_fn(
+                    function,
+                    &[
+                        s_ptr.into(),
+                        s_len.into(),
+                        arg_values[1].into(),
+                        arg_values[2].into(),
+                        arg_values[3].into(),
+                        what_ptr.into(),
+                        what_len.into(),
+                    ],
+                    "str_slice",
+                )?));
+            }
+
             if name == "__aelys_rc_retain" || name == "__aelys_rc_release" {
                 if args.len() != 1 {
                     return Err(CodegenError::UnsupportedInstruction(format!(

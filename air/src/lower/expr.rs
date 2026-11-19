@@ -1932,37 +1932,26 @@ impl<'a> LoweringContext<'a> {
         exprs.extend(end);
         let mut ops = self.lower_pinned_operands(&exprs, sp).into_iter();
         let text = ops.next().expect("the sliced string is lowered first");
-        let lo = match start {
-            Some(_) => ops.next().expect("one operand per written bound"),
-            None => Operand::Const(AirConst::IntLiteral(0)),
-        };
-        let hi = match end {
-            Some(_) => {
-                let hi = ops.next().expect("one operand per written bound");
-                if inclusive {
-                    self.emit_rvalue_to_temp(
-                        AirType::I64,
-                        Rvalue::BinaryOp(BinOp::Add, hi, Operand::Const(AirConst::IntLiteral(1))),
-                        sp,
-                    )
-                } else {
-                    hi
-                }
-            }
-            None => self.emit_rvalue_to_temp(
-                AirType::I64,
-                Rvalue::FieldAccess {
-                    base: text.clone(),
-                    field: "len".to_string(),
-                },
-                sp,
-            ),
-        };
+        let zero = || Operand::Const(AirConst::IntLiteral(0));
+        let lo = start.map_or_else(zero, |_| ops.next().expect("one operand per written bound"));
+        let hi = end.map_or_else(zero, |_| ops.next().expect("one operand per written bound"));
+        let shape =
+            i64::from(start.is_some()) | i64::from(end.is_some()) << 1 | i64::from(inclusive) << 2;
+        let mut what = String::new();
+        if !render_path(object, &mut what) {
+            what = "(..)".to_string();
+        }
         self.emit_rvalue_to_temp(
             AirType::Str,
             Rvalue::Call {
-                func: Callee::Named("__aelys_str_substring_bytes".to_string()),
-                args: vec![text, lo, hi],
+                func: Callee::Named("__aelys_str_slice".to_string()),
+                args: vec![
+                    text,
+                    lo,
+                    hi,
+                    Operand::Const(AirConst::IntLiteral(shape)),
+                    Operand::Const(AirConst::Str(what)),
+                ],
             },
             sp,
         )
@@ -3543,5 +3532,22 @@ fn receiver_indices<'e>(place: &'e TypedExpr, out: &mut Vec<&'e TypedExpr>) {
             }
         }
         _ => {}
+    }
+}
+
+fn render_path(e: &TypedExpr, out: &mut String) -> bool {
+    match &e.kind {
+        TypedExprKind::Identifier(name) => {
+            out.push_str(name);
+            true
+        }
+        TypedExprKind::Grouping(inner) | TypedExprKind::Deref(inner) => render_path(inner, out),
+        TypedExprKind::Member { object, member } => {
+            let ok = render_path(object, out);
+            out.push('.');
+            out.push_str(member);
+            ok
+        }
+        _ => false,
     }
 }
