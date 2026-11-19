@@ -565,11 +565,13 @@ impl TypeInference {
             InferType::Ref { referent, .. } => (**referent).clone(),
             other => other.clone(),
         };
-        let recv_elem = match base {
-            InferType::Array(elem, _) | InferType::Vec(elem) => Some(InferType::Slice {
-                elem: elem.clone(),
-                mutable: false,
-            }),
+        let recv_elem = match (base, &head) {
+            (InferType::Array(elem, _), _) | (InferType::Vec(elem), InferType::Slice { .. }) => {
+                Some(InferType::Slice {
+                    elem: elem.clone(),
+                    mutable: false,
+                })
+            }
             _ => None,
         };
         let matched = match (&head, recv_elem.as_ref().unwrap_or(base)) {
