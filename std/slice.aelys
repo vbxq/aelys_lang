@@ -79,9 +79,10 @@ pub fn swap<T>(s: &mut [T], i: i64, j: i64) {
 }
 
 pub fn copy_from_slice<T>(s: &mut [T], src: &[T]) {
-    // a length mismatch panics through an out of bounds read
-    if s.len != src.len { let past_end: T = src[src.len] }
-    for i in 0..s.len { s[i] = src[i] }
+    if s.len() != src.len() {
+        panic!("copy_from_slice: source and destination lengths differ");
+    }
+    for i in 0..s.len() { s[i] = src[i]; }
 }
 
 pub fn reverse<T>(s: &mut [T]) {
