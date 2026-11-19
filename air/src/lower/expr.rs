@@ -2750,12 +2750,15 @@ impl<'a> LoweringContext<'a> {
             self.report_ice(format!("enum cast of a non-enum operand: {:?}", inner.ty));
             return Operand::Const(AirConst::Null);
         };
-        let discrs: Vec<i64> = self
+        let Some(discrs) = self
             .program
             .type_table
             .get_enum(name)
-            .map(|d| d.variants.iter().map(|v| v.discr).collect())
-            .unwrap_or_default();
+            .map(|d| d.variants.iter().map(|v| v.discr).collect::<Vec<i64>>())
+        else {
+            self.report_ice(format!("enum cast of an unregistered enum `{name}`"));
+            return Operand::Const(AirConst::Null);
+        };
         let tag = self.emit_rvalue_to_temp(AirType::I32, Rvalue::EnumTag { enum_ref, operand }, sp);
         let (value, from) = if discrs.iter().enumerate().all(|(i, d)| *d == i as i64) {
             (tag, AirType::I32)

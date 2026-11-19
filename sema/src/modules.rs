@@ -359,7 +359,7 @@ fn field_is_pub(table: &crate::types::TypeTable, struct_name: &str, field: &str)
         .is_some_and(|f| f.is_pub)
 }
 
-pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
+pub fn collect_exports(path: &str, program: &TypedProgram) -> Result<ModuleExports, String> {
     let mut owned: HashSet<String> = HashSet::new();
     for stmt in &program.stmts {
         match &stmt.kind {
@@ -502,25 +502,33 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
                 is_pub,
             } => {
                 let qualified = qualify_type_name(path, name);
+                let discr = |variant: &str| {
+                    program
+                        .type_table
+                        .get_enum(name)
+                        .and_then(|d| d.variants.iter().find(|v| v.name == variant))
+                        .map(|v| v.discr)
+                        .ok_or_else(|| {
+                            format!("enum variant `{name}::{variant}` has no discriminant")
+                        })
+                };
                 let def = EnumDef {
                     name: qualified.clone(),
                     type_params: type_params.clone(),
                     variants: variants
                         .iter()
-                        .map(|(variant, tag, data)| EnumVariant {
-                            name: variant.clone(),
-                            tag: *tag,
-                            discr: program
-                                .type_table
-                                .get_enum(name)
-                                .and_then(|d| d.variants.iter().find(|v| v.name == *variant))
-                                .map_or(*tag as i64, |v| v.discr),
-                            data: data
-                                .iter()
-                                .map(|ty| qualify_infer_type(ty, path, &owned))
-                                .collect(),
+                        .map(|(variant, tag, data)| {
+                            Ok(EnumVariant {
+                                name: variant.clone(),
+                                tag: *tag,
+                                discr: discr(variant)?,
+                                data: data
+                                    .iter()
+                                    .map(|ty| qualify_infer_type(ty, path, &owned))
+                                    .collect(),
+                            })
                         })
-                        .collect(),
+                        .collect::<Result<_, String>>()?,
                 };
                 exports.types.insert(
                     name.clone(),
@@ -604,5 +612,5 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
             .collect();
         exports.impls.push(imp);
     }
-    exports
+    Ok(exports)
 }

@@ -532,10 +532,19 @@ fn front_stage(
         None => return Err(multiple_diagnostics(collected_errors)),
     };
 
-    let exports = Arc::new(aelys_sema::modules::collect_exports(
-        &unit.dotted,
-        checked.program(),
-    ));
+    let exports = aelys_sema::modules::collect_exports(&unit.dotted, checked.program())
+        .map_err(|message| {
+            backend_diagnostic_error(
+                src.clone(),
+                fallback_source_span(src.as_ref()),
+                "exports",
+                message,
+                None,
+                None,
+                Fault::Compiler,
+            )
+        })?;
+    let exports = Arc::new(exports);
 
     Ok((
         ModuleFront {
