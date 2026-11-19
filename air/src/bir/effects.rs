@@ -165,7 +165,7 @@ pub(crate) fn resolves_late(name: &str) -> bool {
     name.starts_with(TRAIT_STUB) || name.starts_with(aelys_sema::DYN_CALL)
 }
 
-// mirrors the codegen walk of make_unique_through: struct and tuple fields, never arrays, enums or rc
+// mirrors the codegen walk of make_unique_through: struct and tuple fields only
 fn reaches_vec(ty: &InferType, tt: &TypeTable, seen: &mut Vec<String>) -> bool {
     match ty {
         InferType::Vec(_) | InferType::Dyn(_) => true,
@@ -188,7 +188,10 @@ fn reaches_vec(ty: &InferType, tt: &TypeTable, seen: &mut Vec<String>) -> bool {
 }
 
 pub(crate) fn made_unique_before_nogc_call(arg: &InferType, tt: &TypeTable) -> bool {
-    matches!(arg, InferType::Ref { referent, mutable: true } if reaches_vec(referent, tt, &mut Vec::new()))
+    matches!(
+        arg,
+        InferType::Ref { referent, mutable: true } if reaches_vec(referent, tt, &mut Vec::new())
+    )
 }
 
 fn callee_may_be_nogc(callee: &TypedExpr) -> bool {

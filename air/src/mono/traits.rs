@@ -453,7 +453,12 @@ impl MonoContext {
 
     pub(super) fn build_vtables(&self, program: &mut AirProgram) -> Result<(), Vec<MonoError>> {
         let mut vtables = Vec::with_capacity(self.dyn_pairs.len());
-        let mut next_id = program.functions.iter().map(|f| f.id.0).max().map_or(0, |m| m + 1);
+        let mut next_id = program
+            .functions
+            .iter()
+            .map(|f| f.id.0)
+            .max()
+            .map_or(0, |m| m + 1);
         for (q, self_ty) in &self.dyn_pairs {
             let key = self.type_args_key(std::slice::from_ref(self_ty));
             let fns = program

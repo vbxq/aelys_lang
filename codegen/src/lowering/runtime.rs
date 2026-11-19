@@ -447,7 +447,10 @@ impl<'a> FunctionCodegen<'a> {
             .ok_or_else(|| CodegenError::UnsupportedType(format!("no vtable layout for `{q}`")))?;
         let object = self.load_local(local)?.into_struct_value();
         let llvm = |e: inkwell::builder::BuilderError| CodegenError::LlvmError(e.to_string());
-        let data = self.builder.build_extract_value(object, 0, "mu_data").map_err(llvm)?;
+        let data = self
+            .builder
+            .build_extract_value(object, 0, "mu_data")
+            .map_err(llvm)?;
         let vtable = self
             .builder
             .build_extract_value(object, 1, "mu_vtable")
