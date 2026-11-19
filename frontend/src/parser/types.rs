@@ -138,7 +138,7 @@ impl Parser {
                     );
                 }
                 let mut ann = self.path_type()?;
-                ann.dyn_trait = true;
+                ann.is_dyn = true;
                 ann.span = start.merge(ann.span);
                 Ok(ann)
             }

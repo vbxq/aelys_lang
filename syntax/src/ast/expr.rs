@@ -21,7 +21,6 @@ pub struct TypeAnnotation {
     pub is_slice: bool,
     pub is_dyn: bool,
     pub nogc: bool,
-    pub dyn_trait: bool,
     pub span: Span,
 }
 
@@ -40,7 +39,6 @@ impl TypeAnnotation {
             is_slice: false,
             is_dyn: false,
             nogc: false,
-            dyn_trait: false,
             span,
         }
     }
@@ -59,7 +57,6 @@ impl TypeAnnotation {
             is_slice: false,
             is_dyn: false,
             nogc: false,
-            dyn_trait: false,
             span,
         }
     }
@@ -78,7 +75,6 @@ impl TypeAnnotation {
             is_slice: true,
             is_dyn: false,
             nogc: false,
-            dyn_trait: false,
             span,
         }
     }
@@ -102,7 +98,6 @@ impl TypeAnnotation {
             is_slice: false,
             is_dyn: false,
             nogc: false,
-            dyn_trait: false,
             span,
         }
     }
@@ -126,7 +121,6 @@ impl TypeAnnotation {
             is_slice: false,
             is_dyn: false,
             nogc,
-            dyn_trait: false,
             span,
         }
     }
@@ -145,7 +139,6 @@ impl TypeAnnotation {
             is_slice: false,
             is_dyn: false,
             nogc: false,
-            dyn_trait: false,
             span,
         }
     }
@@ -172,9 +165,6 @@ impl std::fmt::Display for TypeAnnotation {
             }
             Ok(())
         };
-        if self.dyn_trait {
-            write!(f, "dyn ")?;
-        }
         match self.reference {
             Some(RefKind::Shared) => write!(f, "&")?,
             Some(RefKind::Mut) => write!(f, "&mut ")?,
