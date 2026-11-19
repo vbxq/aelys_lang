@@ -139,6 +139,11 @@ fn invalid_input_is_refused_with_a_position() {
         ("struct S {\n    a: i64\n", 3),
         ("fn f() { \"unterminated }\n", 1),
         ("fn main() {\n    let a = 1\n    let b = 2;\n}\n", 3),
+        (
+            "fn main() {\n    foo!(\n        // lead a\n        a,\n        b c\n    );\n}\n",
+            5,
+        ),
+        ("fn main() {\n    foo! { a }\n}\n", 2),
     ] {
         match format_source(src) {
             Err(e @ Error::Syntax { .. }) => assert_eq!(e.line_col(src).0, line, "{src:?}: {e}"),
@@ -197,4 +202,16 @@ fn layout_is_canonical_whatever_the_input_layout() {
     let compact = "fn f(a: i64) -> i64 { if a > 0 { a } else { 0 - a } }\n";
     let sprawling = "fn f(\n  a: i64,\n)\n-> i64\n{\n\n\n  if a > 0\n  {\n    a\n  }\n  else { 0 -\n a }\n}\n\n\n";
     assert_eq!(format_source(compact), format_source(sprawling));
+}
+
+#[test]
+fn a_parenthesized_type_or_pattern_gets_no_comma() {
+    let long = "A".repeat(95);
+    for src in [
+        format!("fn main() {{\n    let w: ({long}) = x;\n}}\n"),
+        format!("fn main() {{\n    match x {{ ({long}) => 1 }}\n}}\n"),
+    ] {
+        let out = format_source(&src).unwrap_or_else(|e| panic!("{e}:\n{src}"));
+        assert!(!out.contains(&format!("{long},")), "{out}");
+    }
 }

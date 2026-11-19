@@ -2182,7 +2182,7 @@ impl<'s> Parser<'s> {
                     return self.expected("an expression");
                 }
                 let path = self.expr_path()?;
-                if self.is("!") && matches!(self.at(1), "(" | "[" | "{") {
+                if self.is("!") {
                     let bang = self.tok();
                     return self.macro_call(path, bang);
                 }
@@ -2295,13 +2295,11 @@ impl<'s> Parser<'s> {
     fn macro_call(&mut self, path: Doc, bang: Doc) -> Res<E> {
         let head = concat(vec![path, bang]);
         let offset = format_offset(self.text(self.pos - 2));
-        let save = self.pos;
-        let delim = self.peek();
-        let attempt = match delim {
+        let e = match self.peek() {
             "(" => {
                 let mut kinds = Vec::new();
                 let mut simple = Vec::new();
-                self.list("(", ")", false, |p| {
+                let l = self.list("(", ")", false, |p| {
                     let start = p.pos;
                     let e = p.expr(R::default())?;
                     simple.push((start..p.pos).all(|i| {
@@ -2310,31 +2308,17 @@ impl<'s> Parser<'s> {
                     }));
                     kinds.push(e.ov);
                     Ok(e.doc())
-                })
-                .map(|l| {
-                    let d = match offset {
-                        Some(k) if l.items.len() > k + 1 && simple[k + 1..].iter().all(|s| *s) => {
-                            format_args_layout(l, k)
-                        }
-                        _ => args_layout(l, &kinds, Tr::Never),
-                    };
-                    E::new(d, Ov::ParenMacro)
-                })
-            }
-            "[" => self.array().map(|e| E::new(e.doc, Ov::BracketMacro)),
-            _ => Err(Error::syntax(0, "")),
-        };
-        let e = match attempt {
-            Ok(e) => e,
-            Err(_) => {
-                self.restore(save);
-                let ov = if delim == "(" {
-                    Ov::ParenMacro
-                } else {
-                    Ov::BracketMacro
+                })?;
+                let d = match offset {
+                    Some(k) if l.items.len() > k + 1 && simple[k + 1..].iter().all(|s| *s) => {
+                        format_args_layout(l, k)
+                    }
+                    _ => args_layout(l, &kinds, Tr::Never),
                 };
-                E::new(self.token_tree()?, ov)
+                E::new(d, Ov::ParenMacro)
             }
+            "[" => E::new(self.array()?.doc, Ov::BracketMacro),
+            _ => return self.expected("`(` or `[`"),
         };
         Ok(E::new(concat(vec![head, e.doc]), e.ov))
     }
@@ -2450,10 +2434,10 @@ impl<'s> Parser<'s> {
 }
 
 fn tuple_tr(l: &List) -> Tr {
-    if l.items.len() == 1 && l.items[0].has_comma {
-        Tr::Always
-    } else {
-        Tr::Vertical
+    match l.items.as_slice() {
+        [item] if item.has_comma => Tr::Always,
+        [_] => Tr::Never,
+        _ => Tr::Vertical,
     }
 }
 
