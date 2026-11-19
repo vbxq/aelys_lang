@@ -1,0 +1,6 @@
+needs a
+pub struct Other { pub flag: bool, pub z: i64 }
+pub fn one() -> i64 { return 1 }
+impl a.T {
+    pub fn cmp(&self, o: &Other) -> i64 { return self.x + o.z }
+}
