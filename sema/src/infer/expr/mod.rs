@@ -600,7 +600,11 @@ impl TypeInference {
         }
 
         let lit_like = self.is_literal_like(expr);
-        if lit_like && target_ty.is_integer() && !matches!(expr.kind, TypedExprKind::Int(_)) {
+        if lit_like
+            && target_ty.is_integer()
+            && *target_ty != InferType::I64
+            && !matches!(expr.kind, TypedExprKind::Int(_))
+        {
             match self.fold_int_in(expr, target_ty) {
                 Ok(_) => {
                     Self::retype_literal(expr, target_ty);
