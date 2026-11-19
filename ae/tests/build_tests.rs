@@ -64,10 +64,7 @@ fn a_compile_error_shows_the_diagnostic_and_exits_101() {
     let dir = project("b_bad", "", TYPE_ERROR);
     let output = ae(&dir, &["build"]);
     assert_eq!(output.code, Some(101), "stderr:\n{}", output.stderr);
-    assert_contains(
-        &output.stderr,
-        "error[E0301]: expected `i64`, found `string`",
-    );
+    assert_contains(&output.stderr, "error[E0301]: expected `i64`, found `&str`");
     assert_contains(&output.stderr, " --> src/main.aelys:2:5\n");
     assert_contains(
         &output.stderr,
