@@ -450,7 +450,9 @@ impl<'a> FunctionCodegen<'a> {
                     .structs
                     .iter()
                     .find(|s| s.name == name)
-                    .ok_or_else(|| CodegenError::UnsupportedType(format!("unknown struct {name}")))?;
+                    .ok_or_else(|| {
+                        CodegenError::UnsupportedType(format!("unknown struct {name}"))
+                    })?;
                 for (index, field) in def.fields.iter().enumerate() {
                     path.push(index as u32);
                     self.vec_leaves(&field.ty, path, out)?;
@@ -526,7 +528,8 @@ impl<'a> FunctionCodegen<'a> {
         self.builder.position_at_end(slow_block);
         if panic_if_shared {
             let panic_fn = self.ensure_panic_function();
-            let (msg_ptr, msg_len) = self.global_string_ptr_len("internal: nogc write to a shared buffer")?;
+            let (msg_ptr, msg_len) =
+                self.global_string_ptr_len("internal: nogc write to a shared buffer")?;
             let msg_len_val = self.context.i64_type().const_int(msg_len, false);
             self.builder
                 .build_call(panic_fn, &[msg_ptr.into(), msg_len_val.into()], "")

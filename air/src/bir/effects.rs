@@ -201,7 +201,8 @@ fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
                 if copies_a_vec(initializer, tt) {
                     w.record(RANK_COPY, stmt.span, VEC_COPY.to_string());
                 } else {
-                    w.record(RANK_TYPE, stmt.span, format!("the managed local `{}`", name));
+                    let what = format!("the managed local `{}`", name);
+                    w.record(RANK_TYPE, stmt.span, what);
                 }
             }
             walk_expr(initializer, tt, set, w, Pos::Value);

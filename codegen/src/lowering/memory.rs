@@ -21,8 +21,11 @@ impl<'a> FunctionCodegen<'a> {
         load: BasicValueEnum<'static>,
     ) -> Result<(), CodegenError> {
         if let Some(inst) = load.as_instruction_value() {
-            inst.set_metadata(self.vec_header_scope(), self.context.get_kind_id("alias.scope"))
-                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            inst.set_metadata(
+                self.vec_header_scope(),
+                self.context.get_kind_id("alias.scope"),
+            )
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         }
         Ok(())
     }

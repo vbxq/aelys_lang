@@ -97,11 +97,13 @@ fn nogc_diagnostic(
         .last()
         .is_some_and(|s| s.kind == StepKind::Operation && s.name == super::effects::VEC_COPY);
     if vec_copy {
-        message = "[nogc] copying a `Vec` in a `nogc fn` could share its buffer; pass a slice or a \
-                   reference"
-            .to_string();
+        message =
+            "[nogc] copying a `Vec` in a `nogc fn` could share its buffer; pass a slice or a \
+             reference"
+                .to_string();
         if path.len() > 2 {
-            message = format!("{} (via `{}`)", message, render_path(&path[..path.len() - 1]));
+            let via = render_path(&path[..path.len() - 1]);
+            message = format!("{message} (via `{via}`)");
         }
     } else if path.len() > 1 || stopped.is_some() {
         message = format!("{} via `{}`", message, render_path(&path));
