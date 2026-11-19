@@ -1,10 +1,10 @@
-needs a
-needs c
+mod b;
+mod a;
+mod c;
 struct Q { flag: bool, y: f64 }
-fn main() -> i64 {
-    let t = a.make(1)
-    let q = Q { flag: true, y: 2.5 }
-    println(t.cmp(&q))
-    println(c.two())
-    return 0
+fn main() {
+    let t = a::make(1);
+    let q = Q { flag: true, y: 2.5 };
+    println!("{}", t.cmp(&q));
+    println!("{}", c::two());
 }

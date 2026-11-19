@@ -1,7 +1,8 @@
-needs make from a
-needs total from b
-fn main() -> i64 {
-    let p = make(3)
-    println(total(&p))
-    return 0
+mod a;
+use a::make;
+mod b;
+use b::total;
+fn main() {
+    let p = make(3);
+    println!("{}", total(&p));
 }

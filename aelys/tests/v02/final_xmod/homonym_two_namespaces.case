@@ -1,7 +1,6 @@
-needs a
-needs b
-fn main() -> i64 {
-    let p = a.make(3)
-    println(b.total(&p))
-    return 0
+mod a;
+mod b;
+fn main() {
+    let p = a::make(3);
+    println!("{}", b::total(&p));
 }

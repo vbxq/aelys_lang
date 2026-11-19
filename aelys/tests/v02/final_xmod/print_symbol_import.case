@@ -1,5 +1,5 @@
-needs make from gfx
-fn main() -> i64 {
-    println(make(3))
-    return 0
+mod gfx;
+use gfx::make;
+fn main() {
+    println!("{}", make(3));
 }

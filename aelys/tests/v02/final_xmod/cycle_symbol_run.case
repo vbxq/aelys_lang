@@ -1,8 +1,9 @@
-needs take, mk from b
-fn main() -> i64 {
-    let x = mk(4)
-    println(take(&x))
-    let y = mk(9)
-    println(take(&y) * 3)
-    return 0
+mod a;
+mod b;
+use b::{take, mk};
+fn main() {
+    let x = mk(4);
+    println!("{}", take(&x));
+    let y = mk(9);
+    println!("{}", take(&y) * 3);
 }

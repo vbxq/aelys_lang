@@ -1,4 +1,4 @@
-needs b
+use crate::b;
 pub struct T { pub x: i64 }
-pub fn make(x: i64) -> T { return T { x: x } }
-pub fn ping() -> i64 { return b.one() }
+pub fn make(x: i64) -> T { T { x } }
+pub fn ping() -> i64 { b::one() }

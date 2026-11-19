@@ -1,2 +1,2 @@
-needs c
-pub fn show(p: &c.P) -> i64 { return p.x * 2 }
+use crate::c;
+pub fn show(p: &c::P) -> i64 { p.x * 2 }

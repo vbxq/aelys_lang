@@ -1,7 +1,7 @@
-needs W from gfx
+mod gfx;
+use gfx::W;
 struct Q { flag: bool, y: f64 }
-fn main() -> i64 {
-    let w = W { p: Q { flag: true, y: 2.5 }, k: 1 }
-    println(w.k)
-    return 0
+fn main() {
+    let w = W { p: Q { flag: true, y: 2.5 }, k: 1 };
+    println!("{}", w.k);
 }

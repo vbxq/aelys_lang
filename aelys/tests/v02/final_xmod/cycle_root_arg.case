@@ -1,7 +1,8 @@
-needs take from b
+mod a;
+mod b;
+use b::take;
 struct Q { flag: bool, y: f64 }
-fn main() -> i64 {
-    let q = Q { flag: true, y: 2.5 }
-    println(take(&q))
-    return 0
+fn main() {
+    let q = Q { flag: true, y: 2.5 };
+    println!("{}", take(&q));
 }

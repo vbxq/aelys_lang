@@ -1,7 +1,7 @@
-needs P from gfx
+mod gfx;
+use gfx::P;
 struct Q { flag: bool, y: f64 }
-fn main() -> i64 {
-    let p: P = Q { flag: true, y: 2.5 }
-    println(p.x)
-    return 0
+fn main() {
+    let p: P = Q { flag: true, y: 2.5 };
+    println!("{}", p.x);
 }

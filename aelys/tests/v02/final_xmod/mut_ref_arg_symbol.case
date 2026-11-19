@@ -1,8 +1,8 @@
-needs bump from gfx
+mod gfx;
+use gfx::bump;
 struct Q { flag: bool, y: f64 }
-fn main() -> i64 {
-    let mut q = Q { flag: true, y: 2.5 }
-    bump(&mut q)
-    println(q.y)
-    return 0
+fn main() {
+    let mut q = Q { flag: true, y: 2.5 };
+    bump(&mut q);
+    println!("{}", q.y);
 }

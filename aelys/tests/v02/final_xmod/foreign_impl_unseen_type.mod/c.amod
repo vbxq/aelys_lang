@@ -1,2 +1,2 @@
-needs b
-pub fn two() -> i64 { return b.one() + 1 }
+use crate::b;
+pub fn two() -> i64 { b::one() + 1 }

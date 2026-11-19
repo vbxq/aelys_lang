@@ -1,7 +1,7 @@
-needs total from gfx
+mod gfx;
+use gfx::total;
 struct Q { flag: bool, y: f64 }
-fn main() -> i64 {
-    let q = Q { flag: true, y: 2.5 }
-    println(total(&q))
-    return 0
+fn main() {
+    let q = Q { flag: true, y: 2.5 };
+    println!("{}", total(&q));
 }

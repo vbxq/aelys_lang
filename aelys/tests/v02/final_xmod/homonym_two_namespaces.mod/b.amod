@@ -1,2 +1,2 @@
 pub struct P { pub flag: bool, pub y: f64 }
-pub fn total(p: &P) -> f64 { return p.y }
+pub fn total(p: &P) -> f64 { p.y }
