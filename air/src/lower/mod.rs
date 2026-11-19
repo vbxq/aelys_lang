@@ -210,6 +210,7 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) fresh_returns: std::collections::HashSet<String>,
     pub(super) retaining_fns: std::collections::HashSet<String>,
     pub(super) tuples: std::cell::RefCell<std::collections::BTreeSet<usize>>,
+    pub(super) pre_lowered: std::collections::HashMap<usize, Operand>,
 }
 
 pub(super) enum StrInit {
@@ -289,6 +290,7 @@ impl<'a> LoweringContext<'a> {
             fresh_returns: std::collections::HashSet::new(),
             retaining_fns: std::collections::HashSet::new(),
             tuples: std::cell::RefCell::new(std::collections::BTreeSet::new()),
+            pre_lowered: std::collections::HashMap::new(),
         }
     }
 

@@ -44,6 +44,11 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn lower_expr(&mut self, expr: &TypedExpr) -> Operand {
+        if !self.pre_lowered.is_empty()
+            && let Some(op) = self.pre_lowered.remove(&super::view_owner::key(expr))
+        {
+            return op;
+        }
         let outer = self.site.replace(expr.span);
         let op = self.lower_expr_kind(expr);
         self.site = outer;
@@ -1963,8 +1968,21 @@ impl<'a> LoweringContext<'a> {
         )
     }
 
-    // the argument runs before the receiver address exists, so no buffer can move under it
+    // the indices run first and the address last, so the argument cannot move a buffer under it
     fn lower_string_push(&mut self, variant: &str, args: &[TypedExpr], sp: Option<Span>) -> Operand {
+        let mut indices = Vec::new();
+        receiver_indices(&args[0], &mut indices);
+        let keys: Vec<usize> = indices.iter().map(|e| super::view_owner::key(*e)).collect();
+        for (index, key) in indices.into_iter().zip(&keys) {
+            let op = match self.lower_expr(index) {
+                op @ Operand::Const(_) => op,
+                op => {
+                    let ty = self.lower_type_from_infer(&index.ty);
+                    self.emit_rvalue_to_temp(ty, Rvalue::Use(op), sp)
+                }
+            };
+            self.pre_lowered.insert(*key, op);
+        }
         let value = self.lower_expr(&args[1]);
         let value = self.hold_operand(value, &args[1], &[&args[0]], false, sp);
         let func = if variant == "push" {
@@ -1972,7 +1990,11 @@ impl<'a> LoweringContext<'a> {
         } else {
             "__aelys_string_push"
         };
-        let Some(addr) = self.place_addr_mode(&args[0], PlaceMode::Store) else {
+        let addr = self.place_addr_mode(&args[0], PlaceMode::Store);
+        for key in &keys {
+            self.pre_lowered.remove(key);
+        }
+        let Some(addr) = addr else {
             self.report_ice(
                 "ICE: the receiver of a string push denotes no storage at AIR lowering; sema \
                  must reject it (E0401)"
@@ -3498,5 +3520,28 @@ impl LoweringContext<'_> {
             }
             _ => false,
         }
+    }
+}
+
+fn receiver_indices<'e>(place: &'e TypedExpr, out: &mut Vec<&'e TypedExpr>) {
+    match &place.kind {
+        TypedExprKind::Grouping(inner)
+        | TypedExprKind::Deref(inner)
+        | TypedExprKind::Member { object: inner, .. } => receiver_indices(inner, out),
+        TypedExprKind::Index { object, index } => {
+            receiver_indices(object, out);
+            out.push(index);
+        }
+        TypedExprKind::EnumVariant {
+            enum_name,
+            variant,
+            args,
+            ..
+        } if enum_name == "Rc" && variant == "get" => {
+            if let Some(handle) = args.first() {
+                receiver_indices(handle, out);
+            }
+        }
+        _ => {}
     }
 }
