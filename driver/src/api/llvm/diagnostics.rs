@@ -1232,7 +1232,7 @@ mod tests {
                 spans: vec![None, None],
                 has_extern: false,
             },
-            "fn main() -> i64 { return 0 }\n",
+            "fn main() {}\n",
         );
         assert!(
             rendered.contains("E0427") && rendered.contains("__mono_ghost_i64"),
@@ -1258,7 +1258,7 @@ mod tests {
                 spans: vec![None, None],
                 has_extern: true,
             },
-            "fn solo() -> i64 { return 1 }\nfn main() -> i64 { return solo() }\n",
+            "fn solo() -> i64 { 1 }\nfn main() { solo(); }\n",
         );
         assert!(
             rendered.contains("E0612") && rendered.contains("solo"),
@@ -1284,7 +1284,7 @@ mod tests {
                 spans: vec![None, None],
                 has_extern: false,
             },
-            "fn solo() -> i64 { return 1 }\nfn main() -> i64 { return solo() }\n",
+            "fn solo() -> i64 { 1 }\nfn main() { solo(); }\n",
         );
         assert!(
             rendered.contains("E0427") && rendered.contains("solo"),
@@ -1303,7 +1303,7 @@ mod tests {
 
     #[test]
     fn duplicate_symbol_renders_both_labels_from_the_air_spans() {
-        let src = "fn one() -> i64 { return 1 }\nfn two() -> i64 { return 2 }\nfn main() -> i64 { return one() + two() }\n";
+        let src = "fn one() -> i64 { 1 }\nfn two() -> i64 { 2 }\nfn main() { one() + two(); }\n";
         let (typed, air, source) = stack(src);
         let spans: Vec<Option<aelys_air::Span>> = air
             .functions
