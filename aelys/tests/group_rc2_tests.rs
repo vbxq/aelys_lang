@@ -2271,7 +2271,7 @@ fn rc2_75_a_reference_escaping_in_a_vec_made_by_a_generic_is_refused() {
     let src = format!(
         "fn mkv<T>(x: T) -> Vec<T> {{\n    let mut v: Vec<T> = Vec::new();\n    Vec::push(v, x);\n\
          \x20   v\n}}\nfn esc<T>(x: T) -> Vec<&i64> {{\n    let a: [i64; 3] = [7, 8, 41];\n\
-         \x20   mkv(&a[2])\n}}\n{};",
+         \x20   mkv(&a[2])\n}}\n{}",
         RC2_75_BURN
     );
     refusal_row("rc2-75", &src, &[], "E0714", "which makes a `Vec<&i64>`");
@@ -2282,7 +2282,7 @@ fn rc2_76_a_reference_escaping_in_a_vec_made_by_a_generic_from_a_plain_function_
     let src = format!(
         "fn mkv<T>(x: T) -> Vec<T> {{\n    let mut v: Vec<T> = Vec::new();\n    Vec::push(v, x);\n\
          \x20   v\n}}\nfn esc(x: i64) -> Vec<&i64> {{\n    let a: [i64; 3] = [7, 8, 41];\n\
-         \x20   mkv(&a[2])\n}}\n{};",
+         \x20   mkv(&a[2])\n}}\n{}",
         RC2_75_BURN
     );
     refusal_row(
@@ -2345,7 +2345,7 @@ fn rc2_78_a_refused_instance_from_a_module_points_at_the_call_in_the_root_file()
         compile_file_with_llvm_variant(&root, OptimizationLevel::None, false, RuntimeVariant::Rc)
             .expect_err("rc2-78 compiled")
             .to_string();
-    assert!(text.contains("lib1.outer(&s[2])"), "rc2-78: span\n{text}");
+    assert!(text.contains("lib1::outer(&s[2])"), "rc2-78: span\n{text}");
 }
 
 #[test]
@@ -2701,7 +2701,7 @@ fn rc2_99_a_slice_of_a_string_names_substring() {
          \x20   println!(\"{}, {}\", n.last, n.first);\n}\n",
         &[],
         "E0425",
-        &["a `string` has no slices", "str.substring"],
+        &["a `string` has no slices", "str::substring"],
         &["&[dynamic]"],
     );
 }
@@ -3134,7 +3134,7 @@ fn rc2_125_a_field_of_a_value_whose_type_is_never_inferred_asks_for_an_annotatio
         &[
             "type annotations needed: the type of this value is never inferred, so its field \
              `a` cannot be resolved; annotate the binding it comes from",
-            "return p.a;",
+            "{ p.a }",
         ],
         &["E0412", "survived lowering", "E0301"],
     );

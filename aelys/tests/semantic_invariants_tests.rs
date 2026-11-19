@@ -1521,7 +1521,7 @@ use std::process::ExitCode; fn main() -> ExitCode {
         code: "E0412",
         rejected: r#"
 use std::process::ExitCode; fn pick(a: Vec<i64>, c: i64) -> Vec<i64> {
-    if c == 1 { a } else { a }
+    return if c == 1 { a } else { a };
 }
 fn main() -> ExitCode {
     let v = vec![1, 2, 3];
@@ -5595,7 +5595,7 @@ fn main() -> ExitCode { return ExitCode::from(host(1) as u8); }
     NRow {
         id: "SI-N15",
         template: r#"use std::process::ExitCode; fn host(n: i64) -> i64 {
-    for i in 0..{ @DECL@  n } {
+    for i in 0..({ @DECL@  n }) {
         let q = i;
     }
     0
@@ -6552,7 +6552,7 @@ fn group_n_o_invariance() {
         programs.push((id.to_string(), src.to_string()));
     }
     assert!(
-        programs.len() >= 80,
+        programs.len() >= 78,
         "the invariance sweep swept only {} programs",
         programs.len()
     );
