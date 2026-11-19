@@ -18,6 +18,7 @@ fn fmt_rewrites_files_in_place_and_is_stable() {
     write(&dir.join("target/skip.aelys"), MESSY);
     write(&dir.join(".hidden/skip.aelys"), MESSY);
     write(&dir.join("notes.txt"), MESSY);
+    write(&dir.join("tests/row.case"), MESSY);
     write(&dir.join("src/main.aelys.fmt-tmp"), "mine");
     assert_ok(&ae(&dir, &["fmt"]));
     let read = |p: &str| std::fs::read_to_string(dir.join(p)).unwrap();
@@ -27,9 +28,12 @@ fn fmt_rewrites_files_in_place_and_is_stable() {
     assert_eq!(read(".hidden/skip.aelys"), MESSY);
     assert_eq!(read("notes.txt"), MESSY);
     assert_eq!(read("src/main.aelys.fmt-tmp"), "mine");
+    assert_eq!(read("tests/row.case"), MESSY);
     let output = ae(&dir, &["fmt", "--check"]);
     assert_ok(&output);
     assert_eq!(output.stdout, "");
+    assert_ok(&ae(&dir, &["fmt", "tests/row.case"]));
+    assert_eq!(read("tests/row.case"), TIDY);
 }
 
 #[test]

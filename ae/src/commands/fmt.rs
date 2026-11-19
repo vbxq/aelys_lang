@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
 
-const EXTENSIONS: [&str; 3] = ["aelys", "amod", "case"];
+const EXTENSIONS: [&str; 2] = ["aelys", "amod"];
 
 pub fn run(check: bool, paths: &[PathBuf]) -> Result<()> {
     if paths.len() == 1 && paths[0] == Path::new("-") {
