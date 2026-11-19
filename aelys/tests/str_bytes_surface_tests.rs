@@ -435,8 +435,8 @@ fn sb3_a_byte_view_allocates_nothing_so_it_is_nogc() {
 const SB4_SUBSTRING_BYTES: &str = r#"
 fn main() {
     let s: String = "éléphant";
-    let head = s[0..5].to_string();
-    let tail = s[5..10].to_string();
+    let head = String::substring_bytes(s, 0, 5);
+    let tail = String::substring_bytes(s, 5, 10);
     println!("{}", head);
     println!("{}", tail);
     println!("{}", head.len());
@@ -476,7 +476,7 @@ fn main() {
 const SB5_SUBSTRING_BYTES: &str = r#"
 fn main() {
     let s: String = "hello world";
-    let t = s[0..5].to_string();
+    let t = String::substring_bytes(s, 0, 5);
     println!("{}", t);
 }
 "#;
@@ -493,7 +493,7 @@ fn sb5_a_bound_builtin_substring_and_a_bound_library_call_result_are_both_releas
 const SB6_SPLIT_A_CHARACTER: &str = r#"
 fn main() {
     let s: String = "éab";
-    let t = s[0..1].to_string();
+    let t = String::substring_bytes(s, 0, 1);
     println!("{}", t);
 }
 "#;
@@ -513,7 +513,7 @@ fn sb6_a_range_that_splits_a_character_panics_at_the_constructor() {
 const SB7_RANGE_OUT_OF_BOUNDS: &str = r#"
 fn main() {
     let s: String = "éab";
-    let t = s[0..9].to_string();
+    let t = String::substring_bytes(s, 0, 9);
     println!("{}", t);
 }
 "#;
@@ -630,7 +630,7 @@ fn main() {
 
 const SB14_SUBSTRING_BYTES_IN_A_NOGC_FN: &str = r#"
 nogc fn cut(s: String) -> String {
-    s[0..2].to_string()
+    String::substring_bytes(s, 0, 2)
 }
 
 fn main() {
@@ -681,7 +681,7 @@ use std::str;
 
 fn build(src: String) -> Vec<String> {
     let mut out = Vec::new();
-    let a: String = src[0..3].to_string();
+    let a: String = String::substring_bytes(src, 0, 3);
     let b: String = a;
     Vec::push(out, b);
     out
@@ -689,7 +689,7 @@ fn build(src: String) -> Vec<String> {
 
 fn main() {
     let v: Vec<String> = build("abcdefgh");
-    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    let poison: String = String::substring_bytes("ZZZZZZZZ", 0, 3);
     println!("{}", poison);
     println!("{}", v[0]);
 }
@@ -712,8 +712,8 @@ use std::str;
 
 fn build(src: String) -> Vec<String> {
     let mut out = Vec::new();
-    let mut a: String = src[0..3].to_string();
-    let mut b: String = src[3..6].to_string();
+    let mut a: String = String::substring_bytes(src, 0, 3);
+    let mut b: String = String::substring_bytes(src, 3, 6);
     a = b;
     Vec::push(out, b);
     println!("{}", a);
@@ -722,7 +722,7 @@ fn build(src: String) -> Vec<String> {
 
 fn main() {
     let v: Vec<String> = build("abcdefgh");
-    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    let poison: String = String::substring_bytes("ZZZZZZZZ", 0, 3);
     println!("{}", poison);
     println!("{}", v[0]);
 }
@@ -732,9 +732,9 @@ const SB17_A_SLOT_REASSIGNED_TO_ITSELF: &str = r#"
 use std::str;
 
 fn main() {
-    let mut s: String = "abcdefgh"[0..3].to_string();
+    let mut s: String = String::substring_bytes("abcdefgh", 0, 3);
     s = s;
-    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    let poison: String = String::substring_bytes("ZZZZZZZZ", 0, 3);
     println!("{}", poison);
     println!("{}", s);
 }
@@ -763,21 +763,21 @@ use std::str;
 
 fn build(src: String) -> Vec<String> {
     let mut out = Vec::new();
-    let b: String = src[2..5].to_string();
+    let b: String = String::substring_bytes(src, 2, 5);
     Vec::push(out, b);
     {
-        let mut a1: String = src[0..1].to_string();
+        let mut a1: String = String::substring_bytes(src, 0, 1);
         a1 = b;
         println!("{}", a1);
     }
-    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    let poison: String = String::substring_bytes("ZZZZZZZZ", 0, 3);
     println!("{}", poison);
     {
-        let mut a2: String = src[1..2].to_string();
+        let mut a2: String = String::substring_bytes(src, 1, 2);
         a2 = b;
         println!("{}", a2);
     }
-    let second: String = "WWWWWWWW"[0..3].to_string();
+    let second: String = String::substring_bytes("WWWWWWWW", 0, 3);
     println!("{}", second);
     println!("{}", poison);
     out
@@ -808,16 +808,16 @@ use std::str;
 
 fn build(src: String) -> Vec<String> {
     let mut out = Vec::new();
-    let mut a: String = src[0..3].to_string();
+    let mut a: String = String::substring_bytes(src, 0, 3);
     Vec::push(out, a);
-    a = src[3..6].to_string();
+    a = String::substring_bytes(src, 3, 6);
     println!("{}", a);
     out
 }
 
 fn main() {
     let v: Vec<String> = build("abcdefgh");
-    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    let poison: String = String::substring_bytes("ZZZZZZZZ", 0, 3);
     println!("{}", poison);
     println!("{}", v[0]);
 }
@@ -846,7 +846,7 @@ fn main() {
     let mut out: String = "";
     let mut i: i64 = 0;
     while i < 4 {
-        out = "abcdefgh"[0..3].to_string();
+        out = String::substring_bytes("abcdefgh", 0, 3);
         i = i + 1;
     }
     println!("{}", out);
@@ -872,9 +872,9 @@ use std::str;
 
 fn build(src: String) -> Vec<String> {
     let mut out = Vec::new();
-    let b: String = src[0..3].to_string();
+    let b: String = String::substring_bytes(src, 0, 3);
     let mut a: String = b;
-    a = src[3..6].to_string();
+    a = String::substring_bytes(src, 3, 6);
     Vec::push(out, a);
     Vec::push(out, b);
     out
@@ -882,7 +882,7 @@ fn build(src: String) -> Vec<String> {
 
 fn main() {
     let v: Vec<String> = build("abcdefgh");
-    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    let poison: String = String::substring_bytes("ZZZZZZZZ", 0, 3);
     println!("{}", poison);
     println!("{}", v[0]);
     println!("{}", v[1]);
@@ -917,12 +917,12 @@ fn main() {
         if format!("{i}") == "1" { n = n + 100; }
         Vec::push(v, "k" + format!("{i}"));
         let kept: String = id("r" + format!("{i}"));
-        let poison: String = "ZZZZZZZZ"[0..2].to_string();
+        let poison: String = String::substring_bytes("ZZZZZZZZ", 0, 2);
         println!("{}", kept + poison);
         println!("row {i} of {n}");
         i = i + 1;
     }
-    let poison: String = "ZZZZZZZZ"[0..2].to_string();
+    let poison: String = String::substring_bytes("ZZZZZZZZ", 0, 2);
     println!("{}", v[0] + v[1] + v[2] + poison);
 }
 "#;
@@ -1003,12 +1003,12 @@ fn main() {
             n = n + t.len() + s.len();
         }
         if i == 5 {
-            let poison: String = "ZZZZZZZZ"[0..2].to_string();
+            let poison: String = String::substring_bytes("ZZZZZZZZ", 0, 2);
             println!("{}", s + poison);
             break;
         }
     }
-    let poison: String = "ZZZZZZZZ"[0..2].to_string();
+    let poison: String = String::substring_bytes("ZZZZZZZZ", 0, 2);
     println!("{}", outer + poison);
     println!("{}", n);
     println!("{}", v[0] + v[1]);
@@ -1052,12 +1052,12 @@ fn main() {
         let c: String = id(base);
         let t: String = str::trim(format!(" {i} "));
         Vec::push(v, label(i + 10));
-        let poison: String = "ZZZZZZZZ"[0..2].to_string();
+        let poison: String = String::substring_bytes("ZZZZZZZZ", 0, 2);
         println!("{}", a + b + c + t + poison);
         println!("{}", label(i).len() + str::from_int(i).len());
         i = i + 1;
     }
-    let poison: String = "ZZZZZZZZ"[0..2].to_string();
+    let poison: String = String::substring_bytes("ZZZZZZZZ", 0, 2);
     println!("{}", v[0] + v[2] + base + poison);
 }
 "#;
@@ -2262,16 +2262,16 @@ fn peek(s: &String) -> i64 {
 }
 
 fn build(src: String) -> i64 {
-    let mut a: String = src[0..3].to_string();
+    let mut a: String = String::substring_bytes(src, 0, 3);
     let n: i64 = peek(&a);
-    a = src[3..6].to_string();
+    a = String::substring_bytes(src, 3, 6);
     println!("{}", a);
     n
 }
 
 fn main() {
     let n: i64 = build("abcdefgh");
-    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    let poison: String = String::substring_bytes("ZZZZZZZZ", 0, 3);
     println!("{}", poison);
     println!("{n}");
 }
@@ -2300,7 +2300,7 @@ fn main() {
     let mut out: String = "";
     let mut i: i64 = 0;
     while i < 4 {
-        out = "abcdefgh"[0..3].to_string();
+        out = String::substring_bytes("abcdefgh", 0, 3);
         i = i + 1;
     }
     println!("{}", out);

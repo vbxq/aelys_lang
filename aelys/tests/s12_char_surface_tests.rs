@@ -724,8 +724,8 @@ fn upper(s: String) -> String {
         let b: u8 = s.as_bytes()[i];
         if k == 1 && b >= 97 && b <= 122 {
             let j: i64 = (b as i64) - 97;
-            t = t + up[j..j + 1].to_string();
-        } else { t = t + s[i..i + k].to_string(); }
+            t = t + String::substring_bytes(up, j, j + 1);
+        } else { t = t + String::substring_bytes(s, i, i + k); }
         i = i + k;
     }
     t

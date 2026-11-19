@@ -237,14 +237,14 @@ const NO_PLACE_SAYS: &str = "[no-place] the receiver of `.bytes` denotes no stor
 
 const S11_VIEW_OF_A_TEMPORARY: &str = r#"
 fn mkheap(n: i64) -> String {
-    "ABCDEFGH"[0..n].to_string()
+    String::substring_bytes("ABCDEFGH", 0, n)
 }
 
 fn churn(n: i64) -> i64 {
     let mut acc: i64 = 0;
     let mut i: i64 = 0;
     while i < n {
-        let t: String = "0123456789abcdef"[0..(i % 9) + 2].to_string();
+        let t: String = String::substring_bytes("0123456789abcdef", 0, (i % 9) + 2);
         acc = acc + t.len();
         i = i + 1;
     }
@@ -262,7 +262,7 @@ const S11_VIEW_OF_A_TEMPORARY_IN_AN_ARGUMENT: &str = r#"
 nogc fn first(b: &[u8]) -> i64 { b[0] as i64 }
 
 fn mkheap() -> String {
-    "ABCDEFGH"[0..4].to_string()
+    String::substring_bytes("ABCDEFGH", 0, 4)
 }
 
 fn main() {
@@ -326,7 +326,7 @@ fn churn(n: i64) -> i64 {
     let mut acc: i64 = 0;
     let mut i: i64 = 0;
     while i < n {
-        let t: String = "0123456789abcdef"[0..(i % 9) + 2].to_string();
+        let t: String = String::substring_bytes("0123456789abcdef", 0, (i % 9) + 2);
         acc = acc + t.len();
         i = i + 1;
     }
@@ -365,7 +365,7 @@ fn churn(n: i64) -> i64 {
     let mut acc: i64 = 0;
     let mut i: i64 = 0;
     while i < n {
-        let t: String = "0123456789abcdef"[0..(i % 9) + 2].to_string();
+        let t: String = String::substring_bytes("0123456789abcdef", 0, (i % 9) + 2);
         acc = acc + t.len();
         i = i + 1;
     }
@@ -443,7 +443,7 @@ fn s11_4_the_vec_as_slice_control_stays_refused() {
 
 const S11_LENGTH_OF_A_VIEW_OF_A_TEMPORARY: &str = r#"
 fn mkheap(n: i64) -> String {
-    "ABCDEFGH"[0..n].to_string()
+    String::substring_bytes("ABCDEFGH", 0, n)
 }
 
 fn main() {

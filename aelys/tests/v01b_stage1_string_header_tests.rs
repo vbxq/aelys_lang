@@ -118,7 +118,7 @@ fn main() {
 
     let heap_concat: String = "row " + format!("{k}");
     let heap_char: String = 'A'.to_string();
-    let heap_sub: String = G[k - 5..k - 1].to_string();
+    let heap_sub: String = String::substring_bytes(G, k - 5, k - 1);
     let lit: String = "a literal";
     let b: bool = true;
     let boolstr: String = format!("{b}");
