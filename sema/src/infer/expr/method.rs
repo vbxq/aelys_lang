@@ -12,6 +12,7 @@ const RECV: &str = "__recv$";
 const VEC_ASSOCIATED: &[&str] = &["new", "with_capacity"];
 const STRING_INTRINSICS: &[&str] = &[
     "is_empty",
+    "clone",
     "as_str",
     "to_string",
     "to_owned",
@@ -120,6 +121,7 @@ impl TypeInference {
                 )
             }
             "as_str" => (recv.kind, InferType::StrRef),
+            "clone" => (recv.kind, base.clone()),
             "to_string" | "to_owned" => (recv.kind, InferType::String),
             "as_bytes" | "bytes" => (
                 TypedExprKind::Member {
@@ -697,6 +699,12 @@ impl TypeInference {
                 .copied()
                 .filter(|n| !VEC_ASSOCIATED.contains(n))
                 .collect(),
+            InferType::String | InferType::StrRef => {
+                let grows = |n: &&str| *base == InferType::String || !n.starts_with("push");
+                std::iter::once("len")
+                    .chain(STRING_INTRINSICS.iter().copied().filter(grows))
+                    .collect()
+            }
             _ => vec!["len"],
         };
         let std_hint = match std_function_for(base, member) {

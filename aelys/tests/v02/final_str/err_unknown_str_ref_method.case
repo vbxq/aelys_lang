@@ -1,0 +1,4 @@
+fn main() {
+    let r: &str = "a"
+    r.shout()
+}
