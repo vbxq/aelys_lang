@@ -1,0 +1,5 @@
+static S: i32 = 1 << 32;
+
+fn main() {
+    println!("{}", S);
+}

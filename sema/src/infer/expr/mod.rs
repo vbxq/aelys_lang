@@ -478,7 +478,10 @@ impl TypeInference {
             TypedExprKind::Int(_) | TypedExprKind::Float(_) => true,
             TypedExprKind::Grouping(inner) => self.is_literal_like(inner),
             TypedExprKind::Unary {
-                op: aelys_syntax::UnaryOp::Neg | aelys_syntax::UnaryOp::BitNot,
+                op:
+                    aelys_syntax::UnaryOp::Neg
+                    | aelys_syntax::UnaryOp::Not
+                    | aelys_syntax::UnaryOp::BitNot,
                 operand,
             } => self.is_literal_like(operand),
             TypedExprKind::Binary { left, op, right } => match op {

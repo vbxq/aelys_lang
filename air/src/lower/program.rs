@@ -861,7 +861,7 @@ impl<'a> LoweringContext<'a> {
                         .ok_or(ConstFoldFailure::FoldNotImplemented)?,
                     _ => v,
                 };
-                Self::const_int_in(expr, wrap_to(v, target))
+                Self::const_int_in(expr, wrap_to(v.into(), target))
             }
             TypedExprKind::Unary { op, operand } => {
                 let inner = self.try_const_expr(operand)?;
@@ -872,7 +872,10 @@ impl<'a> LoweringContext<'a> {
                         Self::const_int_in(expr, v)
                     }
                     (aelys_syntax::UnaryOp::Not, AirConst::Bool(b)) => Ok(AirConst::Bool(!*b)),
-                    _ => Err(self.fold_failure_of(&expr.kind)),
+                    (aelys_syntax::UnaryOp::Not | aelys_syntax::UnaryOp::BitNot, _) => {
+                        let v = const_int_of(&inner).ok_or(ConstFoldFailure::FoldNotImplemented)?;
+                        Self::const_int_in(expr, wrap_to(!i128::from(v), &expr.ty))
+                    }
                 }
             }
             TypedExprKind::Binary { op, left, right } => {
@@ -890,12 +893,19 @@ impl<'a> LoweringContext<'a> {
                     B::Ge => return Ok(AirConst::Bool(l >= r)),
                     _ => {}
                 }
+                let bits = int_bits(&expr.ty).unwrap_or(64);
                 let v = match op {
                     B::Add => l.checked_add(r),
                     B::Sub => l.checked_sub(r),
                     B::Mul => l.checked_mul(r),
                     B::Div => l.checked_div(r),
                     B::Mod => l.checked_rem(r),
+                    B::BitAnd => Some(l & r),
+                    B::BitOr => Some(l | r),
+                    B::BitXor => Some(l ^ r),
+                    B::Shl | B::Shr if r < 0 || r >= i64::from(bits) => None,
+                    B::Shl => Some(wrap_to(i128::from(l) << r, &expr.ty)),
+                    B::Shr => Some(l >> r),
                     _ => None,
                 }
                 .ok_or(ConstFoldFailure::NotAConstant)?;
@@ -977,16 +987,22 @@ impl<'a> LoweringContext<'a> {
     }
 }
 
-fn wrap_to(v: i64, ty: &InferType) -> i64 {
-    match ty {
-        InferType::I8 => v as i8 as i64,
-        InferType::I16 => v as i16 as i64,
-        InferType::I32 => v as i32 as i64,
-        InferType::U8 => v as u8 as i64,
-        InferType::U16 => v as u16 as i64,
-        InferType::U32 => v as u32 as i64,
-        _ => v,
+// the value `as` gives: the low bits of the type, read with its sign
+fn wrap_to(v: i128, ty: &InferType) -> i64 {
+    let (Some((lo, hi)), Some(bits)) = (ty.int_bounds(), int_bits(ty)) else {
+        return v as i64;
+    };
+    let low = v & ((1i128 << bits) - 1);
+    if lo < 0 && low > hi {
+        (low - (1i128 << bits)) as i64
+    } else {
+        low as i64
     }
+}
+
+fn int_bits(ty: &InferType) -> Option<u32> {
+    ty.int_bounds()
+        .map(|(lo, hi)| 128 - (hi - lo).leading_zeros())
 }
 
 fn const_int_of(c: &AirConst) -> Option<i64> {

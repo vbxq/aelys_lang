@@ -1,0 +1,2 @@
+refuse E0904
+file-scope let 'S' requires a compile-time constant initializer

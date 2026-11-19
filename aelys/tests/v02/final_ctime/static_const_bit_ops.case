@@ -1,0 +1,19 @@
+const MF_SOLID: u32 = 0x2;
+const MF_SHOOTABLE: u32 = 0x4;
+const NEG: i32 = -1;
+const BIG: i64 = 4294967301;
+
+struct Info { flags: u32, mask: i32, shifted: u8, wrapped: u32 }
+
+static T: [Info; 2] = [
+    Info { flags: MF_SOLID | MF_SHOOTABLE, mask: !0 ^ 5, shifted: (1 << 7) >> 2, wrapped: NEG as u32 },
+    Info { flags: (0xf0 & 0x3c) | 1, mask: 1 << 31, shifted: !0x0f, wrapped: BIG as u32 },
+];
+static ODD: i64 = 2 | 4 ^ 1;
+
+fn main() {
+    for info in T {
+        println!("{} {} {} {}", info.flags, info.mask, info.shifted, info.wrapped);
+    }
+    println!("{}", ODD);
+}
