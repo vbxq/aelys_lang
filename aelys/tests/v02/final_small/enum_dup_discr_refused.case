@@ -1,7 +1,6 @@
 enum E { A = 1, B = 0, C }
 
-fn main() -> i64 {
-    let x = E::A as i64
-    println(x)
-    return 0
+fn main() {
+    let x = E::A as i64;
+    println!("{}", x);
 }

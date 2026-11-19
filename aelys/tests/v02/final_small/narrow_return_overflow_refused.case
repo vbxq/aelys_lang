@@ -1,8 +1,7 @@
 fn f() -> i32 {
-    return 2000000000 + 2000000000
+    2000000000 + 2000000000
 }
 
-fn main() -> i64 {
-    println(f())
-    return 0
+fn main() {
+    println!("{}", f());
 }

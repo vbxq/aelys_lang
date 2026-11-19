@@ -1,42 +1,41 @@
 fn first(v: &Vec<i64>) -> i64 {
-    return v[0]
+    v[0]
 }
 
 fn sum(v: &Vec<i64>) -> i64 {
-    let mut t: i64 = 0
-    let mut i: i32 = 0
-    while i < v.len as i32 {
-        t = t + v[i]
-        i = i + 1
+    let mut t: i64 = 0;
+    let mut i: i32 = 0;
+    while i < v.len() as i32 {
+        t += v[i];
+        i += 1;
     }
-    return t
+    t
 }
 
 fn bump(v: &mut Vec<i64>, i: u8) {
-    v[i] = v[i] * 10
-    v[i] += 1
+    v[i] = v[i] * 10;
+    v[i] += 1;
 }
 
 fn arr_mid(a: &[i64; 5]) -> i64 {
-    return a[2] + a[4]
+    a[2] + a[4]
 }
 
 fn arr_set(a: &mut [i64; 5], i: i64, x: i64) {
-    a[i] = x
-    a[0] -= 1
+    a[i] = x;
+    a[0] -= 1;
 }
 
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[3, 4, 5]
-    println("{first(&v)} {sum(&v)}")
-    bump(&mut v, 1)
-    bump(&mut v, 2)
-    println("{v[0]} {v[1]} {v[2]} {sum(&v)}")
-    let r = &v
-    println(r[2])
-    let mut a: [i64; 5] = [1, 2, 3, 4, 5]
-    println(arr_mid(&a))
-    arr_set(&mut a, 4, 50)
-    println("{a[0]} {a[4]} {arr_mid(&a)}")
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![3, 4, 5];
+    println!("{} {}", first(&v), sum(&v));
+    bump(&mut v, 1);
+    bump(&mut v, 2);
+    println!("{} {} {} {}", v[0], v[1], v[2], sum(&v));
+    let r = &v;
+    println!("{}", r[2]);
+    let mut a: [i64; 5] = [1, 2, 3, 4, 5];
+    println!("{}", arr_mid(&a));
+    arr_set(&mut a, 4, 50);
+    println!("{} {} {}", a[0], a[4], arr_mid(&a));
 }

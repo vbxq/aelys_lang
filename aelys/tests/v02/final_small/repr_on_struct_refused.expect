@@ -1,3 +1,2 @@
-refuse E0101
-enum after `@repr(T)`
-!function after decorator
+refuse E0130
+`#[repr]` with an integer type applies to an enum

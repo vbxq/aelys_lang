@@ -1,5 +1,4 @@
-fn main() -> i64 {
-    let x: i32 = 10 / (5 - 5)
-    println(x)
-    return 0
+fn main() {
+    let x: i32 = 10 / (5 - 5);
+    println!("{}", x);
 }

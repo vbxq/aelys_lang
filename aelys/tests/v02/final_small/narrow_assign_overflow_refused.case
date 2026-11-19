@@ -1,6 +1,5 @@
-fn main() -> i64 {
-    let mut x: i32 = 0
-    x = 50000 * 50000
-    println(x)
-    return 0
+fn main() {
+    let mut x: i32 = 0;
+    x = 50000 * 50000;
+    println!("{}", x);
 }

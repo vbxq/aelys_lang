@@ -1,19 +1,18 @@
 enum Ammo { Clip = 0, Shell = 1, Cell = 2, Missile = 3 }
 
 fn code(a: Ammo) -> i32 {
-    return a as i32
+    a as i32
 }
 
-fn main() -> i64 {
-    let a = Ammo::Cell
-    let b: u8 = Ammo::Missile as u8
-    let c: i64 = Ammo::Shell as i64
-    println("{code(a)} {b} {c} {code(Ammo::Clip)}")
-    let mut total: i64 = 0
-    let all = [Ammo::Clip, Ammo::Shell, Ammo::Cell, Ammo::Missile]
+fn main() {
+    let a = Ammo::Cell;
+    let b: u8 = Ammo::Missile as u8;
+    let c: i64 = Ammo::Shell as i64;
+    println!("{} {} {} {}", code(a), b, c, code(Ammo::Clip));
+    let mut total: i64 = 0;
+    let all = [Ammo::Clip, Ammo::Shell, Ammo::Cell, Ammo::Missile];
     for i in 0..4 {
-        total = total * 10 + all[i] as i64
+        total = total * 10 + all[i] as i64;
     }
-    println(total)
-    return 0
+    println!("{}", total);
 }

@@ -1,6 +1,5 @@
-fn f(x: i16) -> i16 { return x }
+fn f(x: i16) -> i16 { x }
 
-fn main() -> i64 {
-    println(f(200 * 200))
-    return 0
+fn main() {
+    println!("{}", f(200 * 200));
 }

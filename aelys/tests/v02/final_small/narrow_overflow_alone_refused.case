@@ -1,15 +1,14 @@
 struct P { a: u8 }
 
 fn f(x: i32) -> i32 {
-    return x
+    x
 }
 
-fn main() -> i64 {
-    let x: u8 = 255 + 1
-    let mut y: i32 = 0
-    y = 2147483647 + 1
-    let p = P { a: 128 * 2 }
-    let v: [u8; 2] = [1, 255 + 1]
-    println(f(65536 * 65536))
-    return 0
+fn main() {
+    let x: u8 = 255 + 1;
+    let mut y: i32 = 0;
+    y = 2147483647 + 1;
+    let p = P { a: 128 * 2 };
+    let v: [u8; 2] = [1, 255 + 1];
+    println!("{}", f(65536 * 65536));
 }

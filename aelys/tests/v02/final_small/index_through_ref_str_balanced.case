@@ -1,50 +1,49 @@
-fn mk(i: i64) -> string { return "s{i}" }
+fn mk(i: i64) -> String { format!("s{i}") }
 
-fn pick(v: &Vec<string>, i: i32) -> string {
-    return v[i]
+fn pick(v: &Vec<String>, i: i32) -> String {
+    v[i]
 }
 
-fn total_len(v: &Vec<string>) -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
-    while i < v.len {
-        n = n + v[i].len
-        i = i + 1
+fn total_len(v: &Vec<String>) -> i64 {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
+    while i < v.len() {
+        n += v[i].len();
+        i += 1;
     }
-    return n
+    n
 }
 
-fn replace(v: &mut Vec<string>, i: u16, s: string) {
-    v[i] = s
+fn replace(v: &mut Vec<String>, i: u16, s: String) {
+    v[i] = s;
 }
 
-fn set_arr(a: &mut [string; 3], i: i32, s: string) {
-    a[i] = s
+fn set_arr(a: &mut [String; 3], i: i32, s: String) {
+    a[i] = s;
 }
 
-fn arr_get(a: &[string; 3], i: u8) -> string {
-    return a[i]
+fn arr_get(a: &[String; 3], i: u8) -> String {
+    a[i]
 }
 
-fn main() -> i64 {
-    let mut v: Vec<string> = vec[mk(1), mk(22), mk(333)]
-    let w = v
-    println(pick(&v, 2))
-    replace(&mut v, 0, mk(4444))
-    println("{v[0]} {w[0]} {total_len(&v)} {total_len(&w)}")
-    let mut k: i64 = 0
+fn main() {
+    let mut v: Vec<String> = vec![mk(1), mk(22), mk(333)];
+    let w = v;
+    println!("{}", pick(&v, 2));
+    replace(&mut v, 0, mk(4444));
+    println!("{} {} {} {}", v[0], w[0], total_len(&v), total_len(&w));
+    let mut k: i64 = 0;
     while k < 100 {
-        replace(&mut v, 1, mk(k))
-        k = k + 1
+        replace(&mut v, 1, mk(k));
+        k += 1;
     }
-    println("{pick(&v, 1)} {pick(&w, 1)}")
-    let mut a: [string; 3] = [mk(7), mk(8), mk(9)]
-    let b = a
-    k = 0
+    println!("{} {}", pick(&v, 1), pick(&w, 1));
+    let mut a: [String; 3] = [mk(7), mk(8), mk(9)];
+    let b = a;
+    k = 0;
     while k < 50 {
-        set_arr(&mut a, 2, mk(k))
-        k = k + 1
+        set_arr(&mut a, 2, mk(k));
+        k += 1;
     }
-    println("{arr_get(&a, 2)} {arr_get(&b, 2)} {a[0]}")
-    return 0
+    println!("{} {} {}", arr_get(&a, 2), arr_get(&b, 2), a[0]);
 }

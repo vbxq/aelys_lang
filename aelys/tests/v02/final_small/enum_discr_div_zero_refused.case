@@ -1,6 +1,5 @@
 enum E { A = 10 / 0 }
 
-fn main() -> i64 {
-    println(E::A as i64)
-    return 0
+fn main() {
+    println!("{}", E::A as i64);
 }

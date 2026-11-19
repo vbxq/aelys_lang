@@ -1,31 +1,30 @@
-fn main() -> i64 {
-    let v: Vec<i64> = vec[10, 20, 30, 40, 50]
-    let a: [i64; 5] = [1, 2, 3, 4, 5]
-    let s = a[0..4]
-    let i8v: i8 = 1
-    let i16v: i16 = 2
-    let i32v: i32 = 3
-    let u8v: u8 = 4
-    let u16v: u16 = 0
-    let u32v: u32 = 1
-    let u64v: u64 = 2
-    let uz: usize = 3
-    let iz: isize = 4
-    println("{v[i8v]} {v[i16v]} {v[i32v]} {v[u8v]} {v[u16v]} {v[u32v]} {v[u64v]} {v[uz]} {v[iz]}")
-    println("{a[i8v]} {a[i16v]} {a[i32v]} {a[u8v]} {a[u16v]} {a[u32v]} {a[u64v]} {a[uz]} {a[iz]}")
-    println("{s[u16v]} {s[i32v - 1]} {s[u8v - 2]}")
-    let mut m: Vec<i64> = vec[0, 0, 0, 0]
-    let mut b: [i64; 4] = [0, 0, 0, 0]
-    let mut j: u8 = 0
+fn main() {
+    let v: Vec<i64> = vec![10, 20, 30, 40, 50];
+    let a: [i64; 5] = [1, 2, 3, 4, 5];
+    let s = a[0..4];
+    let i8v: i8 = 1;
+    let i16v: i16 = 2;
+    let i32v: i32 = 3;
+    let u8v: u8 = 4;
+    let u16v: u16 = 0;
+    let u32v: u32 = 1;
+    let u64v: u64 = 2;
+    let uz: usize = 3;
+    let iz: isize = 4;
+    println!("{} {} {} {} {} {} {} {} {}", v[i8v], v[i16v], v[i32v], v[u8v], v[u16v], v[u32v], v[u64v], v[uz], v[iz]);
+    println!("{} {} {} {} {} {} {} {} {}", a[i8v], a[i16v], a[i32v], a[u8v], a[u16v], a[u32v], a[u64v], a[uz], a[iz]);
+    println!("{} {} {}", s[u16v], s[i32v - 1], s[u8v - 2]);
+    let mut m: Vec<i64> = vec![0, 0, 0, 0];
+    let mut b: [i64; 4] = [0, 0, 0, 0];
+    let mut j: u8 = 0;
     while j < 4 {
-        m[j] = j as i64 * 7
-        b[j] = m[j] + 1
-        m[j] += 100
-        b[j] *= 2
-        j = j + 1
+        m[j] = j as i64 * 7;
+        b[j] = m[j] + 1;
+        m[j] += 100;
+        b[j] *= 2;
+        j += 1;
     }
-    println("{m[0]} {m[1]} {m[2]} {m[3]} {b[0]} {b[1]} {b[2]} {b[3]}")
-    let k: i32 = 2
-    println(v[k + 2])
-    return 0
+    println!("{} {} {} {} {} {} {} {}", m[0], m[1], m[2], m[3], b[0], b[1], b[2], b[3]);
+    let k: i32 = 2;
+    println!("{}", v[k + 2]);
 }

@@ -1,11 +1,11 @@
-needs Ammo, code from ammo
+mod ammo;
+use ammo::{Ammo, code};
 
-fn main() -> i64 {
-    let a = Ammo::Shell
-    let n = a as i64
-    let c = Ammo::Cell as u8
-    let back = match Ammo::from_i64(-2) { Some(x) => code(x), None => 0 }
-    let miss = match Ammo::from_i64(7) { Some(x) => code(x), None => 99 }
-    println("{n} {c} {back} {miss} {code(Ammo::Clip)}")
-    return 0
+fn main() {
+    let a = Ammo::Shell;
+    let n = a as i64;
+    let c = Ammo::Cell as u8;
+    let back = match Ammo::from_i64(-2) { Some(x) => code(x), None => 0 };
+    let miss = match Ammo::from_i64(7) { Some(x) => code(x), None => 99 };
+    println!("{} {} {} {} {}", n, c, back, miss, code(Ammo::Clip));
 }

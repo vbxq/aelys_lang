@@ -1,8 +1,7 @@
-fn main() -> i64 {
-    let a: [i64; 3] = [1, 2, 3]
-    let mut i: i16 = 1
-    println(a[i])
-    i = i - 2
-    println(a[i])
-    return 0
+fn main() {
+    let a: [i64; 3] = [1, 2, 3];
+    let mut i: i16 = 1;
+    println!("{}", a[i]);
+    i -= 2;
+    println!("{}", a[i]);
 }

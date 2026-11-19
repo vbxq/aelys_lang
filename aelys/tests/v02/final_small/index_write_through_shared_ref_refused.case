@@ -1,10 +1,9 @@
 fn set(v: &Vec<i64>) {
-    v[0] = 5
+    v[0] = 5;
 }
 
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1]
-    set(&v)
-    println(v[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1];
+    set(&v);
+    println!("{}", v[0]);
 }

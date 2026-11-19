@@ -1,6 +1,4 @@
-@repr(u8)
+#[repr(u8)]
 struct S { x: i64 }
 
-fn main() -> i64 {
-    return 0
-}
+fn main() {}
