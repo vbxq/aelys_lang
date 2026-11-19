@@ -1,0 +1,7 @@
+needs total from gfx
+struct P { flag: bool, y: f64 }
+fn main() -> i64 {
+    let p = P { flag: true, y: 2.5 }
+    println(total(&p))
+    return 0
+}

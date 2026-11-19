@@ -328,3 +328,8 @@ fn track_final_str() {
 fn track_final_syntax() {
     run_track("final_syntax");
 }
+
+#[test]
+fn track_final_xmod() {
+    run_track("final_xmod");
+}

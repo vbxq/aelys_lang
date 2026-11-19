@@ -1,0 +1,7 @@
+needs rtotal from gfx
+struct Q { flag: bool, y: f64 }
+fn main() -> i64 {
+    let r: Rc<Q> = Rc::new(Q { flag: true, y: 2.5 })
+    println(rtotal(r))
+    return 0
+}

@@ -1,0 +1,7 @@
+needs make from a
+needs total from b
+fn main() -> i64 {
+    let p = make(3)
+    println(total(&p))
+    return 0
+}

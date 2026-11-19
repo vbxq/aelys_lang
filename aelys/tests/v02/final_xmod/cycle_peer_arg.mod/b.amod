@@ -1,0 +1,4 @@
+needs a
+pub struct B { pub x: i64 }
+pub fn take(p: &B) -> i64 { return p.x }
+pub fn back() -> i64 { return a.go(1) }

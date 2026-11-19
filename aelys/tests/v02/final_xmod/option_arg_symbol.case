@@ -1,0 +1,7 @@
+needs osum from gfx
+struct Q { flag: bool, y: f64 }
+fn main() -> i64 {
+    let o: Option<Q> = Some(Q { flag: true, y: 2.5 })
+    println(osum(o))
+    return 0
+}

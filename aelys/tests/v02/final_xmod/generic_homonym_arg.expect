@@ -1,0 +1,2 @@
+refuse E0301
+expected `gfx.Box<i64>`, found `Box<i64>`

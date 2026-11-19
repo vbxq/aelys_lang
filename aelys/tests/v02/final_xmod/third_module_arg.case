@@ -1,0 +1,7 @@
+needs show from b
+struct Q { flag: bool, y: f64 }
+fn main() -> i64 {
+    let q = Q { flag: true, y: 2.5 }
+    println(show(&q))
+    return 0
+}

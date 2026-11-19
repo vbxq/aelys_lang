@@ -1,0 +1,3 @@
+needs b
+pub struct A { pub x: i64 }
+pub fn mk(x: i64) -> A { return A { x: x } }

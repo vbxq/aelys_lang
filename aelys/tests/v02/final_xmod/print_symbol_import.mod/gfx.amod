@@ -1,0 +1,35 @@
+pub struct P { pub x: i64 }
+pub struct W { pub p: P, pub k: i64 }
+pub struct Box<T> { pub v: T }
+pub enum Color { Red, Green(i64) }
+
+impl P {
+    pub fn add(&self, o: &P) -> i64 { return self.x + o.x }
+}
+
+pub fn total(p: &P) -> i64 { return p.x }
+pub fn total_v(p: P) -> i64 { return p.x }
+pub fn bump(p: &mut P) { p.x = p.x + 1 }
+pub fn rtotal(p: Rc<P>) -> i64 { return p.x }
+pub fn vsum(v: Vec<P>) -> i64 {
+    let mut s = 0
+    for i in 0..v.len() { s = s + v[i].x }
+    return s
+}
+pub fn osum(o: Option<P>) -> i64 {
+    return match o {
+        Some(p) => p.x,
+        None => 0
+    }
+}
+pub fn make(x: i64) -> P { return P { x: x } }
+pub fn pair(x: i64) -> (P, i64) { return (P { x: x }, x + 1) }
+pub fn code(c: &Color) -> i64 {
+    return match c {
+        Color::Red => 1,
+        Color::Green(n) => 100 + n
+    }
+}
+pub fn unbox(b: &Box<i64>) -> i64 { return b.v }
+pub fn unbox_p(b: &Box<P>) -> i64 { return b.v.x }
+pub fn ident<T>(x: T) -> T { return x }

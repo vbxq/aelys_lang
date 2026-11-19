@@ -839,24 +839,6 @@ fn group_mod_t1_a_type_survives_two_module_hops() {
     );
 }
 
-// a transitively reached type must be a type, not a fresh variable that unifies with anything
-#[test]
-fn group_mod_t2_a_transitive_type_is_not_a_free_variable() {
-    reject_row(
-        "T-2",
-        &[
-            (
-                "root.aelys",
-                "use std::process::ExitCode; mod mid;\n\nfn show(s: String) -> i64 {\n    println!(\"{}\", s);\n    0\n}\n\nfn main() -> ExitCode {\n    let p = mid::pass(41, 99);\n    return ExitCode::from(show(p) as u8);\n}\n",
-            ),
-            ("mid.aelys", DEEP_MID),
-            ("a.aelys", DEEP_STRUCT),
-        ],
-        "[E0301]",
-        "found `P`",
-    );
-}
-
 #[test]
 fn group_mod_t3_a_module_may_stand_on_another_module() {
     run_row(

@@ -1,0 +1,7 @@
+needs total_v from gfx
+struct Q { flag: bool, y: f64 }
+fn main() -> i64 {
+    let q = Q { flag: true, y: 2.5 }
+    println(total_v(q))
+    return 0
+}

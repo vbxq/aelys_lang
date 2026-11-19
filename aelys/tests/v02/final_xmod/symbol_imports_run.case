@@ -1,0 +1,27 @@
+needs make, total, total_v, bump, rtotal, vsum, osum, code, unbox, pair, ident, Box, Color from gfx
+struct P { flag: bool, y: f64 }
+fn main() -> i64 {
+    let mut p = make(5)
+    bump(&mut p)
+    println(total(&p))
+    println(total_v(make(9)))
+    println(rtotal(Rc::new(make(11))))
+    let mut v = Vec::new()
+    v.push(make(1))
+    v.push(make(20))
+    println(vsum(v))
+    println(osum(Some(make(13))))
+    let c = Color::Green(4)
+    println(code(&c))
+    let bx = Box { v: 77 }
+    println(unbox(&bx))
+    let t = pair(30)
+    println(total(&t.0) + t.1)
+    let mine = ident(P { flag: true, y: 2.5 })
+    println(mine.y)
+    println(ident(make(8)).x)
+    let hundred = make(100)
+    println(p.add(&hundred))
+    println(p.x)
+    return 0
+}

@@ -1,0 +1,2 @@
+needs a
+pub fn take(p: &a.A) -> i64 { return p.x }

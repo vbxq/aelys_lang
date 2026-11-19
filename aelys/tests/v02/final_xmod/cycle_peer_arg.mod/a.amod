@@ -1,0 +1,6 @@
+needs take from b
+pub struct A { pub flag: bool, pub y: f64 }
+pub fn go(n: i64) -> i64 {
+    let v = A { flag: true, y: 2.5 }
+    return take(&v) + n
+}

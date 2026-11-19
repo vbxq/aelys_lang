@@ -1,0 +1,2 @@
+needs c
+pub fn show(p: &c.P) -> i64 { return p.x * 2 }

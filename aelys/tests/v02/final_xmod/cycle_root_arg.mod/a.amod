@@ -1,0 +1,7 @@
+needs b
+pub struct A { pub x: i64 }
+pub fn mk(x: i64) -> A { return A { x: x } }
+pub fn twice(n: i64) -> i64 {
+    let v = mk(n)
+    return b.take(&v) * 2
+}
