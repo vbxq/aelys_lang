@@ -37,7 +37,7 @@ fn rejects_as_a_value(id: &str, body: &str) {
 }
 
 fn rejects_as_a_value_n(id: &str, body: &str, hits: usize) {
-    let source = format!("{LABS}\n{body};");
+    let source = format!("{LABS}\n{body}");
     for (level, opt) in LEVELS {
         let dir = tempdir().expect("tempdir");
         let root = dir.path().join("root.aelys");

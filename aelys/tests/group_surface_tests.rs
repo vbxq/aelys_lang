@@ -431,7 +431,7 @@ fn group_surface_a_string_carries_a_byte_view() {
          \x20   return 0\n\
          }}\n"
     );
-    h.value_row("str_bytes", &src, &format!("{MULTI_BYTE_BYTES}\n104;\n"));
+    h.value_row("str_bytes", &src, &format!("{MULTI_BYTE_BYTES}\n104\n"));
 }
 
 #[test]
@@ -622,7 +622,7 @@ fn group_surface_a_library_prints_a_multi_byte_string() {
     h.value_row(
         "library_print",
         &src,
-        &format!("{MULTI_BYTE}{MULTI_BYTE_BYTES};\n{MULTI_BYTE_BYTES}\n"),
+        &format!("{MULTI_BYTE}{MULTI_BYTE_BYTES}\n{MULTI_BYTE_BYTES}\n"),
     );
 }
 
@@ -857,7 +857,7 @@ fn group_surface_control_a_multi_byte_literal_reaches_the_program_intact() {
     h.value_row(
         "control_multi_byte",
         &src,
-        &format!("{MULTI_BYTE_BYTES}\n0;\n"),
+        &format!("{MULTI_BYTE_BYTES}\n0\n"),
     );
 }
 
@@ -934,7 +934,7 @@ fn group_surface_one_file_under_two_dotted_names_is_one_unit() {
          \n\
          pub fn label() -> String {{ \"{MULTI_BYTE}\" }}\n"
     );
-    let expected = format!("3;\n3;\n{MULTI_BYTE}\n");
+    let expected = format!("3\n3\n{MULTI_BYTE}\n");
 
     for (tag, opt) in LEVELS {
         let nested_src = "use lib::counter as a;\n\
