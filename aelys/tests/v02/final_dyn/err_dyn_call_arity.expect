@@ -1,0 +1,3 @@
+refuse E0302
+`v` takes 0 argument(s) but 1 were supplied
+!expected 0, found 1
