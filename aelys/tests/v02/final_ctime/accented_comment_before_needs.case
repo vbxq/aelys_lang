@@ -1,0 +1,9 @@
+// é
+// é
+use std::str;
+use std::vec;
+
+fn main() {
+    let v: Vec<String> = vec![" a "];
+    println!("[{}] {}", v[0].trim(), v.is_empty());
+}

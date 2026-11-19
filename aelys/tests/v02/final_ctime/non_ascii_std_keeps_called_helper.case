@@ -1,0 +1,6 @@
+fn main() {
+    let r: Result<i64, i64> = Ok(3);
+    let o = r.ok();
+    let e: Result<i64, i64> = Err(4);
+    println!("{} {}", o.unwrap_or(0), e.ok().unwrap_or(9));
+}
