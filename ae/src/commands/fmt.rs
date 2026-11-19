@@ -73,22 +73,21 @@ fn stdin(check: bool) -> Result<()> {
 }
 
 fn walk(dir: &Path, files: &mut Vec<PathBuf>) -> std::io::Result<()> {
-    let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)?
-        .map(|entry| entry.map(|e| e.path()))
-        .collect::<std::io::Result<_>>()?;
-    entries.sort();
-    for path in entries {
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        if path.is_dir() {
+    let mut entries = std::fs::read_dir(dir)?.collect::<std::io::Result<Vec<_>>>()?;
+    entries.sort_by_key(|e| e.file_name());
+    for entry in entries {
+        let path = entry.path();
+        let file_type = entry.file_type()?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if file_type.is_dir() {
             if name != "target" && !name.starts_with('.') {
                 walk(&path, files)?;
             }
-        } else if path
-            .extension()
-            .is_some_and(|ext| EXTENSIONS.iter().any(|e| ext == *e))
+        } else if file_type.is_file()
+            && path
+                .extension()
+                .is_some_and(|ext| EXTENSIONS.iter().any(|e| ext == *e))
         {
             files.push(path);
         }
@@ -110,23 +109,47 @@ fn format_file(path: &Path, check: bool) -> std::result::Result<bool, String> {
         print!("{}", diff(&shown.to_string(), &src, &out));
         return Ok(true);
     }
-    let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".fmt-tmp");
-    let tmp = PathBuf::from(tmp);
-    let written = std::fs::File::create(&tmp)
-        .and_then(|mut f| {
-            if let Ok(meta) = std::fs::metadata(path) {
-                f.set_permissions(meta.permissions())?;
-            }
-            f.write_all(out.as_bytes())?;
-            f.sync_all()
-        })
-        .and_then(|()| std::fs::rename(&tmp, path));
-    if let Err(err) = written {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(format!("{shown}: {err}"));
-    }
+    write_atomic(path, &out).map_err(|err| format!("{shown}: {err}"))?;
     Ok(true)
+}
+
+fn write_atomic(path: &Path, contents: &str) -> std::io::Result<()> {
+    let target = std::fs::canonicalize(path)?;
+    let permissions = std::fs::metadata(&target)?.permissions();
+    if permissions.readonly() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "the file is read-only",
+        ));
+    }
+    let (tmp, mut file) = create_temp(&target)?;
+    let written = file
+        .set_permissions(permissions)
+        .and_then(|()| file.write_all(contents.as_bytes()))
+        .and_then(|()| file.sync_all())
+        .and_then(|()| std::fs::rename(&tmp, &target));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    written
+}
+
+fn create_temp(target: &Path) -> std::io::Result<(PathBuf, std::fs::File)> {
+    let mut n = 0u32;
+    loop {
+        let mut name = target.as_os_str().to_owned();
+        name.push(format!(".{}.{n}.fmt-tmp", std::process::id()));
+        let tmp = PathBuf::from(name);
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)
+        {
+            Ok(file) => return Ok((tmp, file)),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => n += 1,
+            Err(err) => return Err(err),
+        }
+    }
 }
 
 fn diff(name: &str, old: &str, new: &str) -> String {
