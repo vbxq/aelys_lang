@@ -453,6 +453,23 @@ struct Typed {
     globals: HashSet<String>,
 }
 
+fn exports_of(
+    unit: &crate::modules::ModuleUnit,
+    program: &aelys_sema::TypedProgram,
+) -> Result<aelys_sema::ModuleExports, AelysError> {
+    aelys_sema::modules::collect_exports(&unit.dotted, program).map_err(|message| {
+        backend_diagnostic_error(
+            unit.source.clone(),
+            fallback_source_span(unit.source.as_ref()),
+            "exports",
+            message,
+            None,
+            None,
+            Fault::Compiler,
+        )
+    })
+}
+
 fn typecheck(
     unit: &crate::modules::ModuleUnit,
     imports: aelys_sema::ModuleImports,
@@ -532,19 +549,7 @@ fn front_stage(
         None => return Err(multiple_diagnostics(collected_errors)),
     };
 
-    let exports = aelys_sema::modules::collect_exports(&unit.dotted, checked.program())
-        .map_err(|message| {
-            backend_diagnostic_error(
-                src.clone(),
-                fallback_source_span(src.as_ref()),
-                "exports",
-                message,
-                None,
-                None,
-                Fault::Compiler,
-            )
-        })?;
-    let exports = Arc::new(exports);
+    let exports = Arc::new(exports_of(unit, checked.program())?);
 
     Ok((
         ModuleFront {
@@ -903,10 +908,7 @@ fn lower_file_to_air_with_source(
         if group_start.is_some_and(|start| index >= start) {
             aelys_sema::localize::localize_imports(&mut imports);
             let typed = typecheck(unit, imports)?;
-            exports[index] = Arc::new(aelys_sema::modules::collect_exports(
-                &unit.dotted,
-                &typed.inference.program,
-            ));
+            exports[index] = Arc::new(exports_of(unit, &typed.inference.program)?);
             grouped.push(typed);
             continue;
         }

@@ -1,12 +1,12 @@
 use super::{
-    ModuleFront, Typed, backend_diagnostic_error, build_imports, fall_back_to_prelude,
+    ModuleFront, Typed, backend_diagnostic_error, build_imports, exports_of, fall_back_to_prelude,
     fallback_source_span, known_globals,
 };
 use crate::modules::ModuleUnit;
 use aelys_air::{AirEnumDef, AirFunction, AirStructDef};
 use aelys_common::error::{AelysError, Fault};
 use aelys_sema::localize::{erase_type_vars, localize_imports};
-use aelys_sema::modules::{collect_exports, qualify_value};
+use aelys_sema::modules::qualify_value;
 use aelys_sema::{ModuleExports, ModuleImports, TypeInference, TypedProgram};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -39,7 +39,7 @@ pub(super) fn declare(
                 imports,
                 known_globals(),
             );
-            let mut declared = collect_exports(&unit.dotted, &program);
+            let mut declared = exports_of(unit, &program)?;
             erase_type_vars(&mut declared);
             if *exports[index] != declared {
                 settled = false;
