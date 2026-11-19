@@ -152,33 +152,43 @@ fn create_temp(target: &Path) -> std::io::Result<(PathBuf, std::fs::File)> {
     }
 }
 
+const DIFF_BUDGET: usize = 1 << 22;
+const DIFF_MAX_EDITS: usize = 2048;
+
 fn diff(name: &str, old: &str, new: &str) -> String {
     let a: Vec<&str> = old.lines().collect();
     let b: Vec<&str> = new.lines().collect();
-    let (n, m) = (a.len(), b.len());
-    let mut lcs = vec![vec![0u32; m + 1]; n + 1];
-    for i in (0..n).rev() {
-        for j in (0..m).rev() {
-            lcs[i][j] = if a[i] == b[j] {
-                lcs[i + 1][j + 1] + 1
-            } else {
-                lcs[i + 1][j].max(lcs[i][j + 1])
-            };
-        }
-    }
-    let mut ops = Vec::new();
+    let prefix = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+    let suffix = a[prefix..]
+        .iter()
+        .rev()
+        .zip(b[prefix..].iter().rev())
+        .take_while(|(x, y)| x == y)
+        .count();
+    let mut script = vec![' '; prefix];
+    script.extend(edit_script(
+        &a[prefix..a.len() - suffix],
+        &b[prefix..b.len() - suffix],
+    ));
+    script.extend(std::iter::repeat_n(' ', suffix));
+    let mut ops = Vec::with_capacity(script.len());
     let (mut i, mut j) = (0, 0);
-    while i < n || j < m {
-        if i < n && j < m && a[i] == b[j] {
-            ops.push((' ', i, j));
+    for run in script.chunk_by(|x, y| (*x == ' ') == (*y == ' ')) {
+        if run[0] == ' ' {
+            for _ in run {
+                ops.push((' ', i, j));
+                i += 1;
+                j += 1;
+            }
+            continue;
+        }
+        for &op in run.iter().filter(|op| **op == '-') {
+            ops.push((op, i, j));
             i += 1;
+        }
+        for &op in run.iter().filter(|op| **op == '+') {
+            ops.push((op, i, j));
             j += 1;
-        } else if j < m && (i == n || lcs[i][j + 1] >= lcs[i + 1][j]) {
-            ops.push(('+', i, j));
-            j += 1;
-        } else {
-            ops.push(('-', i, j));
-            i += 1;
         }
     }
     let mut out = format!("--- {name}\n+++ {name}\n");
@@ -215,9 +225,106 @@ fn diff(name: &str, old: &str, new: &str) -> String {
     out
 }
 
+fn edit_script(a: &[&str], b: &[&str]) -> Vec<char> {
+    let (n, m) = (a.len(), b.len());
+    let limit = (n + m)
+        .min(DIFF_MAX_EDITS)
+        .min(DIFF_BUDGET / (n + m).max(1));
+    let off = limit + 1;
+    let mut v = vec![0usize; 2 * limit + 3];
+    let mut trace: Vec<Vec<usize>> = Vec::new();
+    for d in 0..=limit {
+        for k in (off - d..=off + d).step_by(2) {
+            let mut x = if k == off - d || (k != off + d && v[k - 1] < v[k + 1]) {
+                v[k + 1]
+            } else {
+                v[k - 1] + 1
+            };
+            let mut y = x + off - k;
+            while x < n && y < m && a[x] == b[y] {
+                x += 1;
+                y += 1;
+            }
+            v[k] = x;
+            if x >= n && y >= m {
+                trace.push(v[off - d..=off + d].to_vec());
+                return backtrack(&trace, n, m);
+            }
+        }
+        trace.push(v[off - d..=off + d].to_vec());
+    }
+    let mut script = vec!['-'; n];
+    script.extend(std::iter::repeat_n('+', m));
+    script
+}
+
+fn backtrack(trace: &[Vec<usize>], n: usize, m: usize) -> Vec<char> {
+    let mut script = Vec::new();
+    let (mut x, mut y) = (n, m);
+    for d in (1..trace.len()).rev() {
+        let prev = &trace[d - 1];
+        let k = x + d - y;
+        let down = k == 0 || (k != 2 * d && prev[k - 2] < prev[k]);
+        let prev_k = if down { k } else { k - 2 };
+        let px = prev[prev_k];
+        let py = px + d - 1 - prev_k;
+        let sx = if down { px } else { px + 1 };
+        script.extend(std::iter::repeat_n(' ', x - sx));
+        script.push(if down { '+' } else { '-' });
+        x = px;
+        y = py;
+    }
+    script.extend(std::iter::repeat_n(' ', x));
+    script.reverse();
+    script
+}
+
 fn exit(code: u8) -> Result<()> {
     Err(Error {
         diagnostics: Vec::new(),
         code,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use super::diff;
+
+    const BLOCK: &str = "struct Pair@<Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, Bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, Cccccccccccccccccccccccccccc> { a: Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, b: Bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, c: Cccccccccccccccccccccccccccc,
+}
+enum Shape@ { Circle(i64), Rect(i64, i64),
+}
+fn add@( first_number_argument: i64, second_number_argument: i64, third_arg: i64,
+) -> i64 { first_number_argument + second_number_argument + third_arg
+}
+fn main_@() { let total = add@(1000000000000, 2000000000000000, 3000000000000000000); let v: Vec<i64> = vec![     100000000000000,     200000000000000,     300000000000000,     400000000000000,     5, ]; let arr = [     100000000000000,     200000000000000,     300000000000000,     400000000000000,     500000000000, ]; let p = Pair@ {     a: 1000000000000000000,     b: 2000000000000000000,     c: 3000000000000000, }; let t = (     100000000000000000,     200000000000000000,     300000000000000000,     400000000000000000, ); let s = Shape@::Rect(     1000000000000000000,     200000000000000000, ); assert_eq!(     add@(1, 2, 3),     6,     \"sum of one two three should equal six here\" ); println!(\"{} {} {} {} {}\", total, v.len(), arr.len(), p.a, t.0); let m = match s {     Shape@::Circle(r) => r,     Shape@::Rect(w, h) => w + h, }; println!(\"{}\", m > 0);
+}
+
+";
+
+    #[test]
+    fn diff_lists_removed_lines_before_added_ones() {
+        assert_eq!(
+            diff("f", "a\nb\nc\nd\n", "a\nx\nc\ny\nz\n"),
+            "--- f\n+++ f\n@@ -1,4 +1,5 @@\n a\n-b\n+x\n c\n-d\n+y\n+z\n"
+        );
+    }
+
+    #[test]
+    fn diff_of_a_large_reformat_is_fast() {
+        let old: String = (0..1000)
+            .map(|i| BLOCK.replace('@', &i.to_string()))
+            .collect();
+        let new = aelys_fmt::format_source(&old).unwrap();
+        let start = Instant::now();
+        let out = diff("big", &old, &new);
+        assert!(
+            start.elapsed() < Duration::from_secs(2),
+            "{:?}",
+            start.elapsed()
+        );
+        assert!(out.lines().filter(|l| l.starts_with('+')).count() > 40_000);
+    }
 }
