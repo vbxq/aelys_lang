@@ -74,6 +74,7 @@ fn vec_call_kept(kind: &AirStmtKind) -> Option<Vec<Operand>> {
         | "__aelys_vec_release"
         | "__aelys_string_push"
         | "__aelys_string_push_char" => Some(Vec::new()),
+        name if name == crate::symbols::MAKE_UNIQUE_THROUGH => Some(Vec::new()),
         _ => None,
     }
 }

@@ -1,0 +1,14 @@
+struct R { screen: Vec<u8>, w: i64 }
+
+nogc fn draw(r: &mut R, x: i64) { r.screen[x] = 7 as u8 }
+
+fn main() -> i64 {
+    let mut r = R { screen: Vec::new(), w: 0 }
+    for i in 0..4 { r.screen.push(1 as u8) }
+    let w = r.screen
+    draw(&mut r, 0)
+    let q = r
+    draw(&mut r, 1)
+    println("{w[0]} {r.screen[0]} {q.screen[1]} {r.screen[1]}")
+    return 0
+}

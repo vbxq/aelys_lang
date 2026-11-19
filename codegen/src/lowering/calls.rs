@@ -74,6 +74,15 @@ impl<'a> FunctionCodegen<'a> {
             if name == "__aelys_vec_detach" || name == "__aelys_vec_require_unique" {
                 return self.generate_vec_detach_call(args, name == "__aelys_vec_require_unique");
             }
+            if name == aelys_air::symbols::MAKE_UNIQUE_THROUGH {
+                let [Operand::Copy(local) | Operand::Move(local)] = args else {
+                    return Err(CodegenError::UnsupportedInstruction(
+                        "make_unique_through expects exactly one local operand".to_string(),
+                    ));
+                };
+                self.emit_make_unique_through(*local)?;
+                return Ok(None);
+            }
             if name == "__aelys_cycle_poll" && args.is_empty() {
                 self.emit_cycle_poll()?;
                 return Ok(None);

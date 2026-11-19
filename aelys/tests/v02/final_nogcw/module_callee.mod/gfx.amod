@@ -1,0 +1,3 @@
+pub struct R { pub screen: Vec<u8>, pub w: i64 }
+
+pub nogc fn draw(r: &mut R, x: i64) { r.screen[x] = 7 as u8 }

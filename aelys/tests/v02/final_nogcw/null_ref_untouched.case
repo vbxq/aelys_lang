@@ -1,0 +1,15 @@
+struct R { screen: Vec<u8>, w: i64 }
+
+nogc fn maybe(r: &mut R, flag: bool) -> i64 {
+    if flag { r.screen[0] = 7 as u8 }
+    return 5
+}
+
+fn main() -> i64 {
+    let h: Rc<R> = Rc::null()
+    let a = maybe(&mut Rc::get(h), false)
+    println("{a}")
+    let b = maybe(&mut Rc::get(h), true)
+    println("unreachable {b}")
+    return 0
+}

@@ -4,7 +4,7 @@ use crate::lowering::stmts::RC_HEADER_SIZE;
 
 // must stay equal to aelys_rc_dead in core/src/aelys_rc.h
 const RC_DEAD: u32 = 0xAE11_DEAD;
-use crate::types::aelys_string_type;
+use crate::types::{aelys_string_type, air_basic_type_to_llvm};
 use aelys_air::{AirType, LocalId};
 use inkwell::AddressSpace;
 use inkwell::IntPredicate;
@@ -381,6 +381,94 @@ impl<'a> FunctionCodegen<'a> {
         } else {
             self.lookup_local_ptr(local)?
         };
+        self.emit_vec_detach_at(v_alloca, inner, through_ptr, panic_if_shared)
+    }
+
+    // a nogc callee panics on a shared buffer, so its caller detaches every vec the reference reaches
+    pub(crate) fn emit_make_unique_through(&mut self, local: LocalId) -> Result<(), CodegenError> {
+        let pointee = match self.local_air_type(local)? {
+            AirType::Ptr(pointee) | AirType::Rc(pointee) => (**pointee).clone(),
+            other => {
+                return Err(CodegenError::UnsupportedType(format!(
+                    "make_unique_through argument has type {other:?}, not a reference"
+                )));
+            }
+        };
+        let mut leaves = Vec::new();
+        self.vec_leaves(&pointee, &mut Vec::new(), &mut leaves)?;
+        if leaves.is_empty() {
+            return Ok(());
+        }
+        let base = self.load_local(local)?.into_pointer_value();
+        let body_block = self.context.append_basic_block(self.function, "mu_body");
+        let cont_block = self.context.append_basic_block(self.function, "mu_cont");
+        let is_null = self
+            .builder
+            .build_is_null(base, "mu_null")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.builder
+            .build_conditional_branch(is_null, cont_block, body_block)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.builder.position_at_end(body_block);
+        let base_ty = air_basic_type_to_llvm(&pointee, self.context)?;
+        let i32_ty = self.context.i32_type();
+        for (path, inner) in leaves {
+            let v_ptr = if path.is_empty() {
+                base
+            } else {
+                let indices: Vec<_> = std::iter::once(0)
+                    .chain(path)
+                    .map(|i| i32_ty.const_int(u64::from(i), false))
+                    .collect();
+                unsafe {
+                    self.builder
+                        .build_in_bounds_gep(base_ty, base, &indices, "mu_field")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                }
+            };
+            self.emit_vec_detach_at(v_ptr, &inner, true, false)?;
+        }
+        self.builder
+            .build_unconditional_branch(cont_block)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.builder.position_at_end(cont_block);
+        Ok(())
+    }
+
+    fn vec_leaves(
+        &self,
+        ty: &AirType,
+        path: &mut Vec<u32>,
+        out: &mut Vec<(Vec<u32>, AirType)>,
+    ) -> Result<(), CodegenError> {
+        match ty {
+            AirType::Vec(inner) => out.push((path.clone(), (**inner).clone())),
+            AirType::Struct(r) => {
+                let name = r.symbol();
+                let def = self
+                    .program
+                    .structs
+                    .iter()
+                    .find(|s| s.name == name)
+                    .ok_or_else(|| CodegenError::UnsupportedType(format!("unknown struct {name}")))?;
+                for (index, field) in def.fields.iter().enumerate() {
+                    path.push(index as u32);
+                    self.vec_leaves(&field.ty, path, out)?;
+                    path.pop();
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn emit_vec_detach_at(
+        &mut self,
+        v_alloca: PointerValue<'static>,
+        inner: &AirType,
+        through_ptr: bool,
+        panic_if_shared: bool,
+    ) -> Result<(), CodegenError> {
         let ptr_ty = self.context.ptr_type(AddressSpace::default());
 
         let data_ptr = self
@@ -438,7 +526,7 @@ impl<'a> FunctionCodegen<'a> {
         self.builder.position_at_end(slow_block);
         if panic_if_shared {
             let panic_fn = self.ensure_panic_function();
-            let (msg_ptr, msg_len) = self.global_string_ptr_len("nogc write to a shared buffer")?;
+            let (msg_ptr, msg_len) = self.global_string_ptr_len("internal: nogc write to a shared buffer")?;
             let msg_len_val = self.context.i64_type().const_int(msg_len, false);
             self.builder
                 .build_call(panic_fn, &[msg_ptr.into(), msg_len_val.into()], "")

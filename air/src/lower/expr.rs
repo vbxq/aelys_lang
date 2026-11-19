@@ -1678,6 +1678,29 @@ impl<'a> LoweringContext<'a> {
                 || name.starts_with("__aelys_"));
         let refs: Vec<&TypedExpr> = args.iter().collect();
         let ops = self.lower_call_operands(&refs, keeps_unretained, runs_code, sp);
+        // a nogc callee panics on a shared buffer instead of detaching it, so the caller detaches
+        if runs_code && !self.in_nogc && callee_may_be_nogc(callee, &named) {
+            for (arg, op) in args.iter().zip(&ops) {
+                if !matches!(arg.ty, InferType::Ref { mutable: true, .. }) {
+                    continue;
+                }
+                let ty = self.lower_type_from_infer(&arg.ty);
+                if !matches!(
+                    ty.pointee(),
+                    Some(AirType::Vec(_) | AirType::Struct(_) | AirType::Param(_))
+                ) {
+                    continue;
+                }
+                let ptr = self.operand_to_local(op.clone(), &ty);
+                self.emit(
+                    AirStmtKind::CallVoid {
+                        func: Callee::Named(crate::symbols::MAKE_UNIQUE_THROUGH.to_string()),
+                        args: vec![Operand::Copy(ptr)],
+                    },
+                    sp,
+                );
+            }
+        }
         for (arg, op) in args.iter().zip(&ops) {
             let fresh_vec = match &super::pin::peel(arg).kind {
                 TypedExprKind::VecLiteral { .. } => true,
@@ -3683,5 +3706,15 @@ fn render_path(e: &TypedExpr, out: &mut String) -> bool {
             ok
         }
         _ => false,
+    }
+}
+
+// a trait stub resolves to an impl after mono, and that impl may be nogc
+fn callee_may_be_nogc(callee: &TypedExpr, named: &Option<Callee>) -> bool {
+    match named {
+        Some(Callee::Named(name)) if !name.starts_with(crate::bir::effects::TRAIT_STUB) => {
+            matches!(callee.ty, InferType::Function { nogc: true, .. })
+        }
+        _ => true,
     }
 }

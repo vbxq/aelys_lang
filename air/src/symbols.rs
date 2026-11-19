@@ -12,6 +12,8 @@ pub const NATIVE_ENTRY_SYMBOL: &str = "__aelys_user_main";
 // whole `__` space is reserved rather than any list of names the compiler could enumerate
 pub const RESERVED_PREFIX: &str = "__";
 
+pub const MAKE_UNIQUE_THROUGH: &str = "__aelys_vec_make_unique_through";
+
 // a program may call these without declaring them, so sema pins their types and codegen must let them through
 pub const BOOTSTRAP_BUILTIN_SYMBOLS: &[&str] = &["print", "println", "__aelys_collect"];
 

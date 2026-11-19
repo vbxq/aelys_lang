@@ -1265,11 +1265,12 @@ A function declared `nogc` was inferred to reach managed (reference-counted
 or heap-allocating) memory, directly or through a call it makes. A `nogc`
 function must stay free of managed effects.
 
-Writing an element of a `Vec` is allowed in a `nogc` function: it never
-copies the buffer and panics instead if the buffer is shared. Managed code
-calls `v.make_unique()` before the call when the buffer may be shared.
-Growing or shrinking a `Vec` (`push`, `insert`, `pop`, `remove`, `clear`)
-stays refused.",
+Writing an element of a `Vec` is allowed in a `nogc` function: managed code
+that calls it first makes every `Vec` behind its `&mut` arguments unique, so
+the write never copies. Copying a `Vec` inside a `nogc` function (into a
+local, a field, an argument or a return value) is refused, since the copy
+would share the buffer; pass a slice or a reference instead. Growing or
+shrinking a `Vec` (`push`, `insert`, `pop`, `remove`, `clear`) stays refused.",
         severity: Severity::Error,
     },
     DiagnosticInfo {

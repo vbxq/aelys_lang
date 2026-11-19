@@ -17,6 +17,6 @@ fn main() -> i64 {
     let snap = w.ms
     println("{w.ms[0].x} {snap[0].x}")
     step(&mut w)
-    println("unreachable {w.ms[0].x}")
+    println("{w.ms[0].x} {snap[0].x}")
     return 0
 }
