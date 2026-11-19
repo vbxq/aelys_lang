@@ -1,4 +1,6 @@
+use super::TypeInference;
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
+use crate::infer::expr::const_int::{compute_label, div_zero_label, negate_label, shift_label};
 use crate::modules::{Lookup, ModuleExports};
 use crate::typed_ast::{ConstLit, ConstScalar};
 use crate::types::InferType;
@@ -30,6 +32,7 @@ pub(super) struct ConstEval<'a> {
     pub imported: &'a HashMap<String, ConstLit>,
     pub namespaces: &'a HashMap<String, Arc<ModuleExports>>,
     pub errors: Vec<TypeError>,
+    arith: Option<TypeError>,
     state: HashMap<String, State>,
     stack: Vec<String>,
 }
@@ -92,6 +95,7 @@ impl<'a> ConstEval<'a> {
             imported,
             namespaces,
             errors: Vec::new(),
+            arith: None,
             state: HashMap::new(),
             stack: Vec::new(),
         }
@@ -110,13 +114,6 @@ impl<'a> ConstEval<'a> {
         self.stack.pop();
         self.state.insert(name.to_string(), State::Done(lit.clone()));
         lit
-    }
-
-    pub fn eval_int(&mut self, owner: &str, e: &Expr, want: &InferType) -> Option<i128> {
-        match self.eval(owner, e, Some(want)).ok()? {
-            (Val::Int(v), ty) if ty.is_integer() => Some(v),
-            _ => None,
-        }
     }
 
     fn compute(&mut self, name: &str, src: &ConstSource) -> Option<ConstLit> {
@@ -166,6 +163,26 @@ impl<'a> ConstEval<'a> {
         );
         self.errors.push(err);
         Fail
+    }
+
+    fn overflow(&mut self, owner: &str, label: String, ty: &InferType, span: Span) -> Fail {
+        self.arith = Some(TypeError::coded(
+            "E0450",
+            "this arithmetic operation will overflow",
+            &label,
+            span,
+        ));
+        self.fail(owner, &format!("overflows `{ty}`"), span)
+    }
+
+    fn div_zero(&mut self, owner: &str, label: String, span: Span) -> Fail {
+        self.arith = Some(TypeError::coded(
+            "E0451",
+            "this operation will panic at runtime",
+            &label,
+            span,
+        ));
+        self.fail(owner, "performs a division by zero", span)
     }
 
     fn check_int(&mut self, name: &str, v: i128, ty: &InferType, span: Span) -> R<Val> {
@@ -285,7 +302,12 @@ impl<'a> ConstEval<'a> {
             ExprKind::Unary { op, operand } => {
                 let (v, t) = self.eval(owner, operand, want)?;
                 match (op, v) {
-                    (UnaryOp::Neg, Val::Int(v)) => Ok((self.check_int(owner, -v, &t, e.span)?, t)),
+                    (UnaryOp::Neg, Val::Int(v)) => {
+                        if t.int_bounds().is_some_and(|(lo, hi)| -v < lo || -v > hi) {
+                            return Err(self.overflow(owner, negate_label(v, &t), &t, e.span));
+                        }
+                        Ok((self.check_int(owner, -v, &t, e.span)?, t))
+                    }
                     (UnaryOp::Neg, Val::Float(v)) => Ok((Val::Float(-v), t)),
                     (UnaryOp::BitNot | UnaryOp::Not, Val::Int(v)) => {
                         let r = if signed(&t) { Some(!v) } else { wrap(!v, &t) };
@@ -383,7 +405,7 @@ impl<'a> ConstEval<'a> {
                 return Err(self.not_const(owner, e.span));
             };
             if r < 0 || r >= bits as i128 {
-                return Err(self.fail(owner, &format!("overflows `{lt}`"), e.span));
+                return Err(self.overflow(owner, shift_label(op, r, &lt), &lt, e.span));
             }
             let v = if op == BinaryOp::Shl {
                 match wrap(l << r, &lt) {
@@ -434,31 +456,29 @@ impl<'a> ConstEval<'a> {
         }
         match (l, r) {
             (Val::Int(a), Val::Int(b)) => {
-                let v = match op {
-                    BinaryOp::Add => a + b,
-                    BinaryOp::Sub => a - b,
-                    BinaryOp::Mul => match a.checked_mul(b) {
-                        Some(v) => v,
-                        None => return Err(self.fail(owner, &format!("overflows `{lt}`"), e.span)),
-                    },
+                let Some((lo, hi)) = lt.int_bounds() else {
+                    return Err(self.not_const(owner, e.span));
+                };
+                let (v, sym) = match op {
+                    BinaryOp::Add => (a + b, "+"),
+                    BinaryOp::Sub => (a - b, "-"),
+                    BinaryOp::Mul => (a.saturating_mul(b), "*"),
                     BinaryOp::Div | BinaryOp::Mod if b == 0 => {
-                        return Err(self.fail(owner, "performs a division by zero", e.span));
+                        return Err(self.div_zero(owner, div_zero_label(op, a, &lt), e.span));
                     }
-                    BinaryOp::Div => a / b,
-                    BinaryOp::Mod => a % b,
-                    BinaryOp::BitAnd => a & b,
-                    BinaryOp::BitOr => a | b,
-                    BinaryOp::BitXor => a ^ b,
+                    BinaryOp::Div => (a / b, "/"),
+                    BinaryOp::Mod if a == lo && b == -1 && signed(&lt) => (hi + 1, "%"),
+                    BinaryOp::Mod => (a % b, "%"),
+                    BinaryOp::BitAnd => return Ok((Val::Int(a & b), lt)),
+                    BinaryOp::BitOr => return Ok((Val::Int(a | b), lt)),
+                    BinaryOp::BitXor => return Ok((Val::Int(a ^ b), lt)),
                     _ => return Err(self.not_const(owner, e.span)),
                 };
-                if op == BinaryOp::Mod
-                    && lt.int_bounds().is_some_and(|(lo, _)| a == lo)
-                    && b == -1
-                    && signed(&lt)
-                {
-                    return Err(self.fail(owner, &format!("overflows `{lt}`"), e.span));
+                if v < lo || v > hi {
+                    let label = compute_label(a, sym, b, &lt);
+                    return Err(self.overflow(owner, label, &lt, e.span));
                 }
-                Ok((self.check_int(owner, v, &lt, e.span)?, lt))
+                Ok((Val::Int(v), lt))
             }
             (Val::Float(a), Val::Float(b)) => {
                 let v = match op {
@@ -500,5 +520,30 @@ fn mismatch(expected: &InferType, found: &InferType, span: Span) -> TypeError {
         secondary_spans: Vec::new(),
         help: None,
         suggestion: None,
+    }
+}
+
+impl TypeInference {
+    pub(crate) fn eval_discriminant(
+        &mut self,
+        owner: &str,
+        e: &Expr,
+        want: &InferType,
+    ) -> Option<i128> {
+        let sources = HashMap::new();
+        let mut ev = ConstEval::new(&sources, &self.consts, &self.module_imports.namespaces);
+        let value = ev.eval(owner, e, Some(want));
+        let arith = ev.arith.take();
+        match (value, arith) {
+            (Ok((Val::Int(v), ty)), _) if ty.is_integer() => return Some(v),
+            (Err(Fail), Some(err)) => self.errors.push(err),
+            _ => self.errors.push(TypeError::coded(
+                "E0454",
+                format!("the discriminant of `{owner}` is not a constant integer expression"),
+                "not a constant",
+                e.span,
+            )),
+        }
+        None
     }
 }

@@ -2,7 +2,7 @@ use super::TypeInference;
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{TypedExpr, TypedExprKind};
 use crate::types::InferType;
-use aelys_syntax::{BinaryOp, UnaryOp};
+use aelys_syntax::{BinaryOp, Span, UnaryOp};
 
 pub(super) enum Fold {
     NotConst,
@@ -17,6 +17,34 @@ fn min_name(v: i128, ty: &InferType) -> String {
     match ty.int_bounds() {
         Some((lo, _)) if v == lo && lo < 0 => format!("{ty}::MIN"),
         _ => lit(v, ty),
+    }
+}
+
+pub(crate) fn negate_label(v: i128, ty: &InferType) -> String {
+    format!("attempt to negate `{}`, which would overflow", min_name(v, ty))
+}
+
+pub(crate) fn compute_label(l: i128, sym: &str, r: i128, ty: &InferType) -> String {
+    format!(
+        "attempt to compute `{} {sym} {}`, which would overflow",
+        min_name(l, ty),
+        lit(r, ty)
+    )
+}
+
+pub(crate) fn shift_label(op: BinaryOp, r: i128, ty: &InferType) -> String {
+    let dir = if op == BinaryOp::Shl { "left" } else { "right" };
+    format!("attempt to shift {dir} by `{}`, which would overflow", lit(r, ty))
+}
+
+pub(crate) fn div_zero_label(op: BinaryOp, l: i128, ty: &InferType) -> String {
+    if op == BinaryOp::Div {
+        format!("attempt to divide `{}` by zero", lit(l, ty))
+    } else {
+        format!(
+            "attempt to calculate the remainder of `{}` with a divisor of zero",
+            lit(l, ty)
+        )
     }
 }
 
@@ -37,13 +65,7 @@ impl TypeInference {
                 }
                 let v = self.fold_int_in(operand, ty)?;
                 if -v < lo || -v > hi {
-                    return Err(self.overflow(
-                        format!(
-                            "attempt to negate `{}`, which would overflow",
-                            min_name(v, ty)
-                        ),
-                        e,
-                    ));
+                    return Err(self.overflow(negate_label(v, ty), e.span));
                 }
                 Ok(-v)
             }
@@ -72,7 +94,7 @@ impl TypeInference {
                 }
                 let l = self.fold_int_in(left, ty)?;
                 let r = self.fold_int_in(right, ty)?;
-                self.fold_binary(*op, l, r, e, ty)
+                self.fold_binary(*op, l, r, e, ty, (lo, hi))
             }
             _ => Err(Fold::NotConst),
         }
@@ -85,49 +107,31 @@ impl TypeInference {
         r: i128,
         e: &TypedExpr,
         ty: &InferType,
+        (lo, hi): (i128, i128),
     ) -> Result<i128, Fold> {
-        let Some((lo, hi)) = ty.int_bounds() else {
-            return Err(Fold::NotConst);
-        };
-        let bits = 128 - (hi - lo).leading_zeros() as i128;
         let (v, sym) = match op {
             BinaryOp::Add => (l + r, "+"),
             BinaryOp::Sub => (l - r, "-"),
             BinaryOp::Mul => (l * r, "*"),
             BinaryOp::Div | BinaryOp::Mod if r == 0 => {
-                let label = if op == BinaryOp::Div {
-                    format!("attempt to divide `{}` by zero", lit(l, ty))
-                } else {
-                    format!(
-                        "attempt to calculate the remainder of `{}` with a divisor of zero",
-                        lit(l, ty)
-                    )
-                };
                 self.errors.push(TypeError::coded(
                     "E0451",
                     "this operation will panic at runtime",
-                    &label,
+                    &div_zero_label(op, l, ty),
                     e.span,
                 ));
                 return Err(Fold::Reported);
             }
             BinaryOp::Div => (l / r, "/"),
-            // the remainder is 0 but the hardware division traps, as rust reports it
             BinaryOp::Mod if l == lo && r == -1 && lo < 0 => (hi + 1, "%"),
             BinaryOp::Mod => (l % r, "%"),
             BinaryOp::BitAnd => return Ok(l & r),
             BinaryOp::BitOr => return Ok(l | r),
             BinaryOp::BitXor => return Ok(l ^ r),
             BinaryOp::Shl | BinaryOp::Shr => {
+                let bits = 128 - (hi - lo).leading_zeros() as i128;
                 if r < 0 || r >= bits {
-                    let dir = if op == BinaryOp::Shl { "left" } else { "right" };
-                    return Err(self.overflow(
-                        format!(
-                            "attempt to shift {dir} by `{}`, which would overflow",
-                            lit(r, ty)
-                        ),
-                        e,
-                    ));
+                    return Err(self.overflow(shift_label(op, r, ty), e.span));
                 }
                 if op == BinaryOp::Shr {
                     return Ok(l >> r);
@@ -142,14 +146,7 @@ impl TypeInference {
             _ => return Err(Fold::NotConst),
         };
         if v < lo || v > hi {
-            return Err(self.overflow(
-                format!(
-                    "attempt to compute `{} {sym} {}`, which would overflow",
-                    min_name(l, ty),
-                    lit(r, ty)
-                ),
-                e,
-            ));
+            return Err(self.overflow(compute_label(l, sym, r, ty), e.span));
         }
         Ok(v)
     }
@@ -175,12 +172,28 @@ impl TypeInference {
         Err(Fold::Reported)
     }
 
-    fn overflow(&mut self, label: String, e: &TypedExpr) -> Fold {
+    pub(super) fn reject_const_shift_overflow(
+        &mut self,
+        op: BinaryOp,
+        amount: &TypedExpr,
+        width: &InferType,
+        span: Span,
+    ) {
+        let (Some((lo, hi)), Some(r)) = (width.int_bounds(), Self::closed_const_int(amount)) else {
+            return;
+        };
+        let r = r as i128;
+        if r < 0 || r >= 128 - (hi - lo).leading_zeros() as i128 {
+            self.overflow(shift_label(op, r, width), span);
+        }
+    }
+
+    fn overflow(&mut self, label: String, span: Span) -> Fold {
         self.errors.push(TypeError::coded(
             "E0450",
             "this arithmetic operation will overflow",
             &label,
-            e.span,
+            span,
         ));
         Fold::Reported
     }

@@ -1,0 +1,3 @@
+refuse E0451
+attempt to divide `10_i64` by zero
+!E0454

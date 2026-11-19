@@ -2,7 +2,7 @@ mod array;
 mod assign;
 mod binary;
 mod call;
-mod const_int;
+pub(super) mod const_int;
 mod fmt_spec;
 mod if_expr;
 mod lambda;
@@ -84,6 +84,9 @@ impl TypeInference {
                 if is_shift {
                     let width = typed_left.ty.clone();
                     self.fit_shift_amount(&mut typed_right, &width);
+                    if !left_lit {
+                        self.reject_const_shift_overflow(*op, &typed_right, &width, expr.span);
+                    }
                 } else if !left_lit && right_lit {
                     let width = typed_left.ty.clone();
                     if width.is_integer() || width.is_float() {

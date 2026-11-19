@@ -1,0 +1,3 @@
+refuse E0450
+attempt to shift left by `9_u8`, which would overflow
+attempt to shift right by `32_i32`, which would overflow

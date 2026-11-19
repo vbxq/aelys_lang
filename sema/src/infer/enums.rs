@@ -38,7 +38,7 @@ impl TypeInference {
                 let saved_type_params =
                     std::mem::replace(&mut self.type_params_in_scope, type_params.clone());
 
-                let enum_variants: Vec<EnumVariant> = variants
+                let mut enum_variants: Vec<EnumVariant> = variants
                     .iter()
                     .enumerate()
                     .map(|(i, v)| {
@@ -72,7 +72,6 @@ impl TypeInference {
 
                 self.type_params_in_scope = saved_type_params;
 
-                let mut enum_variants = enum_variants;
                 self.assign_discriminants(name, variants, repr.as_ref(), &mut enum_variants);
 
                 self.type_table.register_enum(EnumDef {
@@ -83,9 +82,7 @@ impl TypeInference {
             }
         }
     }
-}
 
-impl TypeInference {
     fn assign_discriminants(
         &mut self,
         name: &str,
@@ -148,14 +145,6 @@ impl TypeInference {
                 Some(e) => {
                     let owner = format!("{name}::{}", decl.name);
                     let Some(v) = self.eval_discriminant(&owner, e, &eval_ty) else {
-                        self.errors.push(TypeError::coded(
-                            "E0454",
-                            format!(
-                                "the discriminant of `{owner}` is not a constant integer expression"
-                            ),
-                            "not a constant",
-                            e.span,
-                        ));
                         return;
                     };
                     if v < lo || v > hi {
@@ -194,9 +183,7 @@ impl TypeInference {
             next = value + 1;
         }
     }
-}
 
-impl TypeInference {
     pub(super) fn infer_enum_from_i64(
         &mut self,
         def: &EnumDef,

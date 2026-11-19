@@ -1041,7 +1041,8 @@ or more.
     let a: i32 = 65536 * 2         // ok, 131072
     let b: i32 = 65536 * 65536     // E0450
     let c: u8 = 200 + 100 - 100    // E0450, `200_u8 + 100_u8` overflows
-    let d: u8 = 1 << 8             // E0450",
+    let d: u8 = 1 << 8             // E0450
+    let e: u8 = d << 8             // E0450, the shift is constant",
         severity: Severity::Error,
     },
     DiagnosticInfo {
