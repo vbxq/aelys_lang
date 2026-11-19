@@ -1,0 +1,12 @@
+needs a
+needs Shape from a
+pub struct Sq { pub s: i64 }
+impl Shape for Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+pub struct Rect { pub w: i64, pub h: i64 }
+impl Shape for Rect {
+    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+}
+pub fn side() -> i64 { return 7 }
+pub fn boxed(w: i64, h: i64) -> Rc<dyn Shape> { return Rc::new(Rect { w: w, h: h }) }
