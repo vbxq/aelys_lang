@@ -20,7 +20,10 @@ impl TypeInference {
             TypedExprKind::Unary {
                 op: UnaryOp::Neg,
                 operand,
-            } => Self::closed_const_int(operand)?.checked_neg(),
+            } => {
+                let v = Self::closed_const_int(operand)?.checked_neg()?;
+                (!expr.ty.is_integer() || InferType::int_fits(v, &expr.ty)).then_some(v)
+            }
             TypedExprKind::Binary { op, left, right } => {
                 let (l, r) = (
                     Self::closed_const_int(left)?,
