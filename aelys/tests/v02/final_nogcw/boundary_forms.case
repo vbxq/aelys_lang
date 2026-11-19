@@ -1,58 +1,57 @@
-trait Paint { fn paint(&mut self, x: i64) }
+trait Paint { fn paint(&mut self, x: i64); }
 
 struct In { buf: Vec<i64>, k: i64 }
 struct R { screen: Vec<u8>, t: (Vec<i64>, i64), inner: In }
 
 impl R {
-    nogc fn draw(&mut self, x: i64) { self.screen[x] = 7 as u8 }
+    nogc fn draw(&mut self, x: i64) { self.screen[x] = 7 as u8; }
 }
 
 impl Paint for R {
-    nogc fn paint(&mut self, x: i64) { self.screen[x] = 5 as u8 }
+    nogc fn paint(&mut self, x: i64) { self.screen[x] = 5 as u8; }
 }
 
-nogc fn draw(r: &mut R, x: i64) { r.screen[x] = 3 as u8 }
+nogc fn draw(r: &mut R, x: i64) { r.screen[x] = 3 as u8; }
 
 nogc fn deep(r: &mut R) {
-    r.t.0[0] = 9
-    r.inner.buf[1] = 8
+    r.t.0[0] = 9;
+    r.inner.buf[1] = 8;
 }
 
-nogc fn put<T>(v: &mut Vec<T>, i: i64, x: T) { (*v)[i] = x }
+nogc fn put<T>(v: &mut Vec<T>, i: i64, x: T) { (*v)[i] = x; }
 
-fn mid(r: &mut R, x: i64) { draw(r, x) }
+fn mid(r: &mut R, x: i64) { draw(r, x); }
 
-nogc fn outer(r: &mut R) { mid(r, 3) }
+fn outer(r: &mut R) { mid(r, 3); }
 
-fn apply(f: nogc fn(&mut R, i64), r: &mut R) { f(r, 2) }
+fn apply(f: nogc fn(&mut R, i64), r: &mut R) { f(r, 2); }
 
-fn go<T: Paint>(t: &mut T) { t.paint(1) }
+fn go<T: Paint>(t: &mut T) { t.paint(1); }
 
-fn main() -> i64 {
-    let mut a: Vec<i64> = Vec::new()
-    a.push(1)
-    a.push(2)
-    let mut s: Vec<u8> = Vec::new()
-    for i in 0..4 { s.push(1 as u8) }
-    let mut r = R { screen: s, t: (a, 1), inner: In { buf: a, k: 0 } }
-    r.draw(0)
-    let s1 = r.screen
-    go(&mut r)
-    let s2 = r.screen
-    apply(draw, &mut r)
-    let s3 = r.screen
-    let f: fn(&mut R, i64) = draw
-    f(&mut r, 0)
-    let s4 = r.screen
-    outer(&mut r)
-    let s5 = r.screen
-    let g = fn(q: &mut R, k: i64) { mid(q, k) }
-    g(&mut r, 1)
-    deep(&mut r)
-    let mut v = a
-    put(&mut v, 1, 6)
-    println("{s[0]} {s1[0]} {s1[1]} {s2[1]} {s2[2]} {s3[2]} {s3[0]} {s4[0]} {s4[3]} {s5[3]} {s5[1]}")
-    println("{r.screen[0]} {r.screen[1]} {r.screen[2]} {r.screen[3]}")
-    println("{a[0]} {a[1]} {r.t.0[0]} {r.inner.buf[1]} {r.inner.buf[0]} {v[1]}")
-    return 0
+fn main() {
+    let mut a: Vec<i64> = Vec::new();
+    a.push(1);
+    a.push(2);
+    let mut s: Vec<u8> = Vec::new();
+    for i in 0..4 { s.push(1 as u8); }
+    let mut r = R { screen: s, t: (a, 1), inner: In { buf: a, k: 0 } };
+    r.draw(0);
+    let s1 = r.screen;
+    go(&mut r);
+    let s2 = r.screen;
+    apply(draw, &mut r);
+    let s3 = r.screen;
+    let f: fn(&mut R, i64) = draw;
+    f(&mut r, 0);
+    let s4 = r.screen;
+    outer(&mut r);
+    let s5 = r.screen;
+    let g = |q: &mut R, k: i64| mid(q, k);
+    g(&mut r, 1);
+    deep(&mut r);
+    let mut v = a;
+    put(&mut v, 1, 6);
+    println!("{} {} {} {} {} {} {} {} {} {} {}", s[0], s1[0], s1[1], s2[1], s2[2], s3[2], s3[0], s4[0], s4[3], s5[3], s5[1]);
+    println!("{} {} {} {}", r.screen[0], r.screen[1], r.screen[2], r.screen[3]);
+    println!("{} {} {} {} {} {}", a[0], a[1], r.t.0[0], r.inner.buf[1], r.inner.buf[0], v[1]);
 }

@@ -1,0 +1,3 @@
+refuse E0727
+making a `Vec` unique before a nogc call
+outer -> forward

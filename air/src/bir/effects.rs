@@ -54,6 +54,7 @@ impl EffectSet {
 // a trait method call is resolved per instance after mono, where its effect is checked
 pub(crate) const TRAIT_STUB: &str = "__trait$";
 pub const VEC_COPY: &str = "a `Vec` copy";
+const MAKE_UNIQUE: &str = "making a `Vec` unique before a nogc call";
 const RANK_INTRINSIC: u8 = 1;
 const RANK_LITERAL: u8 = 2;
 const RANK_COPY: u8 = 3;
@@ -157,6 +158,45 @@ fn copies_a_vec(expr: &TypedExpr, tt: &TypeTable) -> bool {
         _ => false,
     };
     place && tt.contains_vec_by_value(&expr.ty)
+}
+
+// a trait stub or a trait object call resolves to an impl that may be nogc
+pub(crate) fn resolves_late(name: &str) -> bool {
+    name.starts_with(TRAIT_STUB) || name.starts_with(aelys_sema::DYN_CALL)
+}
+
+// mirrors the codegen walk of make_unique_through: struct and tuple fields, never arrays, enums or rc
+fn reaches_vec(ty: &InferType, tt: &TypeTable, seen: &mut Vec<String>) -> bool {
+    match ty {
+        InferType::Vec(_) | InferType::Dyn(_) => true,
+        InferType::Tuple(elems) => elems.iter().any(|e| reaches_vec(e, tt, seen)),
+        InferType::Struct(name, args) => {
+            let Some(fields) = tt.struct_fields(name, args) else {
+                return true;
+            };
+            let key = format!("{name}{args:?}");
+            if seen.contains(&key) {
+                return false;
+            }
+            seen.push(key);
+            let found = fields.iter().any(|f| reaches_vec(&f.ty, tt, seen));
+            seen.pop();
+            found
+        }
+        _ => false,
+    }
+}
+
+pub(crate) fn made_unique_before_nogc_call(arg: &InferType, tt: &TypeTable) -> bool {
+    matches!(arg, InferType::Ref { referent, mutable: true } if reaches_vec(referent, tt, &mut Vec::new()))
+}
+
+fn callee_may_be_nogc(callee: &TypedExpr) -> bool {
+    match &callee.kind {
+        TypedExprKind::Identifier(name) if resolves_late(name) => true,
+        TypedExprKind::Identifier(name) if name.starts_with("__aelys_") => false,
+        _ => matches!(callee.ty, InferType::Function { nogc: true, .. }),
+    }
 }
 
 fn alloc_managed(set: &mut EffectSet) {
@@ -309,6 +349,13 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
         }
 
         TypedExprKind::Call { callee, args } => {
+            if !w.nogc
+                && callee_may_be_nogc(callee)
+                && args.iter().any(|a| made_unique_before_nogc_call(&a.ty, tt))
+            {
+                alloc_managed(set);
+                w.record(RANK_INTRINSIC, expr.span, MAKE_UNIQUE.to_string());
+            }
             walk_expr(callee, tt, set, w, Pos::Value);
             for a in args {
                 walk_expr(a, tt, set, w, Pos::Value);
