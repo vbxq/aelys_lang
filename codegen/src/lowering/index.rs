@@ -2,7 +2,7 @@ use crate::lowering::functions::function_symbol_name;
 use aelys_air::{AirFunction, AirGlobal, AirProgram, FunctionId};
 use std::collections::HashMap;
 
-// each map keeps the first entry, the one the linear scans it replaces would have found
+// each map keeps the first entry for a key
 pub(crate) struct ProgramIndex<'a> {
     pub(crate) symbols: HashMap<FunctionId, String>,
     by_id: HashMap<FunctionId, &'a AirFunction>,

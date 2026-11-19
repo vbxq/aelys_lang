@@ -25,7 +25,7 @@ pub struct TypeEnv {
     /// Local variables in current scope (name -> type)
     locals: Vec<Rc<VarScope>>,
 
-    // the enclosing functions' scopes, shared rather than copied, innermost last
+    // the enclosing functions' scopes, innermost last
     captures: Vec<Rc<VarScope>>,
 
     /// Function signatures by lexical scope (name -> function type)
