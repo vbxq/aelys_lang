@@ -52,10 +52,12 @@ impl EffectSet {
 }
 
 // a trait method call is resolved per instance after mono, where its effect is checked
-const TRAIT_STUB: &str = "__trait$";
+pub(crate) const TRAIT_STUB: &str = "__trait$";
+pub const VEC_COPY: &str = "a `Vec` copy";
 const RANK_INTRINSIC: u8 = 1;
 const RANK_LITERAL: u8 = 2;
-const RANK_TYPE: u8 = 3;
+const RANK_COPY: u8 = 3;
+const RANK_TYPE: u8 = 4;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Pos {
@@ -144,6 +146,19 @@ pub fn intrinsic_effects(
     (set, w.site)
 }
 
+// a fresh value has no other owner, only a value read out of a place shares its buffer
+fn copies_a_vec(expr: &TypedExpr, tt: &TypeTable) -> bool {
+    let place = match &expr.kind {
+        TypedExprKind::Grouping(inner) => return copies_a_vec(inner, tt),
+        TypedExprKind::Identifier(_)
+        | TypedExprKind::Member { .. }
+        | TypedExprKind::Index { .. }
+        | TypedExprKind::Deref(_) => true,
+        _ => false,
+    };
+    place && tt.contains_vec_by_value(&expr.ty)
+}
+
 fn alloc_managed(set: &mut EffectSet) {
     set.insert(Effect::Alloc);
     set.insert(Effect::Managed);
@@ -183,11 +198,11 @@ fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
         } => {
             if category(var_type, tt).is_managed() {
                 set.insert(Effect::Managed);
-                w.record(
-                    RANK_TYPE,
-                    stmt.span,
-                    format!("the managed local `{}`", name),
-                );
+                if copies_a_vec(initializer, tt) {
+                    w.record(RANK_COPY, stmt.span, VEC_COPY.to_string());
+                } else {
+                    w.record(RANK_TYPE, stmt.span, format!("the managed local `{}`", name));
+                }
             }
             walk_expr(initializer, tt, set, w, Pos::Value);
         }
@@ -245,11 +260,15 @@ fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
 fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witness, pos: Pos) {
     if pos == Pos::Value && category(&expr.ty, tt).is_managed() {
         set.insert(Effect::Managed);
-        let name = match &expr.kind {
-            TypedExprKind::Identifier(n) => format!("the managed value `{}`", n),
-            _ => "a managed value".to_string(),
-        };
-        w.record(RANK_TYPE, expr.span, name);
+        if copies_a_vec(expr, tt) {
+            w.record(RANK_COPY, expr.span, VEC_COPY.to_string());
+        } else {
+            let name = match &expr.kind {
+                TypedExprKind::Identifier(n) => format!("the managed value `{}`", n),
+                _ => "a managed value".to_string(),
+            };
+            w.record(RANK_TYPE, expr.span, name);
+        }
     }
     match &expr.kind {
         TypedExprKind::Int(_)
@@ -624,6 +643,13 @@ pub fn managed_chain_with<'a>(
     let mut visited: HashSet<String> = HashSet::new();
     visited.insert(start.name.clone());
     let mut body = start;
+    if start
+        .managed_witness
+        .as_ref()
+        .is_some_and(|(_, name)| name == VEC_COPY)
+    {
+        return close_on_witness(steps, &frames, None);
+    }
 
     loop {
         let Some((span, hop)) = next_managed_call(body, eff, &visited) else {

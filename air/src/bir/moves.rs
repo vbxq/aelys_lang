@@ -93,7 +93,17 @@ fn nogc_diagnostic(
         .filter(|s| s.kind != StepKind::Ambiguous)
         .map(|s| s.name.as_str())
         .collect();
-    if path.len() > 1 || stopped.is_some() {
+    let vec_copy = chain
+        .last()
+        .is_some_and(|s| s.kind == StepKind::Operation && s.name == super::effects::VEC_COPY);
+    if vec_copy {
+        message = "[nogc] copying a `Vec` in a `nogc fn` could share its buffer; pass a slice or a \
+                   reference"
+            .to_string();
+        if path.len() > 2 {
+            message = format!("{} (via `{}`)", message, render_path(&path[..path.len() - 1]));
+        }
+    } else if path.len() > 1 || stopped.is_some() {
         message = format!("{} via `{}`", message, render_path(&path));
     }
     if let Some(step) = stopped {
@@ -124,6 +134,9 @@ fn nogc_diagnostic(
         if let Some(span) = step.span {
             diag = diag.with_secondary(span, step_label(step));
         }
+    }
+    if vec_copy {
+        return diag;
     }
     if indirect {
         diag = diag.with_note(
