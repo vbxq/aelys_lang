@@ -1,19 +1,19 @@
 fn warm(s: &str) -> String {
-    let mut w = String::with_capacity(32)
-    w.push_str(s)
-    return w
+    let mut w = String::with_capacity(32);
+    w.push_str(s);
+    w
 }
 
 fn main() {
-    let mut cap = warm("cap")
-    let g = fn() -> String {
-        let mut t = cap
-        t.push_str("!")
-        return t
-    }
-    let first = g()
-    cap.push_str("?")
-    println(first)
-    println(g())
-    println(cap)
+    let mut cap = warm("cap");
+    let g = move || -> String {
+        let mut t = cap;
+        t.push_str("!");
+        t
+    };
+    let first = g();
+    cap.push_str("?");
+    println!("{}", first);
+    println!("{}", g());
+    println!("{}", cap);
 }

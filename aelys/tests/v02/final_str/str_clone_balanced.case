@@ -1,15 +1,15 @@
 fn main() {
-    let a = String::from("ab")
-    let mut b = a.clone()
-    b.push_str("c")
-    println(a)
-    println(b)
-    let r: &str = "xy"
-    let r2 = r.clone()
-    println(r2)
-    let mut v: Vec<String> = Vec::new()
-    v.push(b.clone())
-    b.push('!')
-    println(v[0])
-    println(b)
+    let a = String::from("ab");
+    let mut b = a.clone();
+    b.push_str("c");
+    println!("{}", a);
+    println!("{}", b);
+    let r: &str = "xy";
+    let r2 = r.clone();
+    println!("{}", r2);
+    let mut v: Vec<String> = Vec::new();
+    v.push(b.clone());
+    b.push('!');
+    println!("{}", v[0]);
+    println!("{}", b);
 }

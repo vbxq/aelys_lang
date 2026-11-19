@@ -1,24 +1,24 @@
 fn warm(s: &str) -> String {
-    let mut w = String::with_capacity(32)
-    w.push_str(s)
-    return w
+    let mut w = String::with_capacity(32);
+    w.push_str(s);
+    w
 }
 
 fn main() {
-    let mut a = warm("abc")
-    let v: &str = a.as_str()
-    let mut b = a
-    b.push_str("zz")
-    a.push_str("yy")
-    println(v)
-    println(a)
-    println(b)
-    let mut c = warm("qr")
-    let w = &c
-    let mut d: String = w
-    c.push('s')
-    d.push('t')
-    println(w)
-    println(c)
-    println(d)
+    let mut a = warm("abc");
+    let v: &str = a.as_str();
+    let mut b = a;
+    b.push_str("zz");
+    a.push_str("yy");
+    println!("{}", v);
+    println!("{}", a);
+    println!("{}", b);
+    let mut c = warm("qr");
+    let w = &c;
+    let mut d: String = w;
+    c.push('s');
+    d.push('t');
+    println!("{}", w);
+    println!("{}", c);
+    println!("{}", d);
 }

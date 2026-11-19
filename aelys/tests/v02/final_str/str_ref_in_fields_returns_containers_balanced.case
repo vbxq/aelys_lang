@@ -1,40 +1,40 @@
 struct User { name: String, tag: &str }
 
 impl User {
-    fn get_name(&self) -> &str { return self.name }
-    fn first(&self) -> &str { return self.name[0..1] }
+    fn get_name(&self) -> &str { self.name }
+    fn first(&self) -> &str { self.name[0..1] }
 }
 
 fn first_word(s: &str) -> &str {
-    let mut i = 0
-    let b = s.bytes()
-    while i < s.len() and b[i] != 32 {
-        i = i + 1
+    let mut i = 0;
+    let b = s.bytes();
+    while i < s.len() && b[i] != 32 {
+        i = i + 1;
     }
-    return s[0..i]
+    s[0..i]
 }
 
 fn pick(o: Option<&str>) -> &str {
-    return match o { Some(x) => x, None => "none" }
+    match o { Some(x) => x, None => "none" }
 }
 
 fn main() {
-    let u = User { name: "ada" + " l", tag: "t" }
-    println(u.get_name())
-    println(u.first())
-    println(u.tag)
-    let w = first_word(u.name)
-    println(w)
-    let words: Vec<&str> = Vec::new()
-    let mut ws = words
-    ws.push("x")
-    ws.push(w)
-    ws.push(u.name)
-    println(ws.len)
-    println(ws[2])
-    println(pick(Some(ws[1])))
-    println(pick(None))
-    let arr = ["p", "q"]
-    println(arr[1])
-    println("{w}-{u.tag}")
+    let u = User { name: "ada" + " l", tag: "t" };
+    println!("{}", u.get_name());
+    println!("{}", u.first());
+    println!("{}", u.tag);
+    let w = first_word(u.name);
+    println!("{}", w);
+    let words: Vec<&str> = Vec::new();
+    let mut ws = words;
+    ws.push("x");
+    ws.push(w);
+    ws.push(u.name);
+    println!("{}", ws.len());
+    println!("{}", ws[2]);
+    println!("{}", pick(Some(ws[1])));
+    println!("{}", pick(None));
+    let arr = ["p", "q"];
+    println!("{}", arr[1]);
+    println!("{}-{}", w, u.tag);
 }

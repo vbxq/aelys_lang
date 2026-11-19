@@ -1,7 +1,7 @@
 fn f(s: str) -> i64 {
-    return 0
+    0
 }
 
 fn main() {
-    println(f("a"))
+    println!("{}", f("a"));
 }

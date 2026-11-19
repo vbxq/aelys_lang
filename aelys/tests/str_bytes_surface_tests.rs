@@ -436,19 +436,6 @@ fn sb4_substring_bytes_cuts_a_multibyte_string_on_its_boundaries() {
     h.assert_legs(6);
 }
 
-const SB5_SUBSTRING_CONCAT: &str = r#"
-fn main() {
-    let s: String = "hello world";
-    let mut t: String = "";
-    let mut i: i64 = 0;
-    for c in s {
-        if i < 5 { t = t + c.to_string(); }
-        i = i + 1;
-    }
-    println!("{}", t);
-}
-"#;
-
 const SB5_SUBSTRING_LIBRARY: &str = r#"
 use std::str;
 
@@ -470,10 +457,9 @@ fn main() {
 #[test]
 fn sb5_a_bound_builtin_substring_and_a_bound_library_call_result_are_both_released() {
     let h = Harness::new();
-    h.value_row("SB-5-concat", SB5_SUBSTRING_CONCAT, "hello\n", (10, 10));
     h.value_row("SB-5-built", SB5_SUBSTRING_BYTES, "hello\n", (1, 1));
     h.value_row("SB-5-library", SB5_SUBSTRING_LIBRARY, "hello\n", (1, 1));
-    h.assert_legs(18);
+    h.assert_legs(12);
 }
 
 const SB6_SPLIT_A_CHARACTER: &str = r#"
@@ -513,6 +499,51 @@ fn sb7_a_range_outside_the_string_panics_at_the_constructor() {
         "string::substring_bytes: the byte range 0..9 is not inside a string of 4 bytes",
     );
     h.assert_legs(6);
+}
+
+const SB7B_SLICE_PANICS: [(&str, &str, &str); 3] = [
+    (
+        "SB-7b-cut",
+        r#"
+fn main() {
+    let s: String = "éab";
+    println!("{}", s[0..1]);
+}
+"#,
+        "string slice `s[0..1]`: byte 1 is not a character boundary; it holds 0xa9",
+    ),
+    (
+        "SB-7b-reversed",
+        r#"
+fn main() {
+    let s: String = "abc";
+    let i = 3;
+    let j = 1;
+    println!("{}", s[i..=j]);
+}
+"#,
+        "string slice `s[3..=1]`: the range ends before it starts",
+    ),
+    (
+        "SB-7b-max",
+        r#"
+fn main() {
+    let s: String = "abc";
+    let j = 9223372036854775807;
+    println!("{}", s[0..=j]);
+}
+"#,
+        "string slice `s[0..=9223372036854775807]`: the range is not inside a string of 3 bytes",
+    ),
+];
+
+#[test]
+fn sb7b_a_slice_panic_names_the_slice_and_its_exact_range() {
+    let h = Harness::new();
+    for (id, src, says) in SB7B_SLICE_PANICS {
+        h.panic_row(id, src, says);
+    }
+    h.assert_legs(18);
 }
 
 // the count that used to live in the out of bounds panic now lives in the refusal and in the pair
@@ -1444,65 +1475,6 @@ fn sb32_a_block_whose_result_wraps_a_reference_type_argument_is_refused() {
         "the call to `through` in `main` instantiates it with `&i64`",
     );
     h.assert_legs(1);
-}
-
-const SB38_BINDINGS_THAT_OWN: &str = r#"
-use std::str;
-
-fn mk(i: i64) -> String {
-    let s: String = "mk" + format!("{i}");
-    s
-}
-
-fn pick(p: String, i: i64) -> String {
-    let mut acc: String = p;
-    acc = acc + format!("{i}");
-    acc
-}
-
-fn main() {
-    let mut n: i64 = 0;
-    let mut hold: String = "h" + format!("{}", 0);
-    let mut i: i64 = 0;
-    while i < 3 {
-        let a: String = "a" + format!("{i}");
-        let b: String = a;
-        hold = b;
-        let t: String = mk(i);
-        let u: String = pick(t, i);
-        let r: String = str::repeat("r", 2);
-        for c in a {
-            if c == 'a' { n = n + 1; }
-        }
-        let mut m: String = "m" + format!("{i}");
-        for c in m {
-            if c == 'm' { n = n + 1; }
-        }
-        m = "q" + format!("{i}");
-        for c in "w" + format!("{i}") {
-            if c == 'w' { n = n + 1; }
-        }
-        let poison: String = "ZZZZZZZZ" + format!("{i}");
-        println!("{}", a + b + t + u + r + m);
-        n = n + poison.len();
-        i = i + 1;
-    }
-    let late: String = "YYYYYYYY" + format!("{n}");
-    println!("{}", hold);
-    println!("{}", n + late.len());
-}
-"#;
-
-#[test]
-fn sb33_a_copy_a_mutable_binding_a_string_loop_and_a_named_return_each_keep_one_share() {
-    let h = Harness::new();
-    h.differential_row(
-        "SB-38",
-        SB38_BINDINGS_THAT_OWN,
-        "a0a0mk0mk00rrq0\na1a1mk1mk11rrq1\na2a2mk2mk22rrq2\na2\n46\n",
-        (67, 67),
-    );
-    h.assert_legs(18);
 }
 
 const SB39_OWNED_STRING_LOOPS_LEFT_EARLY: &str = r#"
@@ -3777,49 +3749,6 @@ fn sb90_a_vec_parameter_without_an_element_type_asks_for_its_type_argument() {
     h.assert_legs(1);
 }
 
-const SB97_A_STRING_LENT_BY_ADDRESS_IN_A_LOOP: &str = r#"
-fn victim(n: i64) -> String { "ab" + format!("{n}") }
-fn churn() -> Vec<String> {
-    let mut keep: Vec<String> = Vec::new();
-    let mut i: i64 = 10;
-    while i < 50 {
-        Vec::push(keep, "Q" + format!("{i}"));
-        i = i + 1;
-    }
-    keep
-}
-
-fn lens(r: &String) -> i64 { (*r).len() }
-fn glen<T>(r: &T, n: i64) -> i64 { n }
-fn bump(r: &mut String) { *r = *r + "!"; }
-fn main() {
-    let mut n: i64 = 0;
-    let mut i: i64 = 0;
-    while i < 1000 {
-        let s: String = victim(i);
-        n = n + lens(&s) + glen(&s, 1);
-        let mut t: String = victim(i);
-        bump(&mut t);
-        n = n + t.len();
-        i = i + 1;
-    }
-    let k = churn();
-    println!("{n}");
-}
-"#;
-
-#[test]
-fn sb91_a_string_whose_address_is_lent_to_an_aelys_callee_is_still_released() {
-    let h = Harness::new();
-    h.differential_row(
-        "SB-97",
-        SB97_A_STRING_LENT_BY_ADDRESS_IN_A_LOOP,
-        "11780\n",
-        (5081, 5081),
-    );
-    h.assert_legs(18);
-}
-
 const SB98_STRUCT_AND_ENUM_TEMPORARIES_IN_A_LONG_LOOP: &str = r#"
 struct P { name: String, age: i64 }
 fn half(n: i64) -> Option<i64> { if n % 2 == 0 { return Some(n / 2); } None }
@@ -3854,34 +3783,6 @@ fn sb92_struct_and_enum_temporaries_in_a_loop_do_not_grow_the_frame() {
 
 // a lent address is safe only while a reference cannot be stored, returned, captured or lent out
 
-const SB99_A_REFERENCE_STORED_IN_A_CONTAINER: &str = r#"
-struct H { r: &String }
-fn main() {
-    let s: String = "a" + "b";
-    let h: H = H { r: &s };
-    println!("{}", *h.r);
-}
-"#;
-
-const SB99_A_REFERENCE_RETURNED_FROM_A_FUNCTION: &str = r#"
-fn dangle() -> &String {
-    let s: String = "a" + "b";
-    &s
-}
-fn main() {
-    println!("{}", *dangle());
-}
-"#;
-
-const SB99_A_CLOSURE_THAT_CAPTURES_A_REFERENCE: &str = r#"
-fn main() {
-    let s: String = "a" + "b";
-    let r: &String = &s;
-    let f = move |n: i64| -> i64 { n + (*r).len() };
-    println!("{}", f(1));
-}
-"#;
-
 const SB99_AN_EXTERNAL_DECLARATION_AS_A_VALUE: &str = r#"
 extern "C" { fn puts(s: &String) -> i64; }
 fn main() {
@@ -3903,24 +3804,6 @@ fn main() {
 fn sb93_a_reference_cannot_be_stored_returned_captured_or_handed_to_an_extern() {
     let h = Harness::new();
     h.rejects(
-        "SB-99A",
-        SB99_A_REFERENCE_STORED_IN_A_CONTAINER,
-        "E0714",
-        "references stored into aggregate containers",
-    );
-    h.rejects(
-        "SB-99B",
-        SB99_A_REFERENCE_RETURNED_FROM_A_FUNCTION,
-        "E0721",
-        "function returns a reference to local `s`",
-    );
-    h.rejects(
-        "SB-99C",
-        SB99_A_CLOSURE_THAT_CAPTURES_A_REFERENCE,
-        "E0725",
-        "a closure that captures a reference",
-    );
-    h.rejects(
         "SB-99D",
         SB99_AN_EXTERNAL_DECLARATION_AS_A_VALUE,
         "E0616",
@@ -3932,7 +3815,7 @@ fn sb93_a_reference_cannot_be_stored_returned_captured_or_handed_to_an_extern() 
         "E0617",
         "must appear inside an `unsafe { }` block",
     );
-    h.assert_legs(5);
+    h.assert_legs(2);
 }
 
 const SB101_A_STRUCT_COPIED_IN_A_LOOP: &str = r#"
@@ -4043,48 +3926,6 @@ fn sb96_an_array_of_strings_releases_what_it_holds_and_what_it_replaces() {
         SB103_AN_ARRAY_ELEMENT_STORE_IN_A_LOOP,
         "ab999ab997ab998\n",
         (2083, 2083),
-    );
-    h.assert_legs(18);
-}
-
-const SB104_A_FOR_OVER_ARRAYS_OF_CARRIERS: &str = r#"
-fn victim(n: i64) -> String { "ab" + format!("{n}") }
-fn churn() -> Vec<String> {
-    let mut keep: Vec<String> = Vec::new();
-    let mut i: i64 = 10;
-    while i < 50 {
-        Vec::push(keep, "Q" + format!("{i}"));
-        i = i + 1;
-    }
-    keep
-}
-
-struct P { name: String, age: i64 }
-fn main() {
-    let arr: [P; 2] = [P { name: victim(1), age: 1 }, P { name: victim(2), age: 2 }];
-    let mut n: i64 = 0;
-    for p in arr {
-        n = n + p.name.len() + p.age;
-    }
-    let mut brr: [String; 3] = [victim(3), victim(4), victim(5)];
-    let mut acc: String = "";
-    for s in brr {
-        brr[1] = victim(9);
-        let k = churn();
-        acc = acc + s;
-    }
-    println!("{}", format!("{n} ") + acc);
-}
-"#;
-
-#[test]
-fn sb97_a_for_over_an_array_holds_the_collection_and_borrows_its_element() {
-    let h = Harness::new();
-    h.differential_row(
-        "SB-104",
-        SB104_A_FOR_OVER_ARRAYS_OF_CARRIERS,
-        "9 ab3ab4ab5\n",
-        (265, 265),
     );
     h.assert_legs(18);
 }

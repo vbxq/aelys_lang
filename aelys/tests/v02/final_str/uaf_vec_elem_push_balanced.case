@@ -1,24 +1,24 @@
 fn warm(s: &str) -> String {
-    let mut w = String::with_capacity(32)
-    w.push_str(s)
-    return w
+    let mut w = String::with_capacity(32);
+    w.push_str(s);
+    w
 }
 
 fn main() {
-    let mut v1: Vec<String> = Vec::new()
-    v1.push(warm("e0"))
-    let mut v2 = v1
-    v2[0].push_str("x")
-    v1[0].push_str("w")
-    println(v1[0])
-    println(v2[0])
-    let mut words: Vec<String> = Vec::new()
-    words.push(warm("w1"))
-    for i in 0..words.len {
-        let mut t = words[i]
-        t.push_str("x")
-        words[i].push_str("y")
-        println(t)
+    let mut v1: Vec<String> = Vec::new();
+    v1.push(warm("e0"));
+    let mut v2 = v1;
+    v2[0].push_str("x");
+    v1[0].push_str("w");
+    println!("{}", v1[0]);
+    println!("{}", v2[0]);
+    let mut words: Vec<String> = Vec::new();
+    words.push(warm("w1"));
+    for i in 0..words.len() {
+        let mut t = words[i];
+        t.push_str("x");
+        words[i].push_str("y");
+        println!("{}", t);
     }
-    println(words[0])
+    println!("{}", words[0]);
 }

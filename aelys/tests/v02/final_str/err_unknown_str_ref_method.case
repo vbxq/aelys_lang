@@ -1,4 +1,4 @@
 fn main() {
-    let r: &str = "a"
-    r.shout()
+    let r: &str = "a";
+    r.shout();
 }

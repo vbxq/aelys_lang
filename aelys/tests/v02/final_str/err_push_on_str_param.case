@@ -1,7 +1,7 @@
 fn f(s: &str) {
-    s.push('x')
+    s.push('x');
 }
 
 fn main() {
-    f("a")
+    f("a");
 }

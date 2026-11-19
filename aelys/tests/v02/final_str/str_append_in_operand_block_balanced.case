@@ -1,15 +1,15 @@
 fn first<T>(a: T, b: T) -> T {
-    return a
+    a
 }
 
 fn main() {
-    let mut b = "b" + ""
-    println(b + { b = b + "X"; "|u" })
-    let mut c = "c" + ""
-    println(first(c, { c = c + "X"; "u" }))
-    let mut g = "g" + ""
-    let eq = g == { g = g + "X"; "gX" }
-    println(eq)
-    let mut f = "f" + ""
-    println("{f}{ { f = f + "X"; "|u" } }")
+    let mut b = "b" + "";
+    println!("{}", b + { b = b + "X"; "|u" });
+    let mut c = "c" + "";
+    println!("{}", first(c, { c = c + "X"; "u" }));
+    let mut g = "g" + "";
+    let eq = g == { g = g + "X"; "gX" };
+    println!("{}", eq);
+    let mut f = "f" + "";
+    println!("{}{}", f, { f = f + "X"; "|u" });
 }

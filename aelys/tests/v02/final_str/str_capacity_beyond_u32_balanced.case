@@ -1,7 +1,7 @@
 fn main() {
-    let mut s = String::with_capacity(5000000000)
-    s.push_str("ab")
-    s.push('c')
-    println(s)
-    println(s.len())
+    let mut s = String::with_capacity(5000000000);
+    s.push_str("ab");
+    s.push('c');
+    println!("{}", s);
+    println!("{}", s.len());
 }

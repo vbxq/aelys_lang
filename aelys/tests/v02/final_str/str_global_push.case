@@ -1,11 +1,11 @@
-let mut glob: String = "g"
+static mut glob: String = "g";
 
 fn bump() {
-    glob.push_str("+")
+    glob.push_str("+");
 }
 
 fn main() {
-    bump()
-    bump()
-    println(glob)
+    bump();
+    bump();
+    println!("{}", glob);
 }

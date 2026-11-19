@@ -2690,20 +2690,25 @@ fn rc2_98_a_lowering_refusal_names_its_site_without_a_numbered_prefix() {
     );
 }
 
+const RC2_99: &str = r#"
+struct Name { first: String, last: String }
+fn parse(full: String) -> Name {
+    let mut i: i64 = 0;
+    while i < full.len() && full.as_bytes()[i] != 32 as u8 { i = i + 1; }
+    Name { first: full[0..i], last: full[i + 1..full.len()] }
+}
+fn main() {
+    let n = parse("ada lovelace");
+    println!("{}, {}", n.last, n.first);
+}
+"#;
+
 #[test]
-fn rc2_99_a_slice_of_a_string_names_substring() {
-    refusal_row_full(
-        "rc2-99",
-        "struct Name { first: String, last: String }\nfn parse(full: String) -> Name {\n\
-         \x20   let mut i: i64 = 0;\n    while i < full.len() && full.as_bytes()[i] != 32 as u8 { i = i + 1; }\n\
-         \x20   Name { first: full[0..i], last: full[i + 1..full.len()] }\n}\n\
-         fn main() {\n    let n = parse(\"ada lovelace\");\n\
-         \x20   println!(\"{}, {}\", n.last, n.first);\n}\n",
-        &[],
-        "E0425",
-        &["a `string` has no slices", "str::substring"],
-        &["&[dynamic]"],
-    );
+fn rc2_99_a_slice_of_a_string_is_a_byte_substring() {
+    let h = Harness::new();
+    h.differential_row("rc2-99", RC2_99, &[], "lovelace, ada\n", (4, 4));
+    h.lsan_row("rc2-99", RC2_99, &[], "lovelace, ada\n");
+    h.assert_legs(24);
 }
 
 const RC2_100: &str = r#"
@@ -3015,7 +3020,7 @@ fn rc2_118_a_string_stored_into_an_integer_field_of_a_generic_result_is_refused(
         &[],
         "E0301",
         &[
-            "expected `i64`, found `string`",
+            "expected `i64`, found `&str`",
             "assignment to field `a` of a value whose type is only inferred after this use",
         ],
         &["E0901"],
@@ -3046,7 +3051,7 @@ fn rc2_120_a_string_stored_into_an_integer_element_of_a_generic_result_is_refuse
          \x20   println!(\"{}\", get(a));\n}\n",
         &[],
         "E0301",
-        &["expected `i64`, found `string`", "element assignment"],
+        &["expected `i64`, found `&str`", "element assignment"],
         &["E0901"],
     );
 }
@@ -5200,7 +5205,7 @@ fn main() {
 #[test]
 fn rc2_208_an_ordinary_program_over_the_whole_library_and_the_rc_list_surface_is_balanced() {
     let h = Harness::new();
-    h.differential_row("rc2-208", RC2_208, &[], "96823 11\n", (10807, 10807));
+    h.differential_row("rc2-208", RC2_208, &[], "96823 11\n", (9607, 9607));
     h.lsan_row("rc2-208", RC2_208, &[], "96823 11\n");
     h.assert_legs(24);
 }
@@ -5325,7 +5330,7 @@ fn rc2_213_a_mistyped_write_through_a_late_rc_is_refused() {
         RC2_213,
         &[],
         "E0301",
-        "expected `i64`, found `string`",
+        "expected `i64`, found `&str`",
     );
 }
 

@@ -1,41 +1,41 @@
 fn warm(s: &str) -> String {
-    let mut w = String::with_capacity(32)
-    w.push_str(s)
-    return w
+    let mut w = String::with_capacity(32);
+    w.push_str(s);
+    w
 }
 
 fn borrow_then_push(s: String) -> String {
-    let mut t = s
-    t.push_str("+t")
-    return t
+    let mut t = s;
+    t.push_str("+t");
+    t
 }
 
 fn mut_param(mut s: String) -> String {
-    s.push_str("+m")
-    return s
+    s.push_str("+m");
+    s
 }
 
 fn str_param(s: &str) -> String {
-    let mut t: String = s
-    t += "+r"
-    return t
+    let mut t: String = s;
+    t += "+r";
+    t
 }
 
 fn main() {
-    let mut f1 = warm("f1")
-    let r1 = borrow_then_push(f1)
-    f1.push_str("-")
-    println(r1)
-    println(f1)
-    let mut f2 = warm("f2")
-    let r2 = mut_param(f2)
-    f2.push_str("-")
-    println(r2)
-    println(f2)
-    let mut f3 = warm("f3")
-    let r3 = str_param(f3)
-    f3.push_str("-")
-    println(r3)
-    println(f3)
-    println(borrow_then_push("lit"))
+    let mut f1 = warm("f1");
+    let r1 = borrow_then_push(f1);
+    f1.push_str("-");
+    println!("{}", r1);
+    println!("{}", f1);
+    let mut f2 = warm("f2");
+    let r2 = mut_param(f2);
+    f2.push_str("-");
+    println!("{}", r2);
+    println!("{}", f2);
+    let mut f3 = warm("f3");
+    let r3 = str_param(f3);
+    f3.push_str("-");
+    println!("{}", r3);
+    println!("{}", f3);
+    println!("{}", borrow_then_push("lit"));
 }

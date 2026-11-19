@@ -1,5 +1,5 @@
 fn main() {
-    let s = String::new()
-    s.push_str("x")
-    println(s)
+    let s = String::new();
+    s.push_str("x");
+    println!("{}", s);
 }

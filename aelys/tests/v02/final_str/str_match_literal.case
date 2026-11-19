@@ -1,17 +1,17 @@
 fn kind(s: &str) -> i64 {
-    return match s { "a" => 1, "bb" => 2, _ => 0 }
+    match s { "a" => 1, "bb" => 2, _ => 0 }
 }
 
 fn kind_owned(s: String) -> String {
-    return match s { "x" => "ex", "" => "empty", _ => "other" }
+    match s { "x" => "ex", "" => "empty", _ => "other" }
 }
 
 fn main() {
-    let o: String = "b" + "b"
-    println(kind(o))
-    println(kind("a"))
-    println(kind("zz"))
-    println(kind_owned("x"))
-    println(kind_owned(String::new()))
-    println(kind_owned(o))
+    let o: String = "b" + "b";
+    println!("{}", kind(o));
+    println!("{}", kind("a"));
+    println!("{}", kind("zz"));
+    println!("{}", kind_owned("x"));
+    println!("{}", kind_owned(String::new()));
+    println!("{}", kind_owned(o));
 }

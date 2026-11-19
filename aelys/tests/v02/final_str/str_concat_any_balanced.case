@@ -1,14 +1,14 @@
 fn main() {
-    let a: String = "A"
-    let b: &str = "b"
-    let c: String = a + b
-    let d: String = b + a
-    let e: String = b + "c"
-    let f: String = a + c
-    println(c)
-    println(d)
-    println(e)
-    println(f)
-    let g = "x" + "y" + a + b
-    println(g)
+    let a: String = "A";
+    let b: &str = "b";
+    let c: String = a + b;
+    let d: String = b + a;
+    let e: String = b + "c";
+    let f: String = a + c;
+    println!("{}", c);
+    println!("{}", d);
+    println!("{}", e);
+    println!("{}", f);
+    let g = "x" + "y" + a + b;
+    println!("{}", g);
 }

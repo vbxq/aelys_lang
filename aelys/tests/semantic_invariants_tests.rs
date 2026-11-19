@@ -5102,18 +5102,20 @@ fn group_s2_fails_closed() {
 }
 
 #[test]
-fn s2_slice_form_refusal_is_opt_level_independent() {
+fn s2_string_slice_is_opt_level_independent() {
     let h = Harness::new();
-    let rows: &[(&str, &str)] = &[
+    let rows: &[(&str, &str, Oracle)] = &[
         (
             "S2-F03",
             r#"
 use std::process::ExitCode; fn main() -> ExitCode {
     let t = "abcdef";
     let s = t[0..2];
+    println!("{}", s);
     return ExitCode::from(22);
 }
 "#,
+            Oracle::ExitOut(22, "ab\n"),
         ),
         (
             "S2-F03b",
@@ -5121,19 +5123,15 @@ use std::process::ExitCode; fn main() -> ExitCode {
 use std::process::ExitCode; fn main() -> ExitCode {
     let t = "abcdef";
     let s = t[..];
+    println!("{}", s);
     return ExitCode::from(22);
 }
 "#,
+            Oracle::ExitOut(22, "abcdef\n"),
         ),
     ];
-    for (id, src) in rows {
-        for (name, opt) in LEVELS {
-            let rendered = h.reject(id, name, src, *opt);
-            assert!(
-                rendered.contains("[E0425]"),
-                "{id} at {name} MUST be rejected with E0425, got:\n{rendered}"
-            );
-        }
+    for (id, src, oracle) in rows {
+        run_row(&h, id, src, *oracle);
     }
 }
 

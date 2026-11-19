@@ -1,18 +1,18 @@
 fn warm(s: &str) -> String {
-    let mut w = String::with_capacity(32)
-    w.push_str(s)
-    return w
+    let mut w = String::with_capacity(32);
+    w.push_str(s);
+    w
 }
 
 fn ident<T>(x: T) -> T {
-    return x
+    x
 }
 
 fn main() {
-    let mut base = warm("gen")
-    let mut copy = ident(base)
-    copy.push_str("2")
-    base.push_str("1")
-    println(base)
-    println(copy)
+    let mut base = warm("gen");
+    let mut copy = ident(base);
+    copy.push_str("2");
+    base.push_str("1");
+    println!("{}", base);
+    println!("{}", copy);
 }

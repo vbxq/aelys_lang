@@ -1,50 +1,50 @@
-struct Person { name: String, tag: string }
+struct Person { name: String, tag: String }
 
 fn shout(s: &str) -> String {
-    return s + "!"
+    s + "!"
 }
 
 fn own(s: String) -> String {
-    return s
+    s
 }
 
 fn first(v: Vec<String>) -> String {
-    return v[0]
+    v[0]
 }
 
 fn label() -> String {
-    return "lbl"
+    "lbl"
 }
 
 fn view(s: &String) -> i64 {
-    return s.len()
+    s.len()
 }
 
 fn main() {
-    let lit = "abc"
-    let owned: String = "def"
-    let p = Person { name: "ann", tag: "t1" }
-    println(shout(lit))
-    println(shout(owned))
-    println(shout(p.name))
-    println(own(lit))
-    println(own(owned + lit))
-    let mut v: Vec<String> = Vec::new()
-    v.push("x")
-    v.push(owned)
-    println(first(v))
-    println(v.len)
-    println(label())
-    println(view(&owned))
-    let o: Option<String> = Some("opt")
+    let lit = "abc";
+    let owned: String = "def";
+    let p = Person { name: "ann", tag: "t1" };
+    println!("{}", shout(lit));
+    println!("{}", shout(owned));
+    println!("{}", shout(p.name));
+    println!("{}", own(lit));
+    println!("{}", own(owned + lit));
+    let mut v: Vec<String> = Vec::new();
+    v.push("x");
+    v.push(owned);
+    println!("{}", first(v));
+    println!("{}", v.len());
+    println!("{}", label());
+    println!("{}", view(&owned));
+    let o: Option<String> = Some("opt");
     match o {
-        Some(s) => println(s),
-        None => println("none"),
+        Some(s) => println!("{}", s),
+        None => println!("none"),
     }
-    let r: &str = owned
-    println(r)
-    let mut acc = ""
-    acc = acc + "z"
-    println(acc)
-    println(p.tag)
+    let r: &str = owned;
+    println!("{}", r);
+    let mut acc = "";
+    acc = acc + "z";
+    println!("{}", acc);
+    println!("{}", p.tag);
 }

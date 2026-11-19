@@ -1,16 +1,16 @@
 nogc fn count_a(s: &str) -> i64 {
-    let mut n = 0
+    let mut n = 0;
     for b in s.bytes() {
         if b == 97 {
-            n = n + 1
+            n = n + 1;
         }
     }
-    return n
+    n
 }
 
 fn main() {
-    let s: String = "banana"
-    println(count_a(s))
-    println(count_a("aaa"))
-    println(count_a(s[1..4]))
+    let s: String = "banana";
+    println!("{}", count_a(s));
+    println!("{}", count_a("aaa"));
+    println!("{}", count_a(s[1..4]));
 }

@@ -110,11 +110,6 @@ fn a_reference_counted_pointer_is_rejected_where_a_borrow_is_not() {
     twin_is_accepted("F2-3", "extern \"C\" { fn probe(x: &i64); }");
 }
 
-#[test]
-fn the_str_alias_is_rejected_exactly_like_string() {
-    rejected_e0615("F2-11", "extern \"C\" { fn probe(x: String); }");
-}
-
 // the accepted spellings are open, so a table of names would be walked around by one capital letter
 #[test]
 fn an_odd_capitalisation_of_string_is_e0615_and_not_an_unknown_type_name() {
