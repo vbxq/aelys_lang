@@ -394,6 +394,9 @@ impl<'a> FunctionCodegen<'a> {
                 )));
             }
         };
+        if let Some(q) = aelys_air::objects::dyn_trait(&pointee) {
+            return self.emit_dyn_make_unique(local, q);
+        }
         let mut leaves = Vec::new();
         self.vec_leaves(&pointee, &mut Vec::new(), &mut leaves)?;
         if leaves.is_empty() {
@@ -432,6 +435,40 @@ impl<'a> FunctionCodegen<'a> {
             .build_unconditional_branch(cont_block)
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         self.builder.position_at_end(cont_block);
+        Ok(())
+    }
+
+    fn emit_dyn_make_unique(&mut self, local: LocalId, q: &str) -> Result<(), CodegenError> {
+        let slot = self
+            .program
+            .dyn_tables
+            .slots_of(q)
+            .map(<[String]>::len)
+            .ok_or_else(|| CodegenError::UnsupportedType(format!("no vtable layout for `{q}`")))?;
+        let object = self.load_local(local)?.into_struct_value();
+        let llvm = |e: inkwell::builder::BuilderError| CodegenError::LlvmError(e.to_string());
+        let data = self.builder.build_extract_value(object, 0, "mu_data").map_err(llvm)?;
+        let vtable = self
+            .builder
+            .build_extract_value(object, 1, "mu_vtable")
+            .map_err(llvm)?
+            .into_pointer_value();
+        let ptr_ty = self.context.ptr_type(AddressSpace::default());
+        let index = self.context.i64_type().const_int(slot as u64, false);
+        let slot_ptr = unsafe {
+            self.builder
+                .build_gep(ptr_ty, vtable, &[index], "mu_slot")
+                .map_err(llvm)?
+        };
+        let unique = self
+            .builder
+            .build_load(ptr_ty, slot_ptr, "mu_fn")
+            .map_err(llvm)?
+            .into_pointer_value();
+        let fn_ty = self.context.void_type().fn_type(&[ptr_ty.into()], false);
+        self.builder
+            .build_indirect_call(fn_ty, unique, &[data.into()], "")
+            .map_err(llvm)?;
         Ok(())
     }
 

@@ -1,0 +1,28 @@
+trait Paint { fn paint(&mut self, x: i64); }
+trait Fill { nogc fn fill(&mut self, x: i64); }
+
+struct R { screen: Vec<u8>, w: i64 }
+
+impl Paint for R {
+    nogc fn paint(&mut self, x: i64) { self.screen[x] = 5 as u8; }
+}
+
+impl Fill for R {
+    nogc fn fill(&mut self, x: i64) { self.screen[x] = 6 as u8; }
+}
+
+nogc fn fill_through(f: &mut dyn Fill, x: i64) { f.fill(x); }
+
+fn main() {
+    let mut r = R { screen: vec![1 as u8, 1 as u8, 1 as u8, 1 as u8], w: 0 };
+    let a = r.screen;
+    let p: &mut dyn Paint = &mut r;
+    p.paint(1);
+    let b = r.screen;
+    let f: &mut dyn Fill = &mut r;
+    f.fill(2);
+    let c = r.screen;
+    fill_through(&mut r, 3);
+    println!("{} {} {} {} {}", a[1], b[1], b[2], c[2], c[3]);
+    println!("{} {} {} {}", r.screen[0], r.screen[1], r.screen[2], r.screen[3]);
+}

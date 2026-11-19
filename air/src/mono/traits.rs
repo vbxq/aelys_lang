@@ -453,6 +453,7 @@ impl MonoContext {
 
     pub(super) fn build_vtables(&self, program: &mut AirProgram) -> Result<(), Vec<MonoError>> {
         let mut vtables = Vec::with_capacity(self.dyn_pairs.len());
+        let mut next_id = program.functions.iter().map(|f| f.id.0).max().map_or(0, |m| m + 1);
         for (q, self_ty) in &self.dyn_pairs {
             let key = self.type_args_key(std::slice::from_ref(self_ty));
             let fns = program
@@ -466,7 +467,7 @@ impl MonoContext {
                         .cloned()
                 })
                 .collect::<Option<Vec<String>>>();
-            let Some(fns) = fns else {
+            let Some(mut fns) = fns else {
                 return Err(vec![MonoError::mono(
                     aelys_common::Fault::Compiler,
                     format!(
@@ -476,6 +477,10 @@ impl MonoContext {
                     ),
                 )]);
             };
+            let unique = make_unique_slot(q, self_ty, FunctionId(next_id));
+            next_id += 1;
+            fns.push(unique.name.clone());
+            program.functions.push(unique);
             vtables.push(crate::objects::AirVtable {
                 trait_q: q.clone(),
                 self_ty: self_ty.clone(),
@@ -484,5 +489,44 @@ impl MonoContext {
         }
         program.dyn_tables.vtables = vtables;
         Ok(())
+    }
+}
+
+// the last vtable slot makes the vecs of the object unique, for a managed caller of a nogc impl
+fn make_unique_slot(q: &str, self_ty: &AirType, id: FunctionId) -> AirFunction {
+    let this = LocalId(0);
+    AirFunction {
+        id,
+        name: format!("__mu${q}${}", super::substitute::type_to_string(self_ty)),
+        gc_mode: GcMode::Managed,
+        type_params: Vec::new(),
+        params: vec![AirParam {
+            id: this,
+            ty: AirType::Ptr(Box::new(self_ty.clone())),
+            name: "this".to_string(),
+            span: None,
+        }],
+        ret_ty: AirType::Void,
+        locals: Vec::new(),
+        blocks: vec![AirBlock {
+            id: BlockId(0),
+            stmts: vec![AirStmt {
+                kind: AirStmtKind::CallVoid {
+                    func: Callee::Named(crate::symbols::MAKE_UNIQUE_THROUGH.to_string()),
+                    args: vec![Operand::Copy(this)],
+                },
+                span: None,
+            }],
+            terminator: AirTerminator::Return(None),
+        }],
+        is_extern: false,
+        calling_conv: CallingConv::C,
+        attributes: FunctionAttribs {
+            inline: InlineHint::Default,
+            no_gc: false,
+            no_unwind: true,
+            cold: false,
+        },
+        span: None,
     }
 }

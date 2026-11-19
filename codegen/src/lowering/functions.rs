@@ -96,7 +96,9 @@ impl CodegenContext {
             let AirType::Ptr(pointee) = &param.ty else {
                 continue;
             };
-            if !matches!(pointee.as_ref(), AirType::Struct(_)) {
+            if !matches!(pointee.as_ref(), AirType::Struct(_))
+                || aelys_air::objects::dyn_trait(pointee).is_some()
+            {
                 continue;
             }
             let ty = air_basic_type_to_llvm(pointee, self.context)?;
