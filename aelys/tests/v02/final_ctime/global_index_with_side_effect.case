@@ -1,0 +1,29 @@
+struct W { arr: [i64; 3] }
+
+static mut G: [i64; 3] = [1, 2, 3];
+static mut H: W = W { arr: [1, 2, 3] };
+
+fn bump() -> i64 {
+    G[0] = 100;
+    H.arr[0] = 100;
+    0
+}
+
+fn reset() {
+    G[0] = 1;
+    H.arr[0] = 1;
+}
+
+fn main() {
+    let a = G[bump()];
+    reset();
+    let b = H.arr[bump()];
+    reset();
+    let k = 0;
+    let f = move || -> i64 { G[bump()] + k };
+    let c = f();
+    reset();
+    let g = move || -> i64 { G[bump()] };
+    let d = g();
+    println!("{a} {b} {c} {d}");
+}

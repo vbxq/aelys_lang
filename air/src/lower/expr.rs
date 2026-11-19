@@ -443,6 +443,7 @@ impl<'a> LoweringContext<'a> {
                     && self.views.captures.is_empty()
                     && self.lookup_local(name).is_none()
                     && self.global_names.contains(name)
+                    && !super::pin::may_free(index)
                     && let pointee @ AirType::Array(..) = self.lower_type_from_infer(&object.ty)
                 {
                     // an element read must not load the whole global array, llvm chokes on a large aggregate
