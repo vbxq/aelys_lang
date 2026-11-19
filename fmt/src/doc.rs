@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
-pub const WIDTH: usize = 100;
+const WIDTH: usize = 100;
 const INDENT: usize = 4;
 
-pub enum Node {
+enum Node {
     Text(Rc<str>),
     Space,
     Concat(Vec<Doc>),
@@ -22,17 +22,17 @@ pub enum Node {
     NextLine,
 }
 
-pub struct Inner {
-    pub node: Node,
-    pub flat: Option<usize>,
-    pub brk: bool,
-    pub multiline: bool,
+struct Inner {
+    node: Node,
+    flat: Option<usize>,
+    brk: bool,
+    multiline: bool,
     open_flat: Option<usize>,
     open_brk: bool,
 }
 
 #[derive(Clone)]
-pub struct Doc(pub Rc<Inner>);
+pub struct Doc(Rc<Inner>);
 
 fn width(s: &str) -> usize {
     s.chars().count()
@@ -105,11 +105,11 @@ impl Doc {
         }
     }
 
-    pub fn flat(&self) -> Option<usize> {
+    pub fn open_flat(&self) -> Option<usize> {
         self.0.open_flat
     }
 
-    pub fn brk(&self) -> bool {
+    pub fn open_brk(&self) -> bool {
         self.0.open_brk
     }
 }
@@ -262,6 +262,17 @@ struct Cmd<'d> {
     from: usize,
 }
 
+impl<'d> Cmd<'d> {
+    fn new(ind: usize, mode: Mode, doc: &'d Doc) -> Cmd<'d> {
+        Cmd {
+            ind,
+            mode,
+            doc,
+            from: 0,
+        }
+    }
+}
+
 struct Printer {
     out: String,
     col: usize,
@@ -316,24 +327,21 @@ impl Printer {
     }
 }
 
-fn fits(next: Cmd, rest: &[Cmd], room: isize) -> bool {
-    fits_all(vec![(next.ind, next.mode, next.doc, next.from)], rest, room)
-}
-
-fn fits_all<'d>(
-    mut cmds: Vec<(usize, Mode, &'d Doc, usize)>,
-    rest: &[Cmd<'d>],
-    mut room: isize,
-) -> bool {
+fn fits_all<'d>(mut cmds: Vec<Cmd<'d>>, rest: &[Cmd<'d>], mut room: isize) -> bool {
     let mut rest_idx = rest.len();
     while room >= 0 {
-        let Some((ind, mode, doc, from)) = cmds.pop() else {
+        let Some(Cmd {
+            ind,
+            mode,
+            doc,
+            from,
+        }) = cmds.pop()
+        else {
             if rest_idx == 0 {
                 return true;
             }
             rest_idx -= 1;
-            let c = rest[rest_idx];
-            cmds.push((c.ind, c.mode, c.doc, c.from));
+            cmds.push(rest[rest_idx]);
             continue;
         };
         match &doc.0.node {
@@ -346,28 +354,27 @@ fn fits_all<'d>(
             Node::Space => room -= 1,
             Node::Concat(v) | Node::Fill(v) => {
                 for d in v[from..].iter().rev() {
-                    cmds.push((ind, mode, d, 0));
+                    cmds.push(Cmd::new(ind, mode, d));
                 }
             }
-            Node::Trail(d) if d.brk() => return true,
+            Node::Trail(d) if d.open_brk() => return true,
             Node::Trail(_) => {}
-            Node::Indent(d) => cmds.push((ind + INDENT, mode, d, 0)),
+            Node::Indent(d) => cmds.push(Cmd::new(ind + INDENT, mode, d)),
             Node::Group(d, _) => {
-                cmds.push((ind, if doc.breaks() { Mode::Break } else { mode }, d, 0))
+                let mode = if doc.breaks() { Mode::Break } else { mode };
+                cmds.push(Cmd::new(ind, mode, d))
             }
             Node::IfBreak(b, f) => {
-                cmds.push((ind, mode, if mode == Mode::Break { b } else { f }, 0))
+                cmds.push(Cmd::new(ind, mode, if mode == Mode::Break { b } else { f }))
             }
-            Node::Choice(v) => cmds.push((
-                ind,
-                mode,
-                if mode == Mode::Break {
+            Node::Choice(v) => {
+                let pick = if mode == Mode::Break {
                     v.last().unwrap()
                 } else {
                     &v[0]
-                },
-                0,
-            )),
+                };
+                cmds.push(Cmd::new(ind, mode, pick))
+            }
             Node::NextLine => room = WIDTH as isize - ind as isize,
             Node::Line => {
                 if mode == Mode::Break {
@@ -396,12 +403,7 @@ pub fn print(doc: &Doc) -> String {
         blank: false,
         need_newline: false,
     };
-    let mut stack = vec![Cmd {
-        ind: 0,
-        mode: Mode::Break,
-        doc,
-        from: 0,
-    }];
+    let mut stack = vec![Cmd::new(0, Mode::Break, doc)];
     while let Some(cmd) = stack.pop() {
         let Cmd {
             ind,
@@ -414,91 +416,39 @@ pub fn print(doc: &Doc) -> String {
             Node::Space => p.space(),
             Node::Concat(v) => {
                 for d in v.iter().rev() {
-                    stack.push(Cmd {
-                        ind,
-                        mode,
-                        doc: d,
-                        from: 0,
-                    });
+                    stack.push(Cmd::new(ind, mode, d));
                 }
             }
-            Node::Indent(d) => stack.push(Cmd {
-                ind: ind + INDENT,
-                mode,
-                doc: d,
-                from: 0,
-            }),
-            Node::Trail(d) => stack.push(Cmd {
-                ind,
-                mode,
-                doc: d,
-                from: 0,
-            }),
+            Node::Indent(d) => stack.push(Cmd::new(ind + INDENT, mode, d)),
+            Node::Trail(d) => stack.push(Cmd::new(ind, mode, d)),
             Node::Group(d, _) => {
-                let flat = Cmd {
-                    ind,
-                    mode: Mode::Flat,
-                    doc: d,
-                    from: 0,
-                };
+                let flat = Cmd::new(ind, Mode::Flat, d);
                 let m = if doc.breaks() {
                     Mode::Break
-                } else if mode == Mode::Flat || fits(flat, &stack, room(&p)) {
+                } else if mode == Mode::Flat || fits_all(vec![flat], &stack, room(&p)) {
                     Mode::Flat
                 } else {
                     Mode::Break
                 };
-                stack.push(Cmd {
-                    ind,
-                    mode: m,
-                    doc: d,
-                    from: 0,
-                });
+                stack.push(Cmd::new(ind, m, d));
             }
             Node::Choice(v) => {
                 if mode == Mode::Flat {
-                    stack.push(Cmd {
-                        ind,
-                        mode,
-                        doc: &v[0],
-                        from: 0,
-                    });
+                    stack.push(Cmd::new(ind, mode, &v[0]));
                 } else {
                     let last = v.len() - 1;
-                    let pick = v[..last].iter().find(|d| {
-                        fits(
-                            Cmd {
-                                ind,
-                                mode: Mode::Flat,
-                                doc: d,
-                                from: 0,
-                            },
-                            &stack,
-                            room(&p),
-                        )
-                    });
+                    let pick = v[..last]
+                        .iter()
+                        .find(|d| fits_all(vec![Cmd::new(ind, Mode::Flat, d)], &stack, room(&p)));
                     match pick {
-                        Some(d) => stack.push(Cmd {
-                            ind,
-                            mode: Mode::Flat,
-                            doc: d,
-                            from: 0,
-                        }),
-                        None => stack.push(Cmd {
-                            ind,
-                            mode: Mode::Break,
-                            doc: &v[last],
-                            from: 0,
-                        }),
+                        Some(d) => stack.push(Cmd::new(ind, Mode::Flat, d)),
+                        None => stack.push(Cmd::new(ind, Mode::Break, &v[last])),
                     }
                 }
             }
-            Node::IfBreak(b, f) => stack.push(Cmd {
-                ind,
-                mode,
-                doc: if mode == Mode::Break { b } else { f },
-                from: 0,
-            }),
+            Node::IfBreak(b, f) => {
+                stack.push(Cmd::new(ind, mode, if mode == Mode::Break { b } else { f }))
+            }
             Node::Line => {
                 if mode == Mode::Break || p.need_newline {
                     p.newline(ind);
@@ -555,19 +505,9 @@ fn print_fill<'d>(
         return;
     }
     let r = room(p);
-    let flat = |d| Cmd {
-        ind,
-        mode: Mode::Flat,
-        doc: d,
-        from: 0,
-    };
-    let broken = |d| Cmd {
-        ind,
-        mode: Mode::Break,
-        doc: d,
-        from: 0,
-    };
-    let content_fits = fits(flat(&parts[0]), &[], r);
+    let flat = |d| Cmd::new(ind, Mode::Flat, d);
+    let broken = |d| Cmd::new(ind, Mode::Break, d);
+    let content_fits = fits_all(vec![flat(&parts[0])], &[], r);
     if parts.len() == 1 {
         stack.push(if content_fits {
             flat(&parts[0])
@@ -592,12 +532,11 @@ fn print_fill<'d>(
         doc,
         from: from + 2,
     });
-    let pair = vec![
-        (ind, Mode::Flat, &parts[2], 0),
-        (ind, Mode::Flat, &parts[1], 0),
-        (ind, Mode::Flat, &parts[0], 0),
-    ];
-    let pair_fits = fits_all(pair, &[], r);
+    let pair_fits = fits_all(
+        vec![flat(&parts[2]), flat(&parts[1]), flat(&parts[0])],
+        &[],
+        r,
+    );
     if pair_fits {
         stack.push(flat(&parts[1]));
         stack.push(flat(&parts[0]));

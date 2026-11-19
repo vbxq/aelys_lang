@@ -5,16 +5,22 @@ use crate::doc::*;
 use crate::lexer::{KEYWORDS, Kind, Lexed};
 
 const MAX_DEPTH: usize = 400;
+const FN_CALL_WIDTH: usize = 60;
+const ARRAY_WIDTH: usize = 60;
+const CHAIN_WIDTH: usize = 60;
+const STRUCT_LIT_WIDTH: usize = 18;
+const STRUCT_VARIANT_WIDTH: usize = 35;
+const SINGLE_LINE_IF_ELSE_WIDTH: usize = 50;
 
 enum Entry {
     Tok(usize),
     Op(usize, usize),
-    Key(usize, String),
+    Key(usize, String, usize),
 }
 
 pub struct Parsed {
     pub doc: Doc,
-    pub norm: Vec<String>,
+    pub norm: Vec<(String, usize)>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -45,10 +51,18 @@ struct Bin {
 }
 
 impl Bin {
+    fn broken(&self) -> Doc {
+        let mut v = Vec::new();
+        for (op, rhs) in &self.rest {
+            v.extend([line(), op.clone(), space(), rhs.clone()]);
+        }
+        concat(vec![self.first.clone(), indent(concat(v))])
+    }
+
     fn joinable(&self) -> bool {
         !self.control
-            && !self.rest.iter().any(|(op, _)| op.brk())
-            && (self.first.brk() || self.rest.iter().any(|(_, r)| r.brk()))
+            && !self.rest.iter().any(|(op, _)| op.open_brk())
+            && (self.first.open_brk() || self.rest.iter().any(|(_, r)| r.open_brk()))
     }
 }
 
@@ -67,7 +81,7 @@ impl E {
         let Some(b) = &self.bin else {
             return self.doc.clone();
         };
-        let g = group(concat(vec![b.first.clone(), indent(bin_rest(b))]));
+        let g = group(b.broken());
         if !b.joinable() {
             return g;
         }
@@ -81,17 +95,6 @@ impl E {
     fn hugs(&self) -> bool {
         self.ov != Ov::Other || self.bin.as_ref().is_some_and(Bin::joinable)
     }
-}
-
-fn bin_rest(b: &Bin) -> Doc {
-    let mut v = Vec::new();
-    for (op, rhs) in &b.rest {
-        v.push(line());
-        v.push(op.clone());
-        v.push(space());
-        v.push(rhs.clone());
-    }
-    concat(v)
 }
 
 #[derive(Clone, Copy, Default)]
@@ -123,6 +126,13 @@ impl List {
     }
 }
 
+#[derive(Clone, Copy)]
+enum Style {
+    Tight(usize),
+    Padded(usize),
+    Vertical,
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum Tr {
     Vertical,
@@ -132,9 +142,8 @@ enum Tr {
 
 struct Block {
     open: Doc,
-    stmts: Vec<(Doc, bool)>,
+    rest: Doc,
     tail: Option<Doc>,
-    close_lead: Option<(Doc, bool)>,
     close: Doc,
 }
 
@@ -197,30 +206,37 @@ pub fn parse(src: &str, lx: Lexed) -> Res<Parsed> {
     let mut seen = std::mem::take(&mut p.consumed);
     seen.sort_unstable();
     seen.dedup();
-    if seen.len() != p.lx.tokens.len() - 1 {
-        return Err(Error::internal(crate::Check::Tokens, 0));
+    let missing = seen
+        .iter()
+        .enumerate()
+        .position(|(k, &i)| k != i)
+        .unwrap_or(seen.len());
+    if missing < p.lx.tokens.len() - 1 {
+        let offset = p.lx.tokens[missing].start;
+        return Err(Error::internal(crate::Check::Tokens, offset));
     }
     let norm = p.norm_strings();
     Ok(Parsed { doc, norm })
 }
 
 impl<'s> Parser<'s> {
-    fn norm_strings(&self) -> Vec<String> {
+    fn norm_strings(&self) -> Vec<(String, usize)> {
         let mut out = Vec::new();
         let mut i = 0;
         while i < self.norm.len() {
             match &self.norm[i] {
-                Entry::Tok(t) => out.push(self.text(*t).to_string()),
+                Entry::Tok(t) => out.push((self.text(*t).to_string(), self.lx.tokens[*t].start)),
                 Entry::Op(a, b) => {
-                    out.push(self.src[self.lx.tokens[*a].start..self.lx.tokens[*b].end].to_string())
+                    let (start, end) = (self.lx.tokens[*a].start, self.lx.tokens[*b].end);
+                    out.push((self.src[start..end].to_string(), start))
                 }
-                Entry::Key(run, _) => {
+                Entry::Key(run, ..) => {
                     let mut keys = Vec::new();
-                    while let Some(Entry::Key(r, k)) = self.norm.get(i) {
+                    while let Some(Entry::Key(r, k, offset)) = self.norm.get(i) {
                         if r != run {
                             break;
                         }
-                        keys.push(k.clone());
+                        keys.push((k.clone(), *offset));
                         i += 1;
                     }
                     keys.sort();
@@ -462,7 +478,7 @@ impl<'s> Parser<'s> {
                 if !same {
                     self.run += 1;
                 }
-                if let Entry::Key(r, _) = &mut self.norm[*entry] {
+                if let Entry::Key(r, ..) = &mut self.norm[*entry] {
                     *r = self.run;
                 }
             }
@@ -474,12 +490,9 @@ impl<'s> Parser<'s> {
     fn attrs(&mut self) -> Res<(Vec<Doc>, bool)> {
         let mut v = Vec::new();
         let mut skip = false;
-        while self.is("#") || self.is("#!") {
+        while self.is("#") {
             let start = self.pos;
             let mut d = vec![self.tok()];
-            if self.is("!") {
-                d.push(self.tok());
-            }
             if !self.is("[") {
                 return self.expected("`[`");
             }
@@ -523,8 +536,8 @@ impl<'s> Parser<'s> {
             return Ok(None);
         }
         let mut v = vec![self.tok()];
-        if self.is("(") && matches!(self.at(1), "crate" | "super" | "self" | "in") {
-            v.push(self.token_tree()?);
+        if self.is("(") && matches!(self.at(1), "crate" | "super" | "self") && self.at(2) == ")" {
+            v.extend([self.tok(), self.tok(), self.tok()]);
         }
         v.push(space());
         Ok(Some(concat(v)))
@@ -540,7 +553,7 @@ impl<'s> Parser<'s> {
             }
             "nogc" => self.at(1) == "fn",
             "unsafe" => matches!(self.at(1), "fn" | "extern" | "impl" | "trait"),
-            "#" | "#!" => true,
+            "#" => true,
             _ => false,
         }
     }
@@ -568,7 +581,8 @@ impl<'s> Parser<'s> {
                     let key = format!("use {};", use_key(&u));
                     self.norm.truncate(norm_mark);
                     sort = Some((0, u.clone(), self.norm.len()));
-                    self.norm.push(Entry::Key(0, key));
+                    self.norm
+                        .push(Entry::Key(0, key, self.lx.tokens[start].start));
                 }
                 u.doc
             }
@@ -590,7 +604,8 @@ impl<'s> Parser<'s> {
                             doc: nil(),
                         };
                         sort = Some((1, tree, self.norm.len()));
-                        self.norm.push(Entry::Key(0, key));
+                        self.norm
+                            .push(Entry::Key(0, key, self.lx.tokens[start].start));
                     }
                     concat(vec![m, space(), name, semi])
                 } else {
@@ -637,19 +652,15 @@ impl<'s> Parser<'s> {
         let open = self.expect("{")?;
         let items = self.items(false)?;
         let (lead, close) = self.close_tok();
-        Ok(seq_block(
-            open,
-            items.into_iter().map(|i| (i.doc, i.blank)).collect(),
-            lead,
-            close,
-        ))
+        let items = items.into_iter().map(|i| (i.doc, i.blank)).collect();
+        Ok(concat(vec![open, seq_rest(items, lead, close)]))
     }
 
     fn fn_item(&mut self) -> Res<Doc> {
         let mut v = Vec::new();
         loop {
             match self.peek() {
-                "const" | "unsafe" | "nogc" | "async" => {
+                "const" | "unsafe" | "nogc" => {
                     v.push(self.tok());
                     v.push(space());
                 }
@@ -671,24 +682,21 @@ impl<'s> Parser<'s> {
             v.push(self.generics()?);
         }
         let l = self.list("(", ")", false, |p| p.param())?;
-        v.push(layout(l, false, usize::MAX, Tr::Vertical, false));
+        v.push(layout(l, Style::Tight(usize::MAX), Tr::Vertical));
         if self.is("->") {
             v.push(space());
             v.push(self.tok());
             v.push(space());
             v.push(self.ty()?);
         }
-        let wh = self.where_clause()?;
-        let has_where = wh.is_some();
-        if let Some(w) = wh {
-            v.push(w);
+        if self.is("where") {
+            v.push(self.where_clause()?);
+        } else if !self.is(";") {
+            v.push(space());
         }
         if self.is(";") {
             v.push(self.tok());
         } else {
-            if !has_where {
-                v.push(space());
-            }
             v.push(self.block_doc()?);
         }
         Ok(concat(v))
@@ -705,13 +713,9 @@ impl<'s> Parser<'s> {
             v.push(self.tok());
             return Ok(concat(v));
         }
-        if self.is("&") || self.is("&&") {
+        if self.is("&") {
             let save = self.pos;
             let mut r = vec![self.tok()];
-            if self.kind(0) == Kind::Lifetime {
-                r.push(self.tok());
-                r.push(space());
-            }
             if self.is("mut") {
                 r.push(self.tok());
                 r.push(space());
@@ -770,15 +774,7 @@ impl<'s> Parser<'s> {
                 v.push(a);
                 v.push(space());
             }
-            if self.is("const") {
-                v.push(self.tok());
-                v.push(space());
-            }
-            if self.kind(0) == Kind::Lifetime {
-                v.push(self.tok());
-            } else {
-                v.push(self.ident()?);
-            }
+            v.push(self.ident()?);
             if self.is(":") {
                 v.push(self.tok());
                 if !self.is(",") && !self.is(">") {
@@ -809,13 +805,6 @@ impl<'s> Parser<'s> {
     }
 
     fn bound(&mut self) -> Res<Doc> {
-        if self.kind(0) == Kind::Lifetime {
-            return Ok(self.tok());
-        }
-        if self.is("?") {
-            let q = self.tok();
-            return Ok(concat(vec![q, self.ty_path()?]));
-        }
         if self.is("(") {
             let o = self.tok();
             let b = self.bounds()?;
@@ -828,31 +817,31 @@ impl<'s> Parser<'s> {
         self.ty_path()
     }
 
-    fn where_clause(&mut self) -> Res<Option<Doc>> {
-        if !self.is("where") {
-            return Ok(None);
+    fn where_or_space(&mut self) -> Res<Doc> {
+        if self.is("where") {
+            self.where_clause()
+        } else {
+            Ok(space())
         }
+    }
+
+    fn where_clause(&mut self) -> Res<Doc> {
         let w = self.tok();
         let mut preds = Vec::new();
         while !self.is("{") && !self.is(";") && !self.eof() {
-            let mut p = Vec::new();
-            if self.kind(0) == Kind::Lifetime {
-                p.push(self.tok());
-            } else {
-                p.push(self.ty()?);
-            }
+            let mut p = vec![self.ty()?];
             p.push(self.expect(":")?);
             p.push(space());
             p.push(self.bounds()?);
             let comma = if self.is(",") { self.drop_tok() } else { nil() };
             preds.push(concat(vec![hardline(), concat(p), text(","), comma]));
         }
-        Ok(Some(concat(vec![
+        Ok(concat(vec![
             hardline(),
             w,
             indent(concat(preds)),
             hardline(),
-        ])))
+        ]))
     }
 
     fn struct_item(&mut self) -> Res<Doc> {
@@ -862,27 +851,24 @@ impl<'s> Parser<'s> {
         }
         if self.is("(") {
             let l = self.list("(", ")", false, |p| p.tuple_field())?;
-            v.push(layout(l, false, usize::MAX, Tr::Vertical, false));
-            if let Some(w) = self.where_clause()? {
-                v.push(w);
+            v.push(layout(l, Style::Tight(usize::MAX), Tr::Vertical));
+            if self.is("where") {
+                v.push(self.where_clause()?);
             }
             v.push(self.expect(";")?);
             return Ok(concat(v));
         }
-        let wh = self.where_clause()?;
-        let has_where = wh.is_some();
-        if let Some(w) = wh {
-            v.push(w);
+        if self.is("where") {
+            v.push(self.where_clause()?);
+        } else if !self.is(";") {
+            v.push(space());
         }
         if self.is(";") {
             v.push(self.tok());
             return Ok(concat(v));
         }
-        if !has_where {
-            v.push(space());
-        }
         let l = self.list("{", "}", false, |p| p.field_def())?;
-        v.push(layout(l, true, 0, Tr::Vertical, true));
+        v.push(layout(l, Style::Vertical, Tr::Vertical));
         Ok(concat(v))
     }
 
@@ -918,15 +904,9 @@ impl<'s> Parser<'s> {
         if self.is("<") {
             v.push(self.generics()?);
         }
-        let wh = self.where_clause()?;
-        if wh.is_none() {
-            v.push(space());
-        }
-        if let Some(w) = wh {
-            v.push(w);
-        }
+        v.push(self.where_or_space()?);
         let l = self.list("{", "}", false, |p| p.variant())?;
-        v.push(layout(l, true, 0, Tr::Vertical, true));
+        v.push(layout(l, Style::Vertical, Tr::Vertical));
         Ok(concat(v))
     }
 
@@ -935,11 +915,11 @@ impl<'s> Parser<'s> {
         let mut v = vec![self.ident()?];
         if self.is("(") {
             let l = self.list("(", ")", false, |p| p.tuple_field())?;
-            v.push(layout(l, false, usize::MAX, Tr::Vertical, false));
+            v.push(layout(l, Style::Tight(usize::MAX), Tr::Vertical));
         } else if self.is("{") {
             let l = self.list("{", "}", false, |p| p.field_def())?;
             v.push(space());
-            v.push(layout(l, true, 35, Tr::Vertical, false));
+            v.push(layout(l, Style::Padded(STRUCT_VARIANT_WIDTH), Tr::Vertical));
         }
         if self.is("=") {
             v.push(space());
@@ -960,13 +940,7 @@ impl<'s> Parser<'s> {
             v.push(space());
             v.push(self.bounds()?);
         }
-        let wh = self.where_clause()?;
-        if wh.is_none() {
-            v.push(space());
-        }
-        if let Some(w) = wh {
-            v.push(w);
-        }
+        v.push(self.where_or_space()?);
         v.push(self.item_block()?);
         Ok(concat(v))
     }
@@ -991,13 +965,7 @@ impl<'s> Parser<'s> {
             v.push(space());
             v.push(self.ty()?);
         }
-        let wh = self.where_clause()?;
-        if wh.is_none() {
-            v.push(space());
-        }
-        if let Some(w) = wh {
-            v.push(w);
-        }
+        v.push(self.where_or_space()?);
         v.push(self.item_block()?);
         Ok(concat(v))
     }
@@ -1108,7 +1076,7 @@ impl<'s> Parser<'s> {
                         close_lead: l.close_lead,
                         close: l.close,
                     };
-                    v.push(layout(l, false, usize::MAX, Tr::Vertical, false));
+                    v.push(layout(l, Style::Tight(usize::MAX), Tr::Vertical));
                     let sorted_trees = order.iter().map(|&i| trees[i].clone()).collect();
                     segs.push(Seg {
                         kind: SegKind::List(sorted_trees),
@@ -1242,10 +1210,6 @@ impl<'s> Parser<'s> {
         match self.peek() {
             "&" | "&&" => {
                 let mut v = vec![self.tok()];
-                if self.kind(0) == Kind::Lifetime {
-                    v.push(self.tok());
-                    v.push(space());
-                }
                 if self.is("mut") {
                     v.push(self.tok());
                     v.push(space());
@@ -1271,7 +1235,7 @@ impl<'s> Parser<'s> {
             "(" => {
                 let l = self.list("(", ")", true, |p| p.ty())?;
                 let tr = tuple_tr(&l);
-                Ok(layout(l, false, usize::MAX, tr, false))
+                Ok(layout(l, Style::Tight(usize::MAX), tr))
             }
             "!" | "_" => Ok(self.tok()),
             "fn" | "nogc" | "unsafe" | "extern" => {
@@ -1285,7 +1249,7 @@ impl<'s> Parser<'s> {
                 }
                 v.push(self.tok());
                 let l = self.list("(", ")", false, |p| p.fn_ty_param())?;
-                v.push(layout(l, false, usize::MAX, Tr::Vertical, false));
+                v.push(layout(l, Style::Tight(usize::MAX), Tr::Vertical));
                 if self.is("->") {
                     v.push(space());
                     v.push(self.tok());
@@ -1330,7 +1294,7 @@ impl<'s> Parser<'s> {
             }
             if self.is("(") && matches!(name, "Fn" | "FnMut" | "FnOnce") {
                 let l = self.list("(", ")", false, |p| p.ty())?;
-                v.push(layout(l, false, usize::MAX, Tr::Vertical, false));
+                v.push(layout(l, Style::Tight(usize::MAX), Tr::Vertical));
                 if self.is("->") {
                     v.push(space());
                     v.push(self.tok());
@@ -1359,19 +1323,13 @@ impl<'s> Parser<'s> {
                 v.push(space());
             }
             first = false;
-            if self.kind(0) == Kind::Lifetime {
-                v.push(self.tok());
-            } else if self.is_ident(0) && self.at(1) == "=" {
+            if self.is_ident(0) && self.at(1) == "=" {
                 v.push(self.tok());
                 v.push(space());
                 v.push(self.tok());
                 v.push(space());
-                v.push(self.ty()?);
-            } else if self.kind(0) == Kind::Literal || self.is("{") || self.is("-") {
-                v.push(self.primary(R::default())?.doc());
-            } else {
-                v.push(self.ty()?);
             }
+            v.push(self.ty()?);
         }
         v.push(self.tok());
         Ok(concat(v))
@@ -1417,11 +1375,11 @@ impl<'s> Parser<'s> {
             "(" if self.kind(0) == Kind::Punct => {
                 let l = self.list("(", ")", true, |p| p.pat())?;
                 let tr = tuple_tr(&l);
-                return Ok(layout(l, false, usize::MAX, tr, false));
+                return Ok(layout(l, Style::Tight(usize::MAX), tr));
             }
             "[" if self.kind(0) == Kind::Punct => {
                 let l = self.list("[", "]", false, |p| p.pat())?;
-                return Ok(layout(l, false, usize::MAX, Tr::Vertical, false));
+                return Ok(layout(l, Style::Tight(usize::MAX), Tr::Vertical));
             }
             ".." | "..=" if self.kind(0) == Kind::Punct => {
                 let d = self.tok();
@@ -1430,7 +1388,7 @@ impl<'s> Parser<'s> {
                 }
                 return Ok(d);
             }
-            "ref" | "mut" | "box"
+            "ref" | "mut"
                 if self.kind(0) == Kind::Ident && (self.is_ident(1) || self.at(1) == "mut") =>
             {
                 let mut v = vec![self.tok(), space()];
@@ -1482,7 +1440,7 @@ impl<'s> Parser<'s> {
             let l = self.list("(", ")", false, |p| p.pat())?;
             return Ok(concat(vec![
                 path,
-                layout(l, false, usize::MAX, Tr::Vertical, false),
+                layout(l, Style::Tight(usize::MAX), Tr::Vertical),
             ]));
         }
         if self.is("{") {
@@ -1492,11 +1450,11 @@ impl<'s> Parser<'s> {
                 p.field_pat()
             })?;
             let tr = if rest { Tr::Never } else { Tr::Vertical };
-            return Ok(concat(vec![path, space(), layout(l, true, 18, tr, false)]));
-        }
-        if self.is("!") {
-            let bang = self.tok();
-            return Ok(concat(vec![path, bang, self.token_tree()?]));
+            return Ok(concat(vec![
+                path,
+                space(),
+                layout(l, Style::Padded(STRUCT_LIT_WIDTH), tr),
+            ]));
         }
         Ok(path)
     }
@@ -1544,7 +1502,7 @@ impl<'s> Parser<'s> {
 
     fn block_doc(&mut self) -> Res<Doc> {
         let b = self.block()?;
-        Ok(block_layout(b))
+        Ok(concat(vec![b.open, b.rest]))
     }
 
     fn block(&mut self) -> Res<Block> {
@@ -1577,15 +1535,14 @@ impl<'s> Parser<'s> {
             }
             stmts.push((doc, blank));
         }
-        if !only_tail {
+        let (close_lead, close) = self.close_tok();
+        if !only_tail || close_lead.is_some() {
             tail = None;
         }
-        let (close_lead, close) = self.close_tok();
         Ok(Block {
             open,
-            stmts,
+            rest: seq_rest(stmts, close_lead, close.clone()),
             tail,
-            close_lead,
             close,
         })
     }
@@ -1668,7 +1625,7 @@ impl<'s> Parser<'s> {
         match self.peek() {
             "{" | "if" | "match" | "loop" | "while" | "for" => self.kind(0) != Kind::Literal,
             "unsafe" => self.at(1) == "{",
-            _ => self.kind(0) == Kind::Lifetime && self.at(1) == ":",
+            _ => self.kind(0) == Kind::Label && self.at(1) == ":",
         }
     }
 
@@ -1693,7 +1650,7 @@ impl<'s> Parser<'s> {
                 let b = self.block()?;
                 E::new(
                     if stmt {
-                        block_layout(b)
+                        concat(vec![b.open, b.rest])
                     } else {
                         closure_block(b)
                     },
@@ -1704,7 +1661,7 @@ impl<'s> Parser<'s> {
                 let u = self.tok();
                 let b = self.block()?;
                 let b = if stmt {
-                    block_layout(b)
+                    concat(vec![b.open, b.rest])
                 } else {
                     closure_block(b)
                 };
@@ -1774,14 +1731,7 @@ impl<'s> Parser<'s> {
             ));
         }
         let other = self.block()?;
-        let simple = !stmt
-            && then.tail.is_some()
-            && other.tail.is_some()
-            && then.close_lead.is_none()
-            && other.close_lead.is_none();
-        if simple {
-            let a = then.tail.clone().unwrap();
-            let b = other.tail.clone().unwrap();
+        if let (false, Some(a), Some(b)) = (stmt, then.tail.clone(), other.tail.clone()) {
             let d = concat(vec![
                 kw,
                 space(),
@@ -1799,11 +1749,14 @@ impl<'s> Parser<'s> {
                 line(),
                 other.close,
             ]);
-            return Ok(E::new(group_limit(d, 50), Ov::Control));
+            return Ok(E::new(
+                group_limit(d, SINGLE_LINE_IF_ELSE_WIDTH),
+                Ov::Control,
+            ));
         }
         let head = control_head(kw, cond, chain, then);
         Ok(E::new(
-            concat(vec![head, space(), els, space(), block_layout(other)]),
+            concat(vec![head, space(), els, space(), other.open, other.rest]),
             Ov::Control,
         ))
     }
@@ -1910,7 +1863,7 @@ impl<'s> Parser<'s> {
             return false;
         }
         match self.kind(0) {
-            Kind::Literal | Kind::Lifetime => true,
+            Kind::Literal | Kind::Label => true,
             Kind::Ident => !matches!(self.peek(), "as" | "else" | "in"),
             _ => matches!(
                 self.peek(),
@@ -1938,9 +1891,9 @@ impl<'s> Parser<'s> {
 
     fn prefix(&mut self, r: R) -> Res<E> {
         match self.peek() {
-            "return" | "break" | "continue" | "yield" if self.kind(0) == Kind::Ident => {
+            "return" | "break" | "continue" if self.kind(0) == Kind::Ident => {
                 let mut v = vec![self.tok()];
-                if self.kind(0) == Kind::Lifetime {
+                if self.kind(0) == Kind::Label {
                     v.push(space());
                     v.push(self.tok());
                 }
@@ -2202,8 +2155,7 @@ impl<'s> Parser<'s> {
     fn looks_like_struct(&self) -> bool {
         let a = self.at(1);
         let k = self.kind(1);
-        a == "}" && k == Kind::Punct
-            || a == ".." && k == Kind::Punct
+        matches!(a, "}" | "..") && k == Kind::Punct
             || (k == Kind::Ident || k == Kind::Literal)
                 && (matches!(self.at(2), ":" | "," | "}") && self.kind(2) == Kind::Punct)
             || a == "#"
@@ -2236,7 +2188,11 @@ impl<'s> Parser<'s> {
         })?;
         let tr = if rest { Tr::Never } else { Tr::Vertical };
         Ok(E::new(
-            concat(vec![path, space(), layout(l, true, 18, tr, false)]),
+            concat(vec![
+                path,
+                space(),
+                layout(l, Style::Padded(STRUCT_LIT_WIDTH), tr),
+            ]),
             Ov::Delimited,
         ))
     }
@@ -2389,7 +2345,7 @@ impl<'s> Parser<'s> {
             let ov = if last_call { Ov::Call } else { Ov::Other };
             return Ok(E::new(concat(v), ov));
         }
-        while rd.flat().is_some_and(|w| w <= 4) && !children.is_empty() {
+        while rd.open_flat().is_some_and(|w| w <= 4) && !children.is_empty() {
             let c = children.remove(0);
             rd = concat(vec![rd, c.0]);
         }
@@ -2400,17 +2356,17 @@ impl<'s> Parser<'s> {
         let mut flat = vec![rd.clone()];
         flat.extend(children.iter().map(|c| c.0.clone()));
         let flat = concat(flat);
-        if flat.flat().is_some_and(|w| w <= 60) {
+        if flat.open_flat().is_some_and(|w| w <= CHAIN_WIDTH) {
             alts.push(flat.clone());
         }
         let n = children.len();
-        let prefix_flat = rd.flat().unwrap_or(usize::MAX).saturating_add(
+        let prefix_flat = rd.open_flat().unwrap_or(usize::MAX).saturating_add(
             children[..n - 1]
                 .iter()
-                .map(|c| c.0.flat().unwrap_or(usize::MAX))
+                .map(|c| c.0.open_flat().unwrap_or(usize::MAX))
                 .fold(0usize, |a, b| a.saturating_add(b)),
         );
-        if children[n - 1].0.brk() && children[n - 1].1 && prefix_flat <= 60 {
+        if children[n - 1].0.open_brk() && children[n - 1].1 && prefix_flat <= CHAIN_WIDTH {
             alts.push(flat);
         }
         let mut v = Vec::new();
@@ -2464,7 +2420,7 @@ fn is_primitive(s: &str) -> bool {
 }
 
 fn tt_space(prev: &str, cur: &str) -> bool {
-    if matches!(prev, "(" | "[" | "{" | "#" | "#!" | "::" | "." | "&" | "$") {
+    if matches!(prev, "(" | "[" | "{" | "#" | "::" | "." | "&" | "$") {
         return false;
     }
     if matches!(cur, ")" | "]" | "}" | "," | ";" | "::" | "." | "?") {
@@ -2494,7 +2450,7 @@ fn rhs(e: &E) -> Doc {
         return concat(vec![space(), d]);
     }
     let same_line = concat(vec![space(), d.clone()]);
-    if d.brk() {
+    if d.open_brk() {
         return same_line;
     }
     let next_line = indent(concat(vec![next_line(), d]));
@@ -2503,7 +2459,7 @@ fn rhs(e: &E) -> Doc {
 
 fn cond_parts(e: &E) -> (Doc, bool) {
     match &e.bin {
-        Some(b) => (concat(vec![b.first.clone(), indent(bin_rest(b))]), true),
+        Some(b) => (b.broken(), true),
         None => (e.doc(), false),
     }
 }
@@ -2511,37 +2467,23 @@ fn cond_parts(e: &E) -> (Doc, bool) {
 fn control_head(kw: Doc, cond: Doc, chain: bool, b: Block) -> Doc {
     let (open, t) = split_trailing(&b.open);
     let t = t.unwrap_or_else(nil);
-    let rest = block_rest(b);
     if chain {
         let head = group(concat(vec![space(), cond, line(), open]));
-        concat(vec![kw, head, t, rest])
+        concat(vec![kw, head, t, b.rest])
     } else {
-        concat(vec![kw, space(), cond, space(), open, t, rest])
+        concat(vec![kw, space(), cond, space(), open, t, b.rest])
     }
 }
 
 fn closure_block(b: Block) -> Doc {
-    match b.tail.clone() {
-        Some(tail) if b.close_lead.is_none() => {
+    match b.tail {
+        Some(tail) => {
             let (open, t) = split_trailing(&b.open);
             let inner = concat(vec![t.unwrap_or_else(nil), line(), tail]);
             group(concat(vec![open, indent(inner), line(), b.close]))
         }
-        _ => block_layout(b),
+        None => concat(vec![b.open, b.rest]),
     }
-}
-
-fn block_layout(b: Block) -> Doc {
-    let open = b.open.clone();
-    concat(vec![open, block_rest(b)])
-}
-
-fn block_rest(b: Block) -> Doc {
-    seq_rest(b.stmts, b.close_lead, b.close)
-}
-
-fn seq_block(open: Doc, items: Vec<(Doc, bool)>, lead: Option<(Doc, bool)>, close: Doc) -> Doc {
-    concat(vec![open, seq_rest(items, lead, close)])
 }
 
 fn seq_rest(items: Vec<(Doc, bool)>, lead: Option<(Doc, bool)>, close: Doc) -> Doc {
@@ -2616,7 +2558,18 @@ fn sort_runs(items: Vec<Item>) -> Vec<Item> {
     out
 }
 
-fn layout(l: List, pad: bool, limit: usize, tr: Tr, vertical: bool) -> Doc {
+fn layout(l: List, style: Style, tr: Tr) -> Doc {
+    let vertical = matches!(style, Style::Vertical);
+    let limit = match style {
+        Style::Tight(limit) => limit.saturating_add(delims_width(&l)),
+        Style::Padded(limit) => limit.saturating_add(delims_width(&l) + 2),
+        Style::Vertical => 0,
+    };
+    let sep = if matches!(style, Style::Tight(_)) {
+        softline()
+    } else {
+        line()
+    };
     let n = l.items.len();
     if n == 0 {
         return match l.close_lead {
@@ -2655,19 +2608,17 @@ fn layout(l: List, pad: bool, limit: usize, tr: Tr, vertical: bool) -> Doc {
     if let Some(cl) = l.close_lead {
         inner.push(cl);
     }
-    let sep = if pad { line() } else { softline() };
-    let ow = l.open.flat().unwrap_or(0) + l.close.flat().unwrap_or(0) + if pad { 2 } else { 0 };
     let d = concat(vec![
         l.open,
         indent(concat(vec![sep.clone(), concat(inner)])),
         sep,
         l.close,
     ]);
-    if vertical {
-        group_limit(d, 0)
-    } else {
-        group_limit(d, limit.saturating_add(ow))
-    }
+    group_limit(d, limit)
+}
+
+fn delims_width(l: &List) -> usize {
+    l.open.open_flat().unwrap_or(0) + l.close.open_flat().unwrap_or(0)
 }
 
 fn overflowable(ov: Ov, n: usize) -> bool {
@@ -2683,10 +2634,10 @@ fn args_layout(l: List, kinds: &[Ov], tr: Tr) -> Doc {
     let hug_ok = n > 0
         && overflowable(kinds[n - 1], n)
         && !l.has_comments()
-        && l.items[..n - 1].iter().all(|i| !i.doc.brk());
+        && l.items[..n - 1].iter().all(|i| !i.doc.open_brk());
     if !hug_ok {
-        let limit = if n == 1 { usize::MAX } else { 60 };
-        return layout(l, false, limit, tr, false);
+        let limit = if n == 1 { usize::MAX } else { FN_CALL_WIDTH };
+        return layout(l, Style::Tight(limit), tr);
     }
     let last = l.items[n - 1].doc.clone();
     let mut heads = Vec::new();
@@ -2707,15 +2658,18 @@ fn args_layout(l: List, kinds: &[Ov], tr: Tr) -> Doc {
     };
     let mut alts = Vec::new();
     let flat = hug(last.clone());
-    if last.brk() {
+    if last.open_brk() {
         alts.push(flat);
     } else {
-        if flat.flat().is_some_and(|w| w <= 62) {
+        if flat
+            .open_flat()
+            .is_some_and(|w| w <= FN_CALL_WIDTH + delims_width(&l))
+        {
             alts.push(flat);
         }
         alts.push(hug(force(last.clone())));
     }
-    alts.push(force(layout(l, false, 60, tr, false)));
+    alts.push(force(layout(l, Style::Tight(FN_CALL_WIDTH), tr)));
     choice(alts)
 }
 
@@ -2731,61 +2685,48 @@ fn format_offset(name: &str) -> Option<usize> {
 
 fn format_args_layout(l: List, k: usize) -> Doc {
     if l.has_comments() {
-        return layout(l, false, 60, Tr::Never, false);
+        return layout(l, Style::Tight(FN_CALL_WIDTH), Tr::Never);
     }
-    let n = l.items.len();
     let mut lead = Vec::new();
     for it in &l.items[..=k] {
         lead.push(it.doc.clone());
         lead.push(text(","));
         lead.push(line());
     }
-    let mut parts = Vec::new();
-    for (j, it) in l.items[k + 1..].iter().enumerate() {
-        if k + 1 + j + 1 < n {
-            parts.push(concat(vec![it.doc.clone(), text(",")]));
-            parts.push(line());
-        } else {
-            parts.push(it.doc.clone());
-        }
-    }
-    lead.push(fill(parts));
-    let ow = l.open.flat().unwrap_or(0) + l.close.flat().unwrap_or(0);
-    let d = concat(vec![
-        l.open,
-        indent(concat(vec![softline(), concat(lead)])),
-        softline(),
-        l.close,
-    ]);
-    group_limit(d, 60 + ow)
+    lead.push(fill_items(&l.items[k + 1..]));
+    wrapped(l, concat(lead), FN_CALL_WIDTH)
 }
 
 fn array_layout(l: List, short: bool) -> Doc {
-    let n = l.items.len();
-    if !short || n == 0 || l.has_comments() {
-        return layout(l, false, 60, Tr::Vertical, false);
+    if !short || l.items.is_empty() || l.has_comments() {
+        return layout(l, Style::Tight(ARRAY_WIDTH), Tr::Vertical);
     }
+    let inner = concat(vec![fill_items(&l.items), if_break(text(","), nil())]);
+    wrapped(l, inner, ARRAY_WIDTH)
+}
+
+fn fill_items(items: &[ListItem]) -> Doc {
     let mut parts = Vec::new();
-    for (k, it) in l.items.iter().enumerate() {
-        if k + 1 < n {
+    for (k, it) in items.iter().enumerate() {
+        if k + 1 < items.len() {
             parts.push(concat(vec![it.doc.clone(), text(",")]));
             parts.push(line());
         } else {
             parts.push(it.doc.clone());
         }
     }
-    let ow = l.open.flat().unwrap_or(0) + l.close.flat().unwrap_or(0);
+    fill(parts)
+}
+
+fn wrapped(l: List, inner: Doc, limit: usize) -> Doc {
+    let limit = limit + delims_width(&l);
     let d = concat(vec![
         l.open,
-        indent(concat(vec![
-            softline(),
-            fill(parts),
-            if_break(text(","), nil()),
-        ])),
+        indent(concat(vec![softline(), inner])),
         softline(),
         l.close,
     ]);
-    group_limit(d, 60 + ow)
+    group_limit(d, limit)
 }
 
 fn use_key(t: &UseTree) -> String {

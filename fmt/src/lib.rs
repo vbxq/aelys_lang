@@ -10,7 +10,6 @@ pub enum Check {
     Tokens,
     Comments,
     Idempotence,
-    Compiler,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -56,7 +55,6 @@ impl fmt::Display for Error {
                     Check::Tokens => "the formatted output changes the token sequence",
                     Check::Comments => "the formatted output loses or duplicates a comment",
                     Check::Idempotence => "formatting the output again changes it",
-                    Check::Compiler => "the compiler parses the formatted output differently",
                 };
                 write!(
                     f,
@@ -69,46 +67,82 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-fn layout(src: &str) -> Result<(String, Vec<String>), Error> {
+fn layout(src: &str) -> Result<(String, Vec<(String, usize)>), Error> {
     let lexed = lexer::lex(src)?;
     let parsed = parse::parse(src, lexed)?;
     Ok((doc::print(&parsed.doc), parsed.norm))
 }
 
-fn comments(src: &str) -> Result<Vec<&str>, Error> {
+fn comments(src: &str) -> Result<Vec<(&str, usize)>, Error> {
     let lexed = lexer::lex(src)?;
-    let mut v: Vec<&str> = lexed
+    let mut v: Vec<(&str, usize)> = lexed
         .comments
         .iter()
-        .map(|c| src[c.start..c.end].trim_end())
+        .map(|c| (src[c.start..c.end].trim_end(), c.start))
         .collect();
     v.sort_unstable();
     Ok(v)
 }
 
-pub fn format_source(src: &str) -> Result<String, Error> {
-    let (out, norm_in) = layout(src)?;
-    let (again, norm_out) =
-        layout(&out).map_err(|e| Error::internal(Check::Reparse, e.offset()))?;
-    if norm_in != norm_out {
-        return Err(Error::internal(Check::Tokens, 0));
+fn first_difference<T: PartialEq>(
+    mut a: impl Iterator<Item = T>,
+    mut b: impl Iterator<Item = T>,
+) -> Option<usize> {
+    let mut k = 0;
+    loop {
+        match (a.next(), b.next()) {
+            (None, None) => return None,
+            (x, y) if x == y => k += 1,
+            _ => return Some(k),
+        }
     }
-    if comments(src)? != comments(&out)? {
-        return Err(Error::internal(Check::Comments, 0));
-    }
-    if again != out {
-        let i = out
-            .bytes()
-            .zip(again.bytes())
-            .position(|(a, b)| a != b)
-            .unwrap_or(out.len().min(again.len()));
-        return Err(Error::internal(Check::Idempotence, i));
-    }
-    compiler_agrees(src, &out)?;
-    Ok(out)
 }
 
-// the stage 1 parser plugs in here: accept src, parse out, compare span-erased asts modulo r1-r4
-fn compiler_agrees(_src: &str, _out: &str) -> Result<(), Error> {
-    Ok(())
+fn source_offset(src: &str, out: &str, out_offset: usize) -> usize {
+    let (Ok(a), Ok(b)) = (lexer::lex(src), lexer::lex(out)) else {
+        return 0;
+    };
+    let k = b.tokens.iter().take_while(|t| t.start < out_offset).count();
+    a.tokens[k.min(a.tokens.len() - 1)].start
+}
+
+pub fn format_source(src: &str) -> Result<String, Error> {
+    let Some(body) = src.strip_prefix('\u{feff}') else {
+        return format_body(src);
+    };
+    let bom = '\u{feff}'.len_utf8();
+    format_body(body)
+        .map(|out| format!("\u{feff}{out}"))
+        .map_err(|err| match err {
+            Error::Syntax { offset, message } => Error::Syntax {
+                offset: offset + bom,
+                message,
+            },
+            Error::Internal { check, offset } => Error::Internal {
+                check,
+                offset: offset + bom,
+            },
+        })
+}
+
+fn format_body(src: &str) -> Result<String, Error> {
+    let (out, norm_in) = layout(src)?;
+    let (again, norm_out) = layout(&out)
+        .map_err(|e| Error::internal(Check::Reparse, source_offset(src, &out, e.offset())))?;
+    if let Some(k) = first_difference(norm_in.iter().map(|n| &n.0), norm_out.iter().map(|n| &n.0)) {
+        let offset = norm_in.get(k).map_or(src.len(), |n| n.1);
+        return Err(Error::internal(Check::Tokens, offset));
+    }
+    let (before, after) = (comments(src)?, comments(&out)?);
+    if let Some(k) = first_difference(before.iter().map(|c| c.0), after.iter().map(|c| c.0)) {
+        let offset = before.get(k).map_or(src.len(), |c| c.1);
+        return Err(Error::internal(Check::Comments, offset));
+    }
+    if let Some(i) = first_difference(out.bytes(), again.bytes()) {
+        return Err(Error::internal(
+            Check::Idempotence,
+            source_offset(src, &out, i),
+        ));
+    }
+    Ok(out)
 }

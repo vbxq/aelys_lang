@@ -3,7 +3,7 @@ use crate::Error;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
     Ident,
-    Lifetime,
+    Label,
     Literal,
     Punct,
     Eof,
@@ -34,16 +34,16 @@ pub struct Lexed {
     pub trailing: Vec<Vec<usize>>,
 }
 
-const PUNCTS: [&str; 22] = [
+const PUNCTS: [&str; 21] = [
     "<<=", "...", "..=", "::", "->", "=>", "==", "!=", "<=", "&&", "||", "+=", "-=", "*=", "/=",
-    "%=", "^=", "&=", "|=", "<<", "..", "#!",
+    "%=", "^=", "&=", "|=", "<<", "..",
 ];
 
-pub const KEYWORDS: [&str; 37] = [
+pub const KEYWORDS: [&str; 35] = [
     "as", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern", "false", "fn",
     "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "nogc", "pub", "ref",
     "return", "static", "struct", "super", "trait", "true", "type", "unsafe", "use", "where",
-    "while", "async", "await",
+    "while",
 ];
 
 fn is_ident_start(c: char) -> bool {
@@ -83,14 +83,10 @@ impl Scanner<'_> {
         }
     }
 
-    fn err(&self, offset: usize, message: &str) -> Error {
-        Error::syntax(offset, message)
-    }
-
     fn quoted(&mut self, start: usize, quote: char) -> Result<(), Error> {
         loop {
             match self.bump() {
-                None => return Err(self.err(start, "unterminated literal")),
+                None => return Err(Error::syntax(start, "unterminated literal")),
                 Some('\\') => {
                     self.bump();
                 }
@@ -107,7 +103,7 @@ impl Scanner<'_> {
             self.pos += 1;
         }
         if self.bump() != Some('"') {
-            return Err(self.err(start, "malformed raw string"));
+            return Err(Error::syntax(start, "malformed raw string"));
         }
         let close = format!("\"{}", "#".repeat(hashes));
         match self.rest().find(&close) {
@@ -115,7 +111,7 @@ impl Scanner<'_> {
                 self.pos += i + close.len();
                 Ok(())
             }
-            None => Err(self.err(start, "unterminated raw string")),
+            None => Err(Error::syntax(start, "unterminated raw string")),
         }
     }
 
@@ -158,7 +154,7 @@ impl Scanner<'_> {
                 depth -= 1;
                 self.pos += 2;
             } else if self.bump().is_none() {
-                return Err(self.err(start, "unterminated block comment"));
+                return Err(Error::syntax(start, "unterminated block comment"));
             }
         }
         Ok(())
@@ -254,9 +250,9 @@ pub fn lex(src: &str) -> Result<Lexed, Error> {
             } else if s.peek(1).is_some_and(is_ident_start) {
                 s.bump();
                 s.eat_while(is_ident_continue);
-                Kind::Lifetime
+                Kind::Label
             } else {
-                return Err(s.err(start, "malformed character literal"));
+                return Err(Error::syntax(start, "malformed character literal"));
             }
         } else {
             match PUNCTS.iter().find(|p| s.rest().starts_with(**p)) {
