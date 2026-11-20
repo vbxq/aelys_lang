@@ -1,0 +1,40 @@
+trait Shape {
+    fn area(&self) -> i64;
+}
+trait Fill {
+    nogc fn fill(&mut self, x: i64);
+}
+struct Sq {
+    s: i64,
+}
+struct Screen {
+    px: Vec<u8>,
+}
+fn offset() -> i64 {
+    100
+}
+fn sq_area(s: i64) -> i64 {
+    s * s + offset()
+}
+impl Shape for Sq {
+    fn area(&self) -> i64 {
+        sq_area(self.s)
+    }
+}
+impl Fill for Screen {
+    nogc fn fill(&mut self, x: i64) {
+        self.px[x] = 7 as u8;
+    }
+}
+fn make() -> Rc<dyn Shape> {
+    Rc::new(Sq { s: 3 })
+}
+fn main() {
+    let sh = make();
+    println!("{}", sh.area());
+    let mut scr = Screen { px: vec![1 as u8, 1 as u8] };
+    let kept = scr.px;
+    let f: &mut dyn Fill = &mut scr;
+    f.fill(1);
+    println!("{} {} {}", kept[1], scr.px[1], scr.px[0]);
+}
